@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0
+
+- Add ASCII VTK XML VTU export and direct JMAG JCF output to the Cubit Export menu.
+- Add an opt-in Femtet menu action for a separately installed model-transfer handler.
+- Document the supported export formats and the native component licenses.
+
 ## 2.2.8
 
 - Add neutral CAD model capture with explicit millimetre units, source topology,
