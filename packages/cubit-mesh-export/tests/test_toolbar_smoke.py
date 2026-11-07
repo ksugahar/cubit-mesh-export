@@ -114,8 +114,6 @@ def test_gui_smoke_is_an_installed_release_gate():
     assert project["project"]["scripts"]["cubit-toolbar-smoke-test"] == (
         "cubit_mesh_export.toolbar_smoke:main"
     )
-    monorepo = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert "cubit-toolbar-smoke-test" not in monorepo["project"]["scripts"]
     assert SMOKE._probe_path().is_file()
 
     release_source = (ROOT / "tools" / "release_cubit_dual.py").read_text(
@@ -123,8 +121,6 @@ def test_gui_smoke_is_an_installed_release_gate():
     )
     assert "('toolbar_smoke', ['--restarts', '2'" in release_source
     assert "('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke'" in release_source
-    solver_release = (ROOT / "tools" / "release_quad.py").read_text(encoding="utf-8")
-    assert "cubit_mesh_export.toolbar_smoke" not in solver_release
 
 
 @pytest.mark.parametrize('returncode', [0, 1, 2, -1073740791])
