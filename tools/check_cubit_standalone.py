@@ -51,7 +51,19 @@ def main():
         archive_path = root / "local/cubit-mesh-export/Cubit/cubit_mesh_export_toolbar.tar.gz"
         with tarfile.open(archive_path) as archive:
             assert archive.extractfile("scripts/cubit_export_menu.py").read() == (gui / "cubit_export_menu.py").read_bytes()
-            assert len([n for n in archive.getnames() if n.startswith("scripts/export_")]) == 6
+            expected_launchers = {
+                "scripts/export_femtet.py",
+                "scripts/export_gmsh.py",
+                "scripts/export_jcf.py",
+                "scripts/export_meg.py",
+                "scripts/export_nastran.py",
+                "scripts/export_netgen.py",
+                "scripts/export_vtu.py",
+            }
+            launchers = [name for name in archive.getnames() if name.startswith("scripts/export_")]
+            assert sorted(launchers) == sorted(expected_launchers), (
+                f"Packaged export launchers: expected {sorted(expected_launchers)}, got {sorted(launchers)}"
+            )
         for module in ("install", "smoke_test", "toolbar_smoke", "check"):
             result = subprocess.run([sys.executable, "-m", f"cubit_mesh_export.{module}", "--help"],
                                     capture_output=True, text=True, timeout=30, cwd=root)
