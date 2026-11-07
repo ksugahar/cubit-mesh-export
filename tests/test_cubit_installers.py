@@ -399,13 +399,13 @@ def test_official_toolbar_package_is_self_contained(tmp_path):
         "version": "1.0", "name": "Cubit Mesh Export", "visible": "true",
     }
     buttons = root.findall("WTButton")
-    assert len(buttons) == 6
+    assert len(buttons) == 7
     action_names = [
         button.find(".//WAction").attrib["name"] for button in buttons
     ]
     assert action_names == [
-        "Netgen Vol (.vol)", "GMSH (.msh)", "Nastran (.bdf)",
-        "VTK (.vtk)", "FEMEEM", "MEG (ELF/MAGIC)",
+        "Netgen (.vol)", "Gmsh (.msh)", "Nastran (.bdf)", "VTK (.vtu)",
+        "JMAG (.jcf)", "Femtet (COM)", "ELF/MAGIC (.meg)",
     ]
 
     referenced = [
@@ -739,3 +739,20 @@ def test_native_module_version_matches_the_distribution():
               / "cubit_mesh_export_pybind.cpp").read_text(encoding="utf-8")
     assert f'__version__ = "{version}"' in init
     assert re.findall(r'm\.attr\("__version__"\) = "([^"]+)"', pybind) == [version]
+
+
+def test_toolbar_sync_replaces_retired_launchers(monkeypatch, tmp_path):
+    from cubit_mesh_export import toolbar_install
+
+    installed = tmp_path / "toolbar"
+    (installed / "scripts").mkdir(parents=True)
+    for retired in ("export_vtk.py", "export_femeem.py"):
+        (installed / "scripts" / retired).write_text("launch_export('retired')\n")
+    (installed / "scripts" / "notes.py").write_text("# not a launcher\n")
+    monkeypatch.setattr(toolbar_install, "_existing_toolbar_install_dirs", lambda all_users=False: [installed])
+
+    assert toolbar_install._sync_existing_toolbar_installations() == [installed]
+    launchers = sorted(p.name for p in (installed / "scripts").glob("export_*.py"))
+    assert launchers == sorted(["export_netgen.py", "export_gmsh.py", "export_nastran.py", "export_vtu.py",
+                                "export_jcf.py", "export_femtet.py", "export_meg.py"]), launchers
+    assert (installed / "scripts" / "notes.py").is_file()

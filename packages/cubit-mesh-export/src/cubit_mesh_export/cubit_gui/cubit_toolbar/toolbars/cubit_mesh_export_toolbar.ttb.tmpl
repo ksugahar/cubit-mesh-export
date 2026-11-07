@@ -6,7 +6,7 @@
       <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_netgen.py</filename>
       <UIfilename></UIfilename>
       <workingdir>@TOOLBAR_INSTALL_DIR@/scripts</workingdir>
-      <WAction name="Netgen Vol (.vol)">
+      <WAction name="Netgen (.vol)">
         <icon>@TOOLBAR_INSTALL_DIR@/icons/cubit_mesh_export.svg</icon>
         <description>Export a checked curved Netgen .vol mesh.</description>
       </WAction>
@@ -17,7 +17,7 @@
       <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_gmsh.py</filename>
       <UIfilename></UIfilename>
       <workingdir>@TOOLBAR_INSTALL_DIR@/scripts</workingdir>
-      <WAction name="GMSH (.msh)">
+      <WAction name="Gmsh (.msh)">
         <icon>@TOOLBAR_INSTALL_DIR@/icons/cubit_mesh_export.svg</icon>
         <description>Gmsh MSH 4.2 export for post-processing and visualization; solver meshes are checked .vol.</description>
       </WAction>
@@ -36,12 +36,34 @@
   </WTButton>
   <WTButton visible="true">
     <WPythonScriptAction>
-      <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_vtk.py</filename>
+      <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_vtu.py</filename>
       <UIfilename></UIfilename>
       <workingdir>@TOOLBAR_INSTALL_DIR@/scripts</workingdir>
-      <WAction name="VTK (.vtk)">
+      <WAction name="VTK (.vtu)">
         <icon>@TOOLBAR_INSTALL_DIR@/icons/cubit_mesh_export.svg</icon>
-        <description>Export a VTK mesh.</description>
+        <description>Export block elements and sideset faces as ASCII VTK XML.</description>
+      </WAction>
+    </WPythonScriptAction>
+  </WTButton>
+  <WTButton visible="true">
+    <WPythonScriptAction>
+      <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_jcf.py</filename>
+      <UIfilename></UIfilename>
+      <workingdir>@TOOLBAR_INSTALL_DIR@/scripts</workingdir>
+      <WAction name="JMAG (.jcf)">
+        <icon>@TOOLBAR_INSTALL_DIR@/icons/cubit_mesh_export.svg</icon>
+        <description>Export a static solver input from named blocks and sidesets.</description>
+      </WAction>
+    </WPythonScriptAction>
+  </WTButton>
+  <WTButton visible="true">
+    <WPythonScriptAction>
+      <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_femtet.py</filename>
+      <UIfilename></UIfilename>
+      <workingdir>@TOOLBAR_INSTALL_DIR@/scripts</workingdir>
+      <WAction name="Femtet (COM)">
+        <icon>@TOOLBAR_INSTALL_DIR@/icons/cubit_mesh_export.svg</icon>
+        <description>Send the model through a separately installed transfer handler.</description>
       </WAction>
     </WPythonScriptAction>
   </WTButton>
@@ -50,7 +72,7 @@
       <filename>@TOOLBAR_INSTALL_DIR@/scripts/export_meg.py</filename>
       <UIfilename></UIfilename>
       <workingdir>@TOOLBAR_INSTALL_DIR@/scripts</workingdir>
-      <WAction name="MEG (ELF/MAGIC)">
+      <WAction name="ELF/MAGIC (.meg)">
         <icon>@TOOLBAR_INSTALL_DIR@/icons/cubit_mesh_export.svg</icon>
         <description>Export an ELF/MAGIC MEG mesh.</description>
       </WAction>

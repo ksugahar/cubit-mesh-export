@@ -560,18 +560,25 @@ The .vol export was unaffected (uses Netgen internal mesh, not edge_ho_nodes_).
 ## Cubit GUI Menu Structure
 
 ```
-Menu bar: File Edit View Display Tools Export_Mesh Help
-                                       (PySide6)
-Export Mesh:
-  Netgen Vol (.vol)...
-  GMSH...
-  Nastran BDF...
-  VTK...
-  MEG...
-  FEMEEM...
+Menu bar: File Edit View Display Tools Export Help
+                                       (Claro menu, PySide6 dialogs)
+Export:
+  Netgen (.vol)
+  Gmsh (.msh)
+  Nastran (.bdf)
+  VTK (.vtu)
+  JMAG (.jcf)
+  Femtet (COM)
+  ELF/MAGIC (.meg)
 ```
 
-- **Export Mesh**: PySide6 menu/dialogs calling C++ APREPRO export commands
+- **Export**: Netgen, Gmsh, Nastran and ELF/MAGIC run the C++ APREPRO export
+  commands. VTK writes ASCII VTK XML (.vtu) from Python (`cubit_mesh_export.vtu`).
+  JMAG writes a static solver input from an analysis-settings JSON
+  (`cubit_mesh_export.jmag`). Femtet (COM) calls the one handler a separately
+  installed package registers in entry-point group
+  `cubit_mesh_export.model_transfer` under name `femtet`; without it the item
+  reports that no handler is installed.
 - Solver orchestration is outside the Cubit plugin. Downstream applications
   consume exported meshes through their own process boundary.
 - **Mesh p-convergence demo**: `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`

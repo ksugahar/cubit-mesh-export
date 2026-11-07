@@ -138,7 +138,13 @@ def test_export_menu_does_not_force_a_journal_save():
     source = EXPORT_MENU.read_text(encoding="utf-8")
 
     assert "ensure_jou_path" not in source
-    assert "getSaveFileName" not in source
+    # Output files of the two Python writers are chosen with a save dialog; a journal never is.
+    tree = ast.parse(source)
+    savers = sorted(f.name for f in tree.body if isinstance(f, ast.FunctionDef)
+                    and any(getattr(c.func, "attr", "") == "getSaveFileName"
+                            for c in ast.walk(f) if isinstance(c, ast.Call)))
+    assert savers == ["_run_jcf_export", "_run_vtu_export"], savers
+    assert source.count("getSaveFileName(") == 2
     assert "save journal" not in source
     assert "_current_journal_hint" in source
 
@@ -202,9 +208,9 @@ def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
     monkeypatch.setitem(sys.modules, "cubit_export_menu", fake_menu)
     original_path = list(sys.path)
     try:
-        for fmt in ("netgen", "gmsh", "nastran", "vtk", "femeem", "meg"):
+        for fmt in ("netgen_vol", "gmsh", "nastran", "vtu", "jcf", "femtet", "meg"):
             exec(namespace["_activate_code"](fmt), {})
     finally:
         sys.path[:] = original_path
 
-    assert calls == ["netgen", "gmsh", "nastran", "vtk", "femeem", "meg"]
+    assert calls == ["netgen_vol", "gmsh", "nastran", "vtu", "jcf", "femtet", "meg"]

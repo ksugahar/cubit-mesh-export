@@ -54,11 +54,11 @@ def test_display_contract_accepts_one_visible_complete_toolbar():
             "no visible screen region",
         ),
         (
-            lambda data: data["action_visible"].update({"GMSH (.msh)": False}),
-            "action is not visible: GMSH",
+            lambda data: data["action_visible"].update({"Gmsh (.msh)": False}),
+            "action is not visible: Gmsh",
         ),
         (
-            lambda data: data["action_enabled"].update({"VTK (.vtk)": False}),
+            lambda data: data["action_enabled"].update({"VTK (.vtu)": False}),
             "action is not enabled: VTK",
         ),
         (
@@ -183,5 +183,23 @@ def test_shipped_toolbar_identifiers_match_both_probe_consumers():
                         for target in node.targets))
     assert actions == expected, (actions, expected)
     description = next(node.findtext("description") for node in ET.parse(template).iter("WAction")
-                       if node.attrib["name"] == "GMSH (.msh)")
+                       if node.attrib["name"] == "Gmsh (.msh)")
     assert "post-processing" in description and ".vol" in description, description
+    # The Export menu offers the same actions in the same order, and every toolbar script
+    # dispatches the format its menu item dispatches.
+    menu = ast.parse((source / "cubit_export_menu.py").read_text(encoding="utf-8"))
+    names = {t.id: n.value.value for n in menu.body if isinstance(n, ast.Assign)
+             for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
+    specs = next(n.value for n in menu.body if isinstance(n, ast.Assign)
+                 and any(isinstance(t, ast.Name) and t.id == "_MENU_SPECS" for t in n.targets))
+    menu_items = [(spec.elts[0].value, names[spec.elts[1].id]) for spec in specs.elts]
+    assert [label for label, _ in menu_items] == actions, (menu_items, actions)
+    scripts = [Path(node.text.split("/")[-1]) for node in ET.parse(template).iter("filename")]
+    dispatched = []
+    for script in scripts:
+        tree = ast.parse((source / "cubit_toolbar/scripts" / script).read_text(encoding="utf-8"))
+        dispatched += [c.args[0].value for c in ast.walk(tree) if isinstance(c, ast.Call)
+                       and getattr(c.func, "id", "") == "launch_export"]
+    assert dispatched == [fmt for _, fmt in menu_items], (dispatched, menu_items)
+    installed = sorted(p.name for p in (source / "cubit_toolbar/scripts").glob("*.py"))
+    assert installed == sorted(s.name for s in scripts), (installed, scripts)

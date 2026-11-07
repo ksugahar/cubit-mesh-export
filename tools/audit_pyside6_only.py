@@ -182,8 +182,8 @@ def check_official_toolbar_contract() -> list[str]:
     if root.tag != "WorkflowToolbar" or root.attrib.get("name") != "Cubit Mesh Export":
         issues.append("toolbar root must be WorkflowToolbar name='Cubit Mesh Export'")
     buttons = root.findall("WTButton")
-    if len(buttons) != 6:
-        issues.append(f"expected 6 official toolbar buttons, found {len(buttons)}")
+    if len(buttons) != 7:
+        issues.append(f"expected 7 official toolbar buttons, found {len(buttons)}")
 
     for filename in root.findall(".//filename"):
         relative = (filename.text or "").split("@TOOLBAR_INSTALL_DIR@/", 1)[-1]
@@ -228,7 +228,7 @@ def _run_smoke() -> int:
         import cubit_export_menu as rem
         stub = _StubCubit()
         for fmt in (rem.FMT_NETGEN, rem.FMT_GMSH, rem.FMT_NASTRAN,
-                    rem.FMT_VTK, rem.FMT_FEMEEM, rem.FMT_MEG):
+                    rem.FMT_MEG):
             dlg = rem.ExportDialog(fmt, "C:/temp/model.jou", stub, parent=None)
             cmd = dlg.cubit_command()
             if not (cmd.startswith("export ") and cmd.endswith(" overwrite")):
@@ -339,7 +339,7 @@ def main(argv: list[str]) -> int:
     else:
         smoke = check_panel_smoke(qt_python)
         print(f"[{'FAIL' if smoke else 'OK'}] headless Cubit toolbar smoke "
-              f"(ExportDialog x6; {qt_runtime}: {qt_python})")
+              f"(ExportDialog x4; {qt_runtime}: {qt_python})")
         for s in smoke:
             print("       " + s)
         all_issues += [f"panel smoke: {s}" for s in smoke]

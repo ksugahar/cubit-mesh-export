@@ -7,12 +7,12 @@ offscreen) and do NOT require Cubit or NGSolve -- only PySide6.
 Coverage:
     A. Module imports + symbol surface
     B. Export actions are registered through Cubit's Claro API
-    C. ExportDialog.cubit_command() round-trip for all 6 formats
+    C. ExportDialog.cubit_command() round-trip for the four command formats
        (default options yield the expected `export ...` APREPRO
         commands so the .ccm side is unchanged)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
     E. Nastran nopyramid flag
-    F. FEMEEM scale flag
+    F. Exactly seven Export actions, in order, each dispatched by launch_export
     G. MEG labels (block table mocking)
     H. install_menu() idempotency on a stub QMainWindow
     I. Current journal is an optional output-name hint, never a prerequisite
@@ -91,16 +91,15 @@ class TestModuleSurface(unittest.TestCase):
         self.assertEqual(rem.FMT_NETGEN, "netgen_vol")
         self.assertEqual(rem.FMT_GMSH, "gmsh")
         self.assertEqual(rem.FMT_NASTRAN, "nastran")
-        self.assertEqual(rem.FMT_VTK, "vtk")
-        self.assertEqual(rem.FMT_FEMEEM, "femeem")
+        self.assertEqual(rem.FMT_VTU, "vtu")
+        self.assertEqual(rem.FMT_JCF, "jcf")
+        self.assertEqual(rem.FMT_FEMTET, "femtet")
         self.assertEqual(rem.FMT_MEG, "meg")
 
     def test_format_extensions(self):
         self.assertEqual(rem._FORMAT_EXTS[rem.FMT_NETGEN], ".vol")
         self.assertEqual(rem._FORMAT_EXTS[rem.FMT_GMSH], ".msh")
         self.assertEqual(rem._FORMAT_EXTS[rem.FMT_NASTRAN], ".bdf")
-        self.assertEqual(rem._FORMAT_EXTS[rem.FMT_VTK], ".vtk")
-        self.assertEqual(rem._FORMAT_EXTS[rem.FMT_FEMEEM], "")  # dir output
         self.assertEqual(rem._FORMAT_EXTS[rem.FMT_MEG], ".meg")
 
     def test_public_callables_present(self):
@@ -251,32 +250,6 @@ class TestNastranCommand(_DialogTestBase):
         self.assertIn("nopyramid", d.cubit_command())
 
 
-class TestVtkCommand(_DialogTestBase):
-
-    def test_default_command(self):
-        d = self._make_dialog(rem.FMT_VTK)
-        self.assertRegex(
-            d.cubit_command(),
-            r'^export vtk "[^"]+\.vtk" order \d+ '
-            r'dimension 3 overwrite$')
-
-
-class TestFemeemCommand(_DialogTestBase):
-
-    def test_default_command(self):
-        d = self._make_dialog(rem.FMT_FEMEEM)
-        cmd = d.cubit_command()
-        # FEMEEM uses directory output (no .ext on filename)
-        self.assertRegex(
-            cmd,
-            r'^export femeem "[^"]+" scale [\d.]+ overwrite$')
-
-    def test_custom_scale(self):
-        d = self._make_dialog(rem.FMT_FEMEEM)
-        d._scale.setText("0.001")
-        self.assertIn("scale 0.001", d.cubit_command())
-
-
 class TestMegCommand(_DialogTestBase):
 
     def test_default_3d(self):
@@ -367,19 +340,19 @@ class TestInstallMenu(unittest.TestCase):
         sys.modules.pop("emclaro", None)
         rem._claro_keepalive.clear()
 
-    def test_install_creates_menu_with_6_export_actions(self):
+    def test_install_creates_menu_with_7_export_actions(self):
         self.assertTrue(rem.install_menu())
         self.assertEqual(self.removed, [rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 1)
         menu_title, actions, component = self.added[0]
         self.assertEqual(menu_title, rem._CLARO_MENU_TITLE)
         self.assertEqual(component, rem._CLARO_COMPONENT)
-        self.assertEqual(len(actions), 6)
+        self.assertEqual(len(actions), 7)
         self.assertEqual(
             [action.text for action in actions],
             [
-                "Netgen Vol (.vol)...", "GMSH (.msh)...", "Nastran BDF (.bdf)...",
-                "VTK (.vtk)...", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
+                "Netgen (.vol)", "Gmsh (.msh)", "Nastran (.bdf)", "VTK (.vtu)",
+                "JMAG (.jcf)", "Femtet (COM)", "ELF/MAGIC (.meg)",
             ],
         )
         self.assertTrue(all("launch_export" in action.activate_method
@@ -391,7 +364,7 @@ class TestInstallMenu(unittest.TestCase):
         self.assertEqual(self.removed,
                          [rem._CLARO_COMPONENT, rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 2)
-        self.assertEqual(len(rem._claro_keepalive), 7)
+        self.assertEqual(len(rem._claro_keepalive), 8)
 
 
 class TestFindClaro(unittest.TestCase):
@@ -510,6 +483,53 @@ class TestMeshEvaluationDocsRouting(unittest.TestCase):
         self.assertIn("p-convergence", text)
         self.assertIn("validation_test", text)
         self.assertIn("p_convergence_demo_results.json", text)
+
+
+# ----------------------------------------------------------------------
+# L. Femtet (COM) runs only the installed handler, only on Yes
+# ----------------------------------------------------------------------
+class TestModelTransferRunner(unittest.TestCase):
+
+    class Unavailable(RuntimeError):
+        pass
+
+    def _run(self, describe, answer=None):
+        calls, shown = [], []
+        mt = types.SimpleNamespace(
+            TransferUnavailable=self.Unavailable, describe=describe,
+            transfer=lambda target, cubit: calls.append((target, cubit)) or {"saved": True})
+        box = MagicMock()
+        box.Yes, box.No = "yes", "no"
+        box.question.return_value = answer
+        box.warning.side_effect = lambda *a: shown.append(("warning",) + a[1:])
+        box.information.side_effect = lambda *a: shown.append(("information",) + a[1:])
+        fake_cubit = types.ModuleType("cubit")
+        with patch.dict(sys.modules, {"cubit": fake_cubit, "cubit_mesh_export":
+                                      types.SimpleNamespace(model_transfer=mt)}), \
+                patch.object(rem, "QMessageBox", box), \
+                patch.object(rem, "find_claro", lambda: "claro"), \
+                patch.object(rem, "_run_generic_export", side_effect=AssertionError("generic")):
+            result = rem.launch_export(rem.FMT_FEMTET)
+        return result, calls, shown, box, fake_cubit
+
+    def test_no_handler_warns_and_runs_nothing(self):
+        def describe(target):
+            raise self.Unavailable("No handler is installed for 'femtet'")
+        result, calls, shown, box, _ = self._run(describe)
+        self.assertIsNone(result)
+        self.assertEqual(calls, [])
+        box.question.assert_not_called()
+        self.assertEqual(shown, [("warning", "Femtet (COM) unavailable",
+                                  "No handler is installed for 'femtet'")])
+
+    def test_handler_runs_only_after_yes(self):
+        result, calls, shown, box, _ = self._run(lambda target: "lab:run", answer="no")
+        self.assertEqual((result, calls, shown), (None, [], []))
+        result, calls, shown, box, fake_cubit = self._run(lambda target: "lab:run", answer="yes")
+        self.assertEqual(result, {"saved": True})
+        self.assertEqual(calls, [("femtet", fake_cubit)])
+        self.assertIn("lab:run", box.question.call_args[0][2])
+        self.assertEqual(shown[0][:2], ("information", "Femtet (COM)"))
 
 
 if __name__ == "__main__":

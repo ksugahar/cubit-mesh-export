@@ -341,7 +341,9 @@ def _toolbar_expected_files(install_dir):
         "scripts/export_netgen.py",
         "scripts/export_gmsh.py",
         "scripts/export_nastran.py",
-        "scripts/export_vtk.py",
+        "scripts/export_vtu.py",
+        "scripts/export_jcf.py",
+        "scripts/export_femtet.py",
         "scripts/export_meg.py",
         "icons/cubit_mesh_export.svg",
     ):
@@ -365,9 +367,15 @@ def _sync_existing_toolbar_installations(all_users=False):
     """Refresh official WorkflowToolbar payloads that Cubit imported before."""
     synced = []
     for install_dir in _existing_toolbar_install_dirs(all_users=all_users):
-        for source, destination in _toolbar_expected_files(install_dir):
+        expected = _toolbar_expected_files(install_dir)
+        for source, destination in expected:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+        # Launchers of retired toolbar actions would otherwise linger beside the new ones.
+        keep = {destination for _, destination in expected}
+        for launcher in (install_dir / "scripts").glob("export_*.py"):
+            if launcher not in keep:
+                launcher.unlink()
         toolbar = install_dir / "toolbars" / "cubit_mesh_export_toolbar.ttb"
         toolbar.parent.mkdir(parents=True, exist_ok=True)
         toolbar.write_text(

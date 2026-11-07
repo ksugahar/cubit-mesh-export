@@ -23,11 +23,13 @@ from pathlib import Path
 SCHEMA = "cubit-mesh-export.toolbar-smoke.v1"
 PROBE_SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
-    "Netgen Vol (.vol)",
-    "GMSH (.msh)",
+    "Netgen (.vol)",
+    "Gmsh (.msh)",
     "Nastran (.bdf)",
-    "VTK (.vtk)",
-    "MEG (ELF/MAGIC)",
+    "VTK (.vtu)",
+    "JMAG (.jcf)",
+    "Femtet (COM)",
+    "ELF/MAGIC (.meg)",
 ]
 
 

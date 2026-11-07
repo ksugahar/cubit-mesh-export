@@ -13,4 +13,4 @@ if _here not in sys.path:
     sys.path.insert(0, _here)
 from cubit_export_menu import launch_export
 
-launch_export("femeem")
+launch_export("jcf")

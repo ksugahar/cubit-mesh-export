@@ -4,11 +4,11 @@ Cubit Mesh Export menu — Claro-registered menu + PySide6 export dialogs.
 The menu itself is registered through Cubit's own Claro API
 (`emclaro.add_to_menu`), so Cubit owns the menu and it
 survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
-run inside Cubit's embedded Python interpreter.  The .ccm (APREPRO
-commands `export gmsh / nastran / vtk / netgen / femeem / meg`) is
-unchanged — this module just calls `cubit.cmd("export ...")` after
-collecting user input through Qt dialogs parented to the Cubit main
-window.
+run inside Cubit's embedded Python interpreter.  Netgen, Gmsh, Nastran
+and MEG run the .ccm APREPRO `export ...` commands after collecting user
+input through Qt dialogs parented to the Cubit main window.  VTU and JCF
+are written by this package's Python writers, and the COM item calls a
+separately installed handler (:mod:`cubit_mesh_export.model_transfer`).
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
 and `cubit_mesh_export.mcp.knowledge.custom_toolbar` (TOOLBAR_PYTHON_SCRIPT_
@@ -184,16 +184,15 @@ def _ensure_model(cubit_mod, parent):
 FMT_NETGEN = "netgen_vol"
 FMT_GMSH = "gmsh"
 FMT_NASTRAN = "nastran"
-FMT_VTK = "vtk"
-FMT_FEMEEM = "femeem"
+FMT_VTU = "vtu"
+FMT_JCF = "jcf"
+FMT_FEMTET = "femtet"
 FMT_MEG = "meg"
 
 _FORMAT_TITLES = {
     FMT_NETGEN: "Export Netgen Vol",
     FMT_GMSH: "Gmsh MSH 4.2 post-processing support",
     FMT_NASTRAN: "Export Nastran BDF",
-    FMT_VTK: "Export VTK",
-    FMT_FEMEEM: "Export FEMEEM",
     FMT_MEG: "Export MEG (ELF/MAGIC)",
 }
 
@@ -201,8 +200,6 @@ _FORMAT_EXTS = {
     FMT_NETGEN: ".vol",
     FMT_GMSH: ".msh",
     FMT_NASTRAN: ".bdf",
-    FMT_VTK: ".vtk",
-    FMT_FEMEEM: "",  # directory output
     FMT_MEG: ".meg",
 }
 
@@ -252,7 +249,7 @@ class ExportDialog(QDialog):
     settings are persisted to
     ``%APPDATA%/cubit-mesh-export/export_settings.json``
     under the format key (``netgen_vol`` / ``gmsh`` / ``nastran`` /
-    ``vtk`` / ``femeem`` / ``meg``).
+    ``meg``).
     """
 
     def __init__(self, fmt, source_path_hint, cubit_mod, parent=None):
@@ -268,10 +265,7 @@ class ExportDialog(QDialog):
         # A loaded journal may suggest a useful initial directory and
         # basename, but it is never required and never controls the export.
         default_dir = ""
-        if fmt == FMT_FEMEEM:
-            base_name = "femeem_output"
-        else:
-            base_name = "ExportedMesh"
+        base_name = "ExportedMesh"
 
         if source_path_hint:
             jp = source_path_hint.replace("\\", "/")
@@ -291,36 +285,22 @@ class ExportDialog(QDialog):
             default_dir = os.getcwd().replace("\\", "/")
 
         # --- Directory + filename row -------------------------------
-        if fmt == FMT_FEMEEM:
-            # FEMEEM: single directory path
-            row = QHBoxLayout()
-            self._dir = QLineEdit(default_dir + "/" + base_name)
-            browse = QPushButton("...")
-            browse.setFixedWidth(30)
-            browse.clicked.connect(self._browse_dir)
-            self._dir.textChanged.connect(self._update_preview)
-            row.addWidget(self._dir)
-            row.addWidget(browse)
-            form.addRow("Directory:", row)
-            self._filename = QLineEdit("")
-            self._filename.setVisible(False)
-        else:
-            row = QHBoxLayout()
-            self._dir = QLineEdit(default_dir)
-            browse = QPushButton("...")
-            browse.setFixedWidth(30)
-            browse.clicked.connect(self._browse_dir)
-            self._dir.textChanged.connect(self._update_preview)
-            row.addWidget(self._dir)
-            row.addWidget(browse)
-            form.addRow("Directory:", row)
-            self._filename = QLineEdit(base_name + _FORMAT_EXTS[fmt])
-            self._filename.textChanged.connect(self._update_preview)
-            form.addRow("Filename:", self._filename)
+        row = QHBoxLayout()
+        self._dir = QLineEdit(default_dir)
+        browse = QPushButton("...")
+        browse.setFixedWidth(30)
+        browse.clicked.connect(self._browse_dir)
+        self._dir.textChanged.connect(self._update_preview)
+        row.addWidget(self._dir)
+        row.addWidget(browse)
+        form.addRow("Directory:", row)
+        self._filename = QLineEdit(base_name + _FORMAT_EXTS[fmt])
+        self._filename.textChanged.connect(self._update_preview)
+        form.addRow("Filename:", self._filename)
 
         # --- Order combo ---------------------------------------------
         self._order = QComboBox()
-        if fmt in (FMT_FEMEEM, FMT_MEG):
+        if fmt == FMT_MEG:
             # Always order 1 — no form row
             self._order.addItem("1 (linear)")
         elif fmt == FMT_NETGEN:
@@ -341,13 +321,6 @@ class ExportDialog(QDialog):
             self._order.currentIndexChanged.connect(self._update_preview)
             form.addRow("Order:", self._order)
 
-        # --- Scale (FEMEEM only) -------------------------------------
-        self._scale = None
-        if fmt == FMT_FEMEEM:
-            self._scale = QLineEdit("1.0")
-            self._scale.textChanged.connect(self._update_preview)
-            form.addRow("Scale:", self._scale)
-
         # --- Dimension ----------------------------------------------
         self._dimension = QComboBox()
         if fmt == FMT_MEG:
@@ -356,7 +329,7 @@ class ExportDialog(QDialog):
         else:
             self._dimension.addItems(["3D", "2D"])
         self._dimension.currentIndexChanged.connect(self._update_preview)
-        if fmt not in (FMT_NETGEN, FMT_FEMEEM):
+        if fmt != FMT_NETGEN:
             form.addRow("Dimension:", self._dimension)
 
         # --- NoPyramid (Nastran only) -------------------------------
@@ -486,8 +459,6 @@ class ExportDialog(QDialog):
             self._dimension.setCurrentIndex(int(s["dimension"]))
         if self._nopyramid and "nopyramid" in s:
             self._nopyramid.setCurrentIndex(int(s["nopyramid"]))
-        if self._scale and "scale" in s:
-            self._scale.setText(s["scale"])
         if self._kelvin_enable and "kelvin_enable" in s:
             self._kelvin_enable.setChecked(bool(s["kelvin_enable"]))
         if self._kelvin_mesh_size and "kelvin_mesh_size" in s:
@@ -513,8 +484,6 @@ class ExportDialog(QDialog):
     # ------------------------------------------------------------------
     def file_path(self):
         d = self._dir.text().replace("\\", "/")
-        if self._fmt == FMT_FEMEEM:
-            return d.rstrip("/")
         if not d.endswith("/"):
             d += "/"
         return d + self._filename.text()
@@ -568,15 +537,6 @@ class ExportDialog(QDialog):
                    f'dimension {dim}')
             if self._nopyramid and self._nopyramid.currentIndex() == 1:
                 cmd += " nopyramid"
-
-        elif fmt == FMT_VTK:
-            dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'export vtk "{f}" order {order} '
-                   f'dimension {dim}')
-
-        elif fmt == FMT_FEMEEM:
-            sc = self._scale.text() if self._scale else "1.0"
-            cmd = f'export femeem "{f}" scale {sc}'
 
         elif fmt == FMT_MEG:
             dim_idx = self._dimension.currentIndex()
@@ -669,8 +629,6 @@ class ExportDialog(QDialog):
         }
         if self._nopyramid:
             s["nopyramid"] = self._nopyramid.currentIndex()
-        if self._scale:
-            s["scale"] = self._scale.text()
         if self._kelvin_enable:
             s["kelvin_enable"] = self._kelvin_enable.isChecked()
         if self._kelvin_mesh_size:
@@ -687,7 +645,7 @@ class ExportDialog(QDialog):
 
 
 # ----------------------------------------------------------------------
-# Generic export runner — applies to GMSH / Nastran / VTK / FEMEEM / MEG
+# Generic export runner — applies to GMSH / Nastran / MEG
 # (Netgen Vol has its own runner with subprocess verification, see below.)
 # ----------------------------------------------------------------------
 
@@ -716,8 +674,7 @@ def _run_generic_export(fmt, cubit_mod, parent):
     cubit_mod.cmd(cmd)
 
     out = dlg.file_path()
-    exists = os.path.isdir(out) if fmt == FMT_FEMEEM else os.path.isfile(out)
-    if not exists:
+    if not os.path.isfile(out):
         QMessageBox.warning(
             parent, "Export failed",
             f"Export did not produce expected output:\n{out}")
@@ -1017,26 +974,69 @@ def _run_jcf_export(parent):
     return result
 
 
+def _run_vtu_export(parent):
+    """Write the current Cubit mesh as ASCII VTK XML (.vtu)."""
+    from cubit_mesh_export.vtu import export_vtu
+
+    out, _ = QFileDialog.getSaveFileName(
+        parent, "Export VTU", "mesh.vtu", "VTK XML UnstructuredGrid (*.vtu)")
+    if not out:
+        return
+    if not out.lower().endswith(".vtu"):
+        out += ".vtu"
+    try:
+        result = export_vtu(out)
+    except Exception as exc:
+        QMessageBox.warning(parent, "VTU export failed", str(exc))
+        return
+    print(f"Export complete: {out}")
+    return result
+
+
+def _run_model_transfer(target, label, parent):
+    """Send the current Cubit model through the one installed handler."""
+    import cubit as cubit_mod
+    from cubit_mesh_export import model_transfer
+
+    try:
+        handler = model_transfer.describe(target)
+    except model_transfer.TransferUnavailable as exc:
+        QMessageBox.warning(parent, f"{label} unavailable", str(exc))
+        return
+    answer = QMessageBox.question(
+        parent, label, f"Send the current model with {handler}?")
+    if answer != QMessageBox.Yes:
+        return
+    try:
+        result = model_transfer.transfer(target, cubit_mod)
+    except Exception as exc:
+        QMessageBox.warning(parent, f"{label} failed", str(exc))
+        return
+    text = json.dumps(result, indent=2, ensure_ascii=False)
+    print(f"{label} complete: {text}")
+    QMessageBox.information(parent, label, text)
+    return result
+
+
 def launch_export(fmt):
     """Launch one export dialog from Cubit's official custom toolbar.
 
     ``WorkflowToolbar`` buttons execute small Python scripts.  Those scripts
     call this stable dispatcher instead of modifying Cubit's QMenuBar.
     """
-    supported = {
-        FMT_NETGEN, FMT_GMSH, FMT_NASTRAN, FMT_VTK, FMT_FEMEEM, FMT_MEG,
-    }
-    if fmt == "jcf":
-        parent = find_claro()
-        if parent is None:
-            raise RuntimeError("Cubit main window is not available")
-        return _run_jcf_export(parent)
-    if fmt not in supported:
+    labels = {spec[1]: spec[0] for spec in _MENU_SPECS}
+    if fmt not in labels:
         raise ValueError(f"unsupported Cubit export format: {fmt!r}")
-    import cubit as cubit_mod
     parent = find_claro()
     if parent is None:
         raise RuntimeError("Cubit main window is not available")
+    if fmt == FMT_JCF:
+        return _run_jcf_export(parent)
+    if fmt == FMT_VTU:
+        return _run_vtu_export(parent)
+    if fmt == FMT_FEMTET:
+        return _run_model_transfer(fmt, labels[fmt], parent)
+    import cubit as cubit_mod
     if fmt == FMT_NETGEN:
         return _run_netgen_export(cubit_mod, parent)
     return _run_generic_export(fmt, cubit_mod, parent)
@@ -1060,17 +1060,21 @@ _CLARO_MENU_TITLE = "&Export"
 _claro_keepalive = []
 _shutdown_connected = False
 
-# (menu label, export format, status tip)
+# (menu label, export format, status tip).  The toolbar template, its
+# scripts and the toolbar checks carry the same labels in the same order.
 _MENU_SPECS = (
-    ("Netgen Vol (.vol)...", FMT_NETGEN,
+    ("Netgen (.vol)", FMT_NETGEN,
      "Export curved mesh with labels (.vol, order 1-5)"),
-    ("GMSH (.msh)...", FMT_GMSH,
+    ("Gmsh (.msh)", FMT_GMSH,
      "Gmsh MSH 4.2 export for post-processing and visualization; solver meshes are checked .vol"),
-    ("Nastran BDF (.bdf)...", FMT_NASTRAN,
-     "Export mesh to Nastran BDF format (.bdf)"),
-    ("VTK (.vtk)...", FMT_VTK,
-     "Export mesh to VTK format (.vtk)"),
-    ("JMAG (.jcf)", "jcf", "Export a JMAG solver input with named symmetry sidesets"),
+    ("Nastran (.bdf)", FMT_NASTRAN,
+     "Export mesh to Nastran BDF format (.bdf, order 1-2)"),
+    ("VTK (.vtu)", FMT_VTU,
+     "Export block elements and sideset faces as ASCII VTK XML (.vtu)"),
+    ("JMAG (.jcf)", FMT_JCF,
+     "Export a static solver input from named blocks and sidesets (.jcf)"),
+    ("Femtet (COM)", FMT_FEMTET,
+     "Send the model through a separately installed transfer handler"),
     ("ELF/MAGIC (.meg)", FMT_MEG,
      "Export mesh to ELF/MAGIC MEG format (1st-order)"),
 )

@@ -18,11 +18,13 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QToolBar
 
 SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
-    "Netgen Vol (.vol)",
-    "GMSH (.msh)",
+    "Netgen (.vol)",
+    "Gmsh (.msh)",
     "Nastran (.bdf)",
-    "VTK (.vtk)",
-    "MEG (ELF/MAGIC)",
+    "VTK (.vtu)",
+    "JMAG (.jcf)",
+    "Femtet (COM)",
+    "ELF/MAGIC (.meg)",
 ]
 RESULT_PATH = os.environ.get(
     "CUBIT_MESH_EXPORT_TOOLBAR_PROBE_RESULT",
