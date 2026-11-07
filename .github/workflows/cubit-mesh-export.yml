@@ -202,7 +202,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install setuptools pytest psutil numpy pefile `
             "netgen-mesher==6.2.2608" "ngsolve==6.2.2608"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
             tests\test_cubit_mesh_quality.py `
@@ -268,7 +268,39 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -I packages\cubit-mesh-export\tools\check_mcp_standalone.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pytest packages\cubit-mesh-export\tests\mcp --confcutdir=packages\cubit-mesh-export\tests\mcp -q
+          @'
+          import os
+          from pathlib import Path
+          import shutil
+          import sysconfig
+          import tempfile
+
+          import cubit_mesh_export
+          import pytest
+
+          package = Path(cubit_mesh_export.__file__).resolve()
+          install_dirs = {Path(sysconfig.get_path(key)).resolve()
+                          for key in ('purelib', 'platlib')}
+          if not any(package.is_relative_to(path) for path in install_dirs):
+              raise SystemExit(f'Expected wheel install, imported {package}')
+          print(f'Testing installed package: {package}', flush=True)
+          os.environ.pop('PYTHONPATH', None)
+
+          checkout = Path(os.environ['GITHUB_WORKSPACE'])
+          with tempfile.TemporaryDirectory(dir=os.environ['RUNNER_TEMP']) as tmp:
+              root = Path(tmp)
+              tests = root / 'tests' / 'mcp'
+              shutil.copytree(checkout / 'packages/cubit-mesh-export/tests/mcp', tests)
+              config = root / 'pytest.ini'
+              config.write_bytes(b'[pytest]\n')
+              os.chdir(root)
+              try:
+                  result = pytest.main(['-c', str(config), '--confcutdir', str(tests),
+                                        str(tests), '-q'])
+              finally:
+                  os.chdir(checkout)
+          raise SystemExit(result)
+          '@ | python -I -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Retain Gmsh runtime identity

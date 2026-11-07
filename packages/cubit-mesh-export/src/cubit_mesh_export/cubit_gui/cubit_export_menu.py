@@ -330,8 +330,7 @@ class ExportDialog(QDialog):
             form.addRow("Order:", self._order)
         elif fmt == FMT_GMSH:
             # tet/hex up to order 3, wedge up to order 2.
-            # order 4-5 unsupported in GMSH writer (see CLAUDE.md
-            # "GMSH order limit").
+            # The Gmsh writer supports orders up to three.
             self._order.addItems(
                 ["1", "2", "3 (tet/hex only, wedge stays 2)"])
             self._order.setCurrentIndex(0)

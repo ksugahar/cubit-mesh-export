@@ -1,10 +1,18 @@
 # cubit-mesh-export
 
+Export high-order curved meshes from Coreform Cubit directly to Netgen/NGSolve
+`.vol`. Use `check-vol` to verify the exported mesh and its named regions and
+boundaries before analysis. The standalone tools run without Radia.
+
+Nastran BDF export supports first- and second-order elements. Gmsh MSH 4.2 output
+supports visualization and post-processing. The ELF/MAGIC writer exports
+`.meg` directly from Cubit. VTK output uses the Legacy `.vtk` format.
+
 ## Neutral CAD capture
 
 `export model_capture "model.json" units mm` records CAD topology and explicit
 block/sideset identity for separate construction adapters, without meshing.
-Read [the model-capture contract](docs/model_capture.md) for supported source
+Read [the model-capture contract](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/docs/model_capture.md) for supported source
 records, mandatory units, approximation limits and external physical mappings.
 
 ## Explicit named periodic export
@@ -96,14 +104,10 @@ The standalone GUI, installer, and `cubit-toolbar-smoke-test` release check are
 owned by this distribution and require no Radia installation. The former
 `radia.install_panels` and Radia GUI paths are removed, with no compatibility
 shims. Existing deployments must regenerate their startup registration using
-`cubit-plugin-install` from the selected Python environment. See the owning MCP
-`cubit_toolbar_guide` for the operating contract and
-`validation_test/cubit_mesh_export/STANDALONE_GUI.md` for acceptance evidence.
+`cubit-plugin-install` from the selected Python environment. See the MCP `cubit_toolbar_guide` for the operating contract.
 
-This GUI and MCP are published independently of Radia. Installation
-and deployment verification never import Radia. validation host/100 acceptance
-uses `python tools/release_cubit_dual.py`, not the Radia solver's release-quad
-commands.
+The GUI and MCP are distributed independently. The repository includes
+`tools/release_cubit_dual.py` for verifying a release on a licensed Cubit installation.
 
 The supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
 2026.8, and Netgen/NGSolve 6.2.2608.  These solver versions are exact pins in
@@ -113,8 +117,6 @@ Netgen and does not link against the Python solver wheels.
 For LLM operation, the canonical manual is the included `cubit_mesh_export.mcp` server:
 start with `cubit_status` and `cubit_docs`; use APREPRO through its headless
 execution tools and `cubit_check_vol` before handing a mesh to a solver.
-Standalone wheel acceptance is recorded under
-`validation_test/cubit_mesh_export/standalone_1_0_0_lab_result.json`.
 Combined Radia installations must also pass Radia's declared exporter
 compatibility check; standalone operation does not import Radia.
 
@@ -154,11 +156,11 @@ The included MCP manual owns the operating workflow.
 
 Cubit MCP uses `CUBIT_MCP_*` settings, not `RADIA_MCP_*`. Historical Radia
 logs and caches are neither automatically migrated nor deleted. Runtime support
-is intentionally maintained independently; see its [ownership and license](src/cubit_mesh_export/mcp/_support/OWNERSHIP.md).
+is intentionally maintained independently; see its [ownership and license](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md).
 
 For an MCP client, use the installed `mcp-server-cubit` command, or the selected
 Python interpreter with `-m cubit_mesh_export.mcp.server`. See the
-[Cubit MCP manual](src/cubit_mesh_export/mcp/README.md) for capabilities and
+[Cubit MCP manual](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md) for capabilities and
 headless operation. Old `radia_mcp.cubit` module commands must be updated;
 no compatibility forwarding package is shipped. Radia topology optimization
 may depend on Cubit, but Cubit users do not install Radia to use MCP.
@@ -183,27 +185,11 @@ The journal must produce the expected material and boundary labels; adjust
 The no-argument `cubit-smoke-test` uses the package-owned
 `solver_ready_sample.jou`; no Radia installation or source tree is required.
 
-What you get depends on whether `radia` is installed alongside it:
-
-|                                                             | standalone | with `radia` |
-|-------------------------------------------------------------|:----------:|:------------:|
-| `export {netgen,gmsh,vtk,femeem,meg}` / `export nastran_bdf` |     yes    |      yes     |
-| `check-vol` CLI (no Cubit required)                           |     yes    |      yes     |
-| Kelvin transformation and symmetry labels                     |     yes    |      yes     |
-| **Export menu inside Cubit's GUI**                            |     yes    |      yes     |
-| **Cubit MCP server and API reference**                        |     yes    |      yes     |
-
-The menu is registered through Cubit's own Claro API and runs in Cubit's
-embedded Python; normal Radia Python/MCP workflows and Simulink applications do
-not need PySide6.  To get the whole Radia toolchain in one step:
-
-```bash
-pip install "radia[cubit]"
-cubit-plugin-install
-```
+The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
+bundled PySide6.
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
-> machine-wide `CUBIT_PLUGIN_DIR` environment variable. On validation host this caused Cubit
+> machine-wide `CUBIT_PLUGIN_DIR` environment variable. A stale setting can cause Cubit
 > to receive a `-commandplugindir` argument and report both the flag and its
 > value as files it could not open. This is a diagnosed environment issue, not
 > a reason to accept every exit code 2. Inspect the log and correct the stale
@@ -219,8 +205,7 @@ cubit-plugin-install
 
 Always re-run `cubit-plugin-install` after upgrading.
 `cubit-plugin-install --verify-only` checks both the deployed binary
-hashes and, when `radia` is installed, the Cubit toolbar startup
-registration. If the official WorkflowToolbar was imported previously, the
+hashes and the Cubit toolbar startup registration. If the official WorkflowToolbar was imported previously, the
 installer refreshes its scripts and toolbar definition automatically and the
 verification step rejects any stale deployed copy.
 
@@ -484,10 +469,6 @@ from ngsolve import Mesh
 mesh = Mesh("model.vol")
 ```
 
-See `docs/cubit_mesh_export/hex_sphere_highorder/` for a runnable demo (a curved
-hex sphere whose NGSolve volume converges to 4/3 pi r^3 as the order rises: order 1
--23 % -> order 2 -0.2 % -> order 3 +0.1 %).
-
 The Cubit-side Python helpers (Kelvin transformation, etc.) live in
 `cubit_mesh_export.cubit_helpers`:
 
@@ -607,18 +588,13 @@ solver or Simulink initialization. Material constants are not inferred from
 mesh labels; the application's checked DesignSpec/configuration owns those
 values and validates them separately.
 
-## Part of the Radia project
+## Source and licenses
 
-Source: [github.com/ksugahar/Radia](https://github.com/ksugahar/Radia)
+[Source, tests and CI](https://github.com/ksugahar/cubit-mesh-export)
 
-Coreform Cubit 2026.8 is the supported native SDK/runtime. The installer rejects
-older runtimes and SDK mismatches. Distribution acceptance runs on the licensed validation host; computation-time
-evaluation hosts do not install Cubit.
-
-
-Owner-authored code is licensed under Apache-2.0 from the next releases.
-See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
-retain their original licenses; previously published artifacts are unchanged.
+The project license is Apache-2.0 for owner-authored exporter code. See
+[third-party notices](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/THIRD_PARTY_NOTICES.md)
+for the native components and their licenses.
 
 ### Gmsh output boundary
 
@@ -655,12 +631,4 @@ for wedge/pyramid. Unsupported requests fail before creating a partial `.msh`;
 they never substitute a lower-order mesh. Pyramid 3 export remains unqualified:
 the current official reference runtime advertises type 125 but cannot construct
 it. This restriction is a pending adoption disposition, not a physics criterion
-change. Licensed regression execution (with admitted compute resources) is:
-
-```powershell
-python validation_test/cubit/run_gmsh42_hex_order3.py --cubit-exe <console-executable> --plugin <candidate.ccm> --install-report gmsh-install.json --wheel <retained-official.whl> --out <new-job-output>
-```
-
-The executable checks the loaded candidate DLL and uses Gmsh's positive-Jacobian
-contract to expose reversed cubic edge ordering. It does not replace release
-handler acceptance or numerical validation.
+change.

@@ -1,7 +1,9 @@
 # cubit-mesh-export
 
-Standalone mesh and CAD export tools for Coreform Cubit. See the
-[package documentation](packages/cubit-mesh-export/README.md) for use.
+Export high-order curved meshes from Coreform Cubit directly to Netgen/NGSolve
+`.vol`. The standalone exporter also writes Nastran BDF (orders 1 and 2),
+Gmsh MSH 4.2 for visualization and post-processing, and ELF/MAGIC MEG.
+See the [package documentation](packages/cubit-mesh-export/README.md).
 
 Build the Python wheel with `python -m build --wheel packages/cubit-mesh-export`.
 The build verifies the native source and payload manifest. It requires the
