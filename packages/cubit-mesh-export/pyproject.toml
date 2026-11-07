@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ksugahar/Radia"
+Homepage = "https://github.com/ksugahar/cubit-mesh-export"
 
 [project.optional-dependencies]
 mesh-quality = ["gmsh>=5.0.0.dev0"]
