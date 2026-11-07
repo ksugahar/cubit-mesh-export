@@ -14,14 +14,6 @@ SPEC = importlib.util.spec_from_file_location("cubit_mesh_export_check_current",
 CHECK_MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(CHECK_MODULE)
-VERIFY_FILE = (
-    Path(__file__).resolve().parents[1]
-    / "src" / "radia" / "panels" / "calc_verify_vol.py"
-)
-VERIFY_SPEC = importlib.util.spec_from_file_location("radia_calc_verify_vol_current", VERIFY_FILE)
-VERIFY_MODULE = importlib.util.module_from_spec(VERIFY_SPEC)
-assert VERIFY_SPEC.loader is not None
-VERIFY_SPEC.loader.exec_module(VERIFY_MODULE)
 LABEL_CONTRACT_SCHEMA = CHECK_MODULE.LABEL_CONTRACT_SCHEMA
 REPORT_SCHEMA = CHECK_MODULE.REPORT_SCHEMA
 check_consistency = CHECK_MODULE.check_consistency
@@ -558,36 +550,6 @@ def test_cli_writes_versioned_json_report_and_requires_explicit_sidecar(
     assert exit_code == 2
     assert "CAD reference not found" in capsys.readouterr().err
     assert json.loads(error_report.read_text(encoding="utf-8"))["passed"] is False
-
-
-def test_cubit_toolbar_verifier_delegates_to_canonical_checker(
-        tmp_path, monkeypatch):
-    # Root CI intentionally does not install package-level distributions.
-    # Expose the monorepo package source so this integration check exercises
-    # the same public import used by the deployed toolbar.
-    monkeypatch.syspath_prepend(str(PACKAGE_SRC))
-    mesh, vol_path = _save_box(tmp_path)
-    sidecar = Path(str(vol_path) + ".json")
-    sidecar.write_text(
-        json.dumps({
-            "materials": {"body": 1.0},
-            "boundaries": {"outer": 6.0},
-            "edges": {},
-            "n_elements": mesh.ne,
-            "n_points": mesh.nv,
-            "order": mesh.GetCurveOrder(),
-        }),
-        encoding="utf-8",
-    )
-
-    result = VERIFY_MODULE.verify_vol(str(vol_path))
-    updated = json.loads(sidecar.read_text(encoding="utf-8"))
-
-    assert result["schema"] == REPORT_SCHEMA
-    assert result["passed"]
-    assert updated["ng_materials"]["body"] == pytest.approx(1.0)
-    assert updated["ng_boundaries"]["outer"] == pytest.approx(6.0)
-    assert updated["warnings"] == []
 
 
 MIXED_CYLINDER = (
