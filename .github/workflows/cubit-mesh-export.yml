@@ -106,7 +106,8 @@ jobs:
                           'cubit_mesh_export/cubit_gui/solver_ready_sample.jou',
                           'cubit_mesh_export/cubit_gui/cubit_export_menu.py',
                           'cubit_mesh_export/cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
-                          'cubit_mesh_export/native_payloads.json')
+                          'cubit_mesh_export/native_payloads.json',
+                          'cubit_mesh_export/cubit_mesh_export_native_source.zip')
               missing = [name for name in required if name not in names]
               if missing:
                   raise SystemExit(f'missing required wheel payloads: {missing}')
