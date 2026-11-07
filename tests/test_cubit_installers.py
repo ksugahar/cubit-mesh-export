@@ -10,6 +10,7 @@ import sys
 import tarfile
 import tomllib
 import xml.etree.ElementTree as ET
+import zipfile
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -658,7 +659,7 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
 
 @pytest.mark.parametrize("damage", [
     None, "schema", "ccm-content", "pyd-content", "ccm-missing", "pyd-missing",
-    "size",
+    "size", "source-archive-content",
 ])
 def test_sdist_setup_verifies_payloads_without_native_sources(
     monkeypatch, tmp_path, damage
@@ -675,11 +676,23 @@ def test_sdist_setup_verifies_payloads_without_native_sources(
     manifest_path.write_text('{"payloads": {}}', encoding="utf-8")
     monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
     _fake_native_sdk_cache(tmp_path)
-    provenance.record_manifest(tmp_path, package_dir)
+    manifest = provenance.record_manifest(tmp_path, package_dir)
+    source = manifest["source"]
+    archive = package_dir / "cubit_mesh_export_native_source.zip"
+    with zipfile.ZipFile(archive, "w") as contents:
+        contents.writestr("native-source.json", json.dumps({
+            "source_commit": source["commit"],
+            "native_tree_sha256": source["tree_sha256"],
+            "native_input_count": source["file_count"],
+        }))
+    source["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     shutil.rmtree(tmp_path / "src/cubit_plugin")
     assert provenance.verify_manifest(None, package_dir) == []
 
-    if damage in ("schema", "size"):
+    if damage == "source-archive-content":
+        archive.write_bytes(archive.read_bytes() + b"drift")
+    elif damage in ("schema", "size"):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if damage == "schema":
             manifest["schema"] = "unsupported"
@@ -708,6 +721,10 @@ def test_sdist_setup_verifies_payloads_without_native_sources(
     if damage is None:
         runpy.run_path(str(package_root / "setup.py"))
         assert len(setup_calls) == 1
+    elif damage == "source-archive-content":
+        with pytest.raises(RuntimeError, match="corresponding native source archive"):
+            runpy.run_path(str(package_root / "setup.py"))
+        assert not setup_calls
     else:
         with pytest.raises(SystemExit) as error:
             runpy.run_path(str(package_root / "setup.py"))
