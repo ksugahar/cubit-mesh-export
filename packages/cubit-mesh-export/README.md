@@ -6,7 +6,8 @@ boundaries before analysis. The standalone tools run without Radia.
 
 Nastran BDF export supports first- and second-order elements. Gmsh MSH 4.2 output
 supports visualization and post-processing. The ELF/MAGIC writer exports
-`.meg` directly from Cubit. VTK output uses the Legacy `.vtk` format.
+`.meg` directly from Cubit. The Export menu writes ASCII VTK XML `.vtu` and
+JMAG `.jcf`; the `export vtk` command writes Legacy `.vtk`.
 
 ## Neutral CAD capture
 
@@ -187,6 +188,27 @@ The no-argument `cubit-smoke-test` uses the package-owned
 
 The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
 bundled PySide6.
+
+The menu lists, in order: Netgen (.vol), Gmsh (.msh), Nastran (.bdf),
+VTK (.vtu), JMAG (.jcf), Femtet (COM) and ELF/MAGIC (.meg). VTK (.vtu) writes
+block cells and sideset faces with full-precision coordinates; every volume
+element must belong to a block. Femtet (COM) needs a separately installed
+handler registered in the entry-point group `cubit_mesh_export.model_transfer`;
+without one the menu reports that it is unavailable and does nothing.
+
+JMAG (.jcf) asks for an analysis settings JSON file, then for the output path,
+and writes a static analysis input from the active mesh. The settings name Cubit
+blocks and sidesets: `block_materials` maps every block to an entry of
+`material_library` (inline, or a JSON file next to the settings), `coils` give
+current, turns and a flow-in sideset or direction, `external_field` is optional,
+and `boundaries` maps sideset names to a boundary type (`symmetry` only). The
+former `symmetry_sidesets` key is rejected. The full schema is in the
+`cubit_mesh_export.jmag` module documentation. Only static analysis is written.
+
+Femtet (COM) scope: this package ships only the entry-point contract and the
+menu action, verified with test handlers. A transfer through a real handler,
+including saving and reopening the model, depends on that handler and is not
+verified by this package.
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
 > machine-wide `CUBIT_PLUGIN_DIR` environment variable. A stale setting can cause Cubit
