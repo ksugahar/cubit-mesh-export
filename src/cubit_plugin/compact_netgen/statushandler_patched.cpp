@@ -1,3 +1,7 @@
+// Modified from Netgen libsrc/core/statushandler.cpp at 9642315f7a930701df33c917c537a51a4f3b46cd.
+// Local modifications present in the source history on 2026-10-15.
+// Netgen licensing and attribution are provided with the distribution.
+
 // statushandler_patched.cpp — Compact Netgen
 // All file-scope statics converted to function-local statics (lazy init)
 // to avoid DLL DllMain static initialization issues.

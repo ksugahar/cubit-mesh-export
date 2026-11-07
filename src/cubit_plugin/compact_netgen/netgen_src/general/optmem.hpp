@@ -1,3 +1,7 @@
+// Modified from Netgen libsrc/general/optmem.hpp at 9642315f7a930701df33c917c537a51a4f3b46cd.
+// Local modifications present in the source history on 2026-10-15.
+// Netgen licensing and attribution are provided with the distribution.
+
 #ifndef FILE_OPTMEM
 #define FILE_OPTMEM
 

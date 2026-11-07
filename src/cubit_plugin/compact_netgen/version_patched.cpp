@@ -1,3 +1,7 @@
+// Modified from Netgen libsrc/core/version.cpp at 9642315f7a930701df33c917c537a51a4f3b46cd.
+// Local modifications present in the source history on 2026-10-15.
+// Netgen licensing and attribution are provided with the distribution.
+
 // version_patched.cpp — Compact Netgen version
 // Removes file-scope std::map and lambda static init that crash in DLL DllMain.
 

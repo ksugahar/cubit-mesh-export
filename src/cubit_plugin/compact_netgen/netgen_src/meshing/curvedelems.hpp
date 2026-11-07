@@ -1,3 +1,7 @@
+// Modified from Netgen libsrc/meshing/curvedelems.hpp at 9642315f7a930701df33c917c537a51a4f3b46cd.
+// Local modifications present in the source history on 2026-10-28.
+// Netgen licensing and attribution are provided with the distribution.
+
 #ifndef NETGEN_CURVEDELEMS_HPP
 #define NETGEN_CURVEDELEMS_HPP
 

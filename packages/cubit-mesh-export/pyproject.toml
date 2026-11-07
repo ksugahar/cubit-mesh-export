@@ -7,8 +7,8 @@ name = "cubit-mesh-export"
 version = "2.2.8"
 description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
-license = "Apache-2.0"
-license-files = ["LICENSE", "LICENSE-MCP", "LICENSE-NETGEN.txt", "LICENSE-PYBIND11.txt", "NOTICE", "THIRD_PARTY_NOTICES.md"]
+license = "Apache-2.0 AND LGPL-2.1-only AND BSD-3-Clause AND MIT"
+license-files = ["LICENSE", "LICENSE-MCP", "LICENSE-NETGEN.txt", "NETGEN-AUTHORS.txt", "LICENSE-PYBIND11.txt", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.12,<3.13"
 authors = [
     {name = "Kengo Sugahara"},
