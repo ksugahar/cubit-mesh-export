@@ -205,7 +205,24 @@ and `boundaries` maps sideset names to a boundary type (`symmetry` only). The
 former `symmetry_sidesets` key is rejected. See the
 [JMAG JCF settings JSON guide (Japanese)](docs/jcf_settings_ja.md) for examples.
 The full schema is in the `cubit_mesh_export.jmag` module documentation.
-Only static analysis is written.
+Only static analysis is written. To copy the wheel's starter settings into
+your working directory without importing Cubit, run this in the Python
+environment where the wheel is installed:
+
+```python
+from importlib.metadata import distribution
+from pathlib import Path
+
+template = distribution("cubit-mesh-export").locate_file(
+    "cubit_mesh_export/examples/jmag/settings.json"
+)
+with Path("settings.json").open("xb") as output:
+    output.write(template.read_bytes())
+```
+
+Set the block names, sideset names, and analysis parameters for your model
+before selecting the file in the Cubit Export menu. For batch export, make the
+wheel and its dependencies available to the Python environment that runs Cubit.
 
 Femtet (COM) scope: this package ships only the entry-point contract and the
 menu action, verified with test handlers. A transfer through a real handler,

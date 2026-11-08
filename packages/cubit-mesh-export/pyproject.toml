@@ -33,6 +33,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/ksugahar/cubit-mesh-export"
+"JCF Settings" = "https://github.com/ksugahar/cubit-mesh-export/blob/codex/standalone-baseline/packages/cubit-mesh-export/docs/jcf_settings_ja.md"
 
 [project.optional-dependencies]
 mesh-quality = ["gmsh>=5.0.0.dev0"]
@@ -52,7 +53,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 # The retired Qt5 GUI .ccl is not packaged. The exporter-owned PySide6 toolbar
 # is the only supported Cubit GUI; cubit-plugin-install deletes stale .ccl files.
-cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "native_payloads.json", "cubit_mesh_export_native_source.zip"]
+cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "native_payloads.json", "cubit_mesh_export_native_source.zip", "examples/jmag/settings.json"]
 "cubit_mesh_export.cubit_helpers" = ["*.py"]
 "cubit_mesh_export.mcp" = ["README.md"]
 "cubit_mesh_export.mcp._support" = ["*.txt", "*.md"]
