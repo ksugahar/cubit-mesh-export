@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.1
+
+- Include an example JMAG JCF settings JSON in the wheel and link to the settings guide from PyPI.
+
 ## 2.3.0
 
 - Add ASCII VTK XML VTU export and direct JMAG JCF output to the Cubit Export menu.
