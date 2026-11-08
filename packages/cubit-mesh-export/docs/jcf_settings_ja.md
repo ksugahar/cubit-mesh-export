@@ -1,10 +1,20 @@
 # JMAG JCF 出力用の設定 JSON
 
-Cubit の **Export → JMAG (.jcf)** で選ぶ設定ファイルです。メッシュは Cubit 側に用意し、材料・励磁・対称境界を JSON で指定します。JSON は UTF-8 で保存し、コメントや末尾のカンマは入れません。
+このページは、AI エージェントが Cubit モデルから JMAG の静磁場解析用 `.jcf` を生成するための入力仕様です。出力前に実モデルのブロック・sideset と、ユーザーが指定した解析条件を照合します。
+
+## エージェントの作業手順
+
+1. Cubit のモデルからブロック名と sideset 名を取得する。メッシュ要素がブロックに割り当てられ、使用する sideset にメッシュ面があることを確認する。
+2. `settings.json` をひな形にし、実モデルに合わせて `unit`、材料、励磁、境界を記述する。すべてのブロックを `block_materials` に含める。材料特性、電流、巻数、励磁方向、対称面の根拠が不足していれば、値を確定する前に確認する。
+3. JSON として読み込み、ブロック名・sideset 名の完全一致と、参照先の材料名を確認する。UTF-8 で保存し、コメントや末尾カンマを入れない。
+4. Cubit の **Export → JMAG (.jcf)** で設定ファイルを選び、新しい出力先を指定する。Cubit 内の Python から実行する場合は、読み込んだ設定辞書を `cubit_mesh_export.jmag.export_jcf(path, settings)` に渡す。別ファイルの材料辞書を使う場合、Python 呼び出し側で先に読み込む。
+5. 出力が生成されたことを確認する。出力内容の検証が必要なら、JCF に含まれる材料・励磁・境界の設定を照合する。静解析の確認には JMAG ExecSolver の実行結果を使う。
 
 ## 基本例
 
-以下は、Cubit に `air` と `coil` のブロック、`symmetry_plane` の sideset がある場合の `settings.json` です。名前と座標は対象モデルに合わせて変更してください。
+[settings.json をダウンロード](https://raw.githubusercontent.com/ksugahar/cubit-mesh-export/refs/heads/codex/standalone-baseline/packages/cubit-mesh-export/docs/settings.json) · [GitHub で内容を表示](settings.json)
+
+このファイルは下の基本例と同一です。Cubit に `air` と `coil` のブロック、`symmetry_plane` の sideset があり、例の解析条件を使う場合はそのまま選択できます。別のモデルでは名前、座標、物理条件を合わせてください。
 
 ```json
 {
