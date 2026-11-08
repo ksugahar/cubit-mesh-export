@@ -1,0 +1,38 @@
+{
+  "unit": "mm",
+  "material_library": {
+    "air_material": {
+      "mu_r": 1
+    },
+    "coil_material": {
+      "mu_r": 1,
+      "resistivity": 1.7e-08
+    }
+  },
+  "block_materials": {
+    "TestAir": "air_material",
+    "TestCoil": "coil_material"
+  },
+  "coils": [
+    {
+      "blocks": [
+        "TestCoil"
+      ],
+      "current": 1.5,
+      "turns": 10,
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "origin": [
+        4,
+        0,
+        1
+      ]
+    }
+  ],
+  "boundaries": {
+    "TestSym": "symmetry"
+  }
+}

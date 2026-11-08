@@ -1,0 +1,53 @@
+#!python
+from pathlib import Path
+import cubit
+
+if Path("model.cub5").exists():
+    raise FileExistsError("Use a fresh working directory")
+
+def cmd(command):
+    cubit.cmd(command)
+
+def volumes():
+    return set(cubit.get_entities("volume"))
+
+def brick(dimensions, z):
+    old = volumes()
+    x, y, depth = dimensions
+    cmd(f"create brick x {x} y {y} z {depth}")
+    entity, = volumes() - old
+    if z:
+        cmd(f"volume {entity} move z {z}")
+    return entity
+
+outer = brick((10, 8, 2), 1)
+bore = brick((6, 4, 4), 1)
+cmd(f"subtract volume {bore} from volume {outer}")
+coil, = volumes()
+
+air_box = brick((20, 16, 8), 4)
+cmd(f"subtract volume {coil} from volume {air_box} keep")
+air, = volumes() - {coil, air_box}
+cmd(f"delete volume {air_box}")
+assert volumes() == {coil, air}, volumes()
+cmd("imprint all")
+cmd("merge all")
+assert volumes() == {coil, air}, volumes()
+cmd("volume all scheme tetmesh")
+cmd("volume all size 1.5")
+cmd("mesh volume all")
+for block, volume, name in [(1, air, "TestAir"), (2, coil, "TestCoil")]:
+    cmd(f"block {block} volume {volume}")
+    cmd(f"block {block} name '{name}'")
+    assert cubit.get_exodus_entity_name("block", block) == name
+symmetry_surfaces = [
+    surface for surface in cubit.get_entities("surface")
+    if abs(cubit.get_center_point("surface", surface)[2]) < 1e-8
+]
+assert symmetry_surfaces, "no z=0 surfaces"
+surface_ids = " ".join(map(str, symmetry_surfaces))
+cmd(f"sideset 1 surface {surface_ids}")
+cmd("sideset 1 name 'TestSym'")
+assert cubit.get_exodus_entity_name("sideset", 1) == "TestSym"
+cmd('save as "model.cub5"')
+#!cubit
