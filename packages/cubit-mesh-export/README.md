@@ -202,8 +202,10 @@ blocks and sidesets: `block_materials` maps every block to an entry of
 `material_library` (inline, or a JSON file next to the settings), `coils` give
 current, turns and a flow-in sideset or direction, `external_field` is optional,
 and `boundaries` maps sideset names to a boundary type (`symmetry` only). The
-former `symmetry_sidesets` key is rejected. The full schema is in the
-`cubit_mesh_export.jmag` module documentation. Only static analysis is written.
+former `symmetry_sidesets` key is rejected. See the
+[JMAG JCF settings JSON guide (Japanese)](docs/jcf_settings_ja.md) for examples.
+The full schema is in the `cubit_mesh_export.jmag` module documentation.
+Only static analysis is written.
 
 Femtet (COM) scope: this package ships only the entry-point contract and the
 menu action, verified with test handlers. A transfer through a real handler,
