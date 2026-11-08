@@ -203,11 +203,11 @@ blocks and sidesets: `block_materials` maps every block to an entry of
 current, turns and a flow-in sideset or direction, `external_field` is optional,
 and `boundaries` maps sideset names to a boundary type (`symmetry` only). The
 former `symmetry_sidesets` key is rejected. See the
-[JMAG JCF settings JSON guide (Japanese)](docs/jcf_settings_ja.md) for examples.
+[JMAG JCF settings JSON guide (Japanese)](https://github.com/ksugahar/cubit-mesh-export/blob/codex/standalone-baseline/packages/cubit-mesh-export/docs/jcf_settings_ja.md) for examples.
 The full schema is in the `cubit_mesh_export.jmag` module documentation.
 Only static analysis is written. To copy the wheel's starter settings into
-your working directory without importing Cubit, run this in the Python
-environment where the wheel is installed:
+your working directory without importing Cubit or the package, run this in
+the Python environment where the wheel is installed:
 
 ```python
 from importlib.metadata import distribution
@@ -221,8 +221,42 @@ with Path("settings.json").open("xb") as output:
 ```
 
 Set the block names, sideset names, and analysis parameters for your model
-before selecting the file in the Cubit Export menu. For batch export, make the
-wheel and its dependencies available to the Python environment that runs Cubit.
+before selecting the file in the Cubit Export menu.
+
+For batch export on Windows with Cubit 2026.8, run the script below with
+64-bit CPython 3.12 after installing the wheel and its dependencies in that
+environment (`python -m pip install cubit-mesh-export`). The package imports
+Netgen at startup, so the wheel's pinned `netgen-mesher` dependency must also
+be importable for JCF export.
+
+```python
+import json
+import os
+from pathlib import Path
+import sys
+
+cubit_bin = r"C:\Program Files\Coreform Cubit 2026.8\bin"
+cubit_dlls = os.add_dll_directory(cubit_bin)  # Keep the handle alive.
+sys.path.insert(0, cubit_bin)
+
+import cubit
+from cubit_mesh_export.jmag import export_jcf
+
+cubit.init(["cubit", "-nographics", "-batch", "-nojournal", "-noinitfile"])
+if not cubit.cmd('open "model.cub5"'):
+    raise RuntimeError("Cubit could not open model.cub5")
+settings_path = Path("settings.json")
+settings = json.loads(settings_path.read_text(encoding="utf-8"))
+library = settings.get("material_library")
+if isinstance(library, str):
+    library_path = settings_path.parent / library
+    settings["material_library"] = json.loads(library_path.read_text(encoding="utf-8"))
+export_jcf("model.jcf", settings)
+```
+
+Use the path to your Cubit installation and an already meshed `.cub5` model.
+The menu resolves a `material_library` file name relative to `settings.json`;
+with the Python API the caller loads that file into a dictionary as shown.
 
 Femtet (COM) scope: this package ships only the entry-point contract and the
 menu action, verified with test handlers. A transfer through a real handler,
