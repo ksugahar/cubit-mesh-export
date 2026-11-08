@@ -28,8 +28,7 @@ def test_distribution_version_and_netgen_abi_contract_are_aligned():
         ).read_text(encoding="utf-8")
     )
 
-    assert project["version"] == "2.3.0"
-    assert '__version__ = "2.3.0"' in package_source
+    assert f'__version__ = "{project["version"]}"' in package_source.splitlines()
     assert f"netgen-mesher=={PINNED_NETGEN}" in dependencies
     assert f"ngsolve=={PINNED_NETGEN}" in dependencies
     assert (
