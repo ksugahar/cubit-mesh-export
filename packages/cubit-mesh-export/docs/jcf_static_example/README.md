@@ -73,11 +73,4 @@ Check `model.jlog` for the completed static step and `model.jplot` for the
 saved result. The `CURRENT_of_Current_Control` channel in `jmonitor` should
 report 1.5 A.
 
-For a Designer API cross-check, use the same mesh and configure the materials,
-coil and symmetry condition independently from the JSON. Use mm for the
-position-based face selection and verify that the saved symmetry condition
-covers the entire z = 0 exterior, including the air in the bore and the coil
-face. Compare **B** over corresponding tetrahedra. The reference used the
-curl of the saved edge vector potential to compute **B** in each tetrahedron.
-See the [2.3.1 release notes](https://github.com/ksugahar/cubit-mesh-export/releases/tag/cubit-mesh-export-v2.3.1)
-for the measured agreement.
+Follow the [Designer API comparison](designer-comparison.md) to reproduce the static reference solve and compare the 314 symmetry faces and magnetic flux density across all 6,107 elements.
