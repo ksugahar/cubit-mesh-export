@@ -8,45 +8,6 @@
 #include <mystdlib.h>
 #include "meshing.hpp"
 
-// MarkedTet/MarkedPrism/MarkedIdentification/MarkedTri: complete type
-// needed for BisectionInfo destructor (unique_ptr<Array<MarkedTet>>)
-namespace netgen {
-  class MarkedTet {
-  public:
-    PointIndex pnums[4];
-    int matindex = 0;
-    unsigned int marked:2;
-    unsigned int flagged:1;
-    unsigned int tetedge1:3;
-    unsigned int tetedge2:3;
-    char faceedges[4];
-    bool incorder = false;
-    unsigned int order:6;
-    int8_t newest_vertex = -1;
-    MarkedTet() = default;
-  };
-  class MarkedPrism {
-  public:
-    PointIndex pnums[6];
-    int matindex = 0;
-    unsigned int marked:2;
-    MarkedPrism() = default;
-  };
-  class MarkedIdentification {
-  public:
-    int np = 0;
-    PointIndex pnums[8];
-    unsigned int marked:1;
-    MarkedIdentification() = default;
-  };
-  class MarkedTri {
-  public:
-    PointIndex pnums[3];
-    PointGeomInfo IsectP1gi, IsectP2gi;
-    unsigned int IsectFlag:1;
-    MarkedTri() = default;
-  };
-}
 
 namespace netgen
 {
@@ -86,32 +47,150 @@ double Det(const Mat<2,2,double>& m) {
 // Volume meshing stubs (referenced by basegeom)
 MESHING3_RESULT MeshVolume(const MeshingParameters&, Mesh&) { return MESHING3_OK; }
 MESHING3_RESULT OptimizeVolume(const MeshingParameters&, Mesh&) { return MESHING3_OK; }
-void MeshQuality3d(const Mesh&, NgArray<int,0,int>*) {}
+void MeshQuality3d(const Mesh&, Array<int>*) {}
 
 // ============================================================
 // Mesh utility stubs (from meshclass.cpp)
 // ============================================================
-double CalcTetBadness(const Point3d&, const Point3d&, const Point3d&, const Point3d&,
+double CalcTetBadness(const netgen::Point<3>&, const netgen::Point<3>&, const netgen::Point<3>&, const netgen::Point<3>&,
                       double, const MeshingParameters&) { return 0.0; }
 int CheckMesh3D(const Mesh&) { return 0; }
 int IntersectTriangleTriangle(const Point<3>**, const Point<3>**) { return 0; }
-double ComputeCylinderRadius(const Point3d&, const Point3d&, const Point3d&, const Point3d&) { return 0.0; }
+double ComputeCylinderRadius(const netgen::Point<3>&, const netgen::Point<3>&, const netgen::Point<3>&, const netgen::Point<3>&) { return 0.0; }
 
 // Mesh functions removed from meshclass_patched.cpp (compact build)
 void Mesh::BuildElementSearchTree(int) {}
-bool Mesh::PointContainedIn3DElementOld(const Point3d&, double* const, ElementIndex, double) const { return false; }
+bool Mesh::PointContainedIn3DElementOld(const netgen::Point<3>&, double* const, ElementIndex, double) const { return false; }
 void Mesh::SetLocalH(netgen::Point<3> , netgen::Point<3> , double, int) {}
-void Mesh::RestrictLocalH(const Point3d&, double, int) {}
-void Mesh::RestrictLocalHLine(const Point3d&, const Point3d&, double, int) {}
+void Mesh::RestrictLocalH(const netgen::Point<3>&, double, int) {}
+void Mesh::RestrictLocalHLine(const netgen::Point<3>&, const netgen::Point<3>&, double, int) {}
 void Mesh::LoadLocalMeshSize(const filesystem::path&) {}
 void Mesh::SetGlobalH(double h) { hglob = h; }
 void Mesh::SetMinimalH(double h) { hmin = h; }
-double Mesh::GetH(const Point3d&, int) const { return hglob; }
-bool Mesh::PointContainedIn2DElement(const Point3d&, double* const, SurfaceElementIndex, bool) const { return false; }
-bool Mesh::PointContainedIn3DElement(const Point3d&, double* const, ElementIndex, double) const { return false; }
+double Mesh::GetH(const netgen::Point<3>&, int) const { return hglob; }
+bool Mesh::PointContainedIn2DElement(const netgen::Point<3>&, double* const, SurfaceElementIndex, bool) const { return false; }
+bool Mesh::PointContainedIn3DElement(const netgen::Point<3>&, double* const, ElementIndex, double) const { return false; }
 
-// BisectionInfo (mesh refinement)
-BisectionInfo::BisectionInfo() {}
+// Marked-element classes of upstream 6.2.2608 bisect.cpp (not compiled here), verbatim:
+// BisectionInfo owns unique_ptr arrays of them, so its constructor and destructor need complete types.
+  class MarkedTet
+  {
+  public:
+    /// pnums of tet
+    PointIndex pnums[4];
+    /// material number
+    VolumeRegionIndex matindex;
+    /// element marked for refinement
+    /// marked = 1: marked by element marker, marked = 2 due to closure
+    unsigned int marked:2;
+    /// flag of Arnold-Mukherjee algorithm
+    unsigned int flagged:1;
+    /// tetedge (local coordinates 0..3)
+    unsigned int tetedge1:3;
+    unsigned int tetedge2:3;
+    // marked edge of faces
+    // face_j : face without node j,
+    // mark_k : edge without node k
+    
+    char faceedges[4];
+    // unsigned char faceedges[4];
+    bool incorder;
+    unsigned int order:6;
+    int8_t newest_vertex;
+
+    MarkedTet() = default;
+    /*
+    { 
+      for (int i = 0; i < 4; i++) { faceedges[i] = 127; }
+    }
+    */
+    MarkedTet (const MarkedTet&) = default;
+    MarkedTet (MarkedTet &&) = default;
+    MarkedTet & operator= (const MarkedTet&) = default;
+    MarkedTet & operator= (MarkedTet&&) = default;
+    
+  };
+  class MarkedPrism
+  {
+  public:
+    /// 6 point numbers
+    PointIndex pnums[6];
+    /// material number
+    VolumeRegionIndex matindex;
+    /// marked for refinement
+    int marked;
+    /// edge without node k (0,1,2)
+    int markededge;
+
+    bool incorder;
+    unsigned int order:6;
+  };
+  class MarkedIdentification
+  {
+  public:
+    // number of points of one face (3 or 4) - or edge (in 2d)
+    int np;
+    /// 6 or 8 point numbers - or 4 in 2d
+    PointIndex pnums[8];
+    /// marked for refinement
+    int marked;
+    /// edge starting with node k (0,1,2, or 3)
+    int markededge;
+
+    bool incorder;
+    unsigned int order:6;
+  };
+  class MarkedTri
+  {
+  public:
+    MarkedTri () = default;
+    MarkedTri (const MarkedTri&) = default;
+    MarkedTri (MarkedTri &&) = default;
+    MarkedTri & operator= (const MarkedTri&) = default;
+    MarkedTri & operator= (MarkedTri&&) = default;
+    
+    /// three point numbers
+    PointIndex pnums[3];
+    /// three geominfos
+    PointGeomInfo pgeominfo[3];
+    /// marked for refinement
+    int marked;
+    /// edge without node k
+    int markededge;
+    /// surface id
+    FaceRegionIndex surfid;
+
+    bool incorder;
+    unsigned int order:6;
+    int8_t newest_vertex;
+  };
+  class MarkedQuad
+  {
+  public:
+    /// point numbers
+    PointIndex pnums[4];
+    ///
+    PointGeomInfo pgeominfo[4];
+    /// marked for refinement
+    int marked;
+    /// marked edge: 0/2 = vertical, 1/3 = horizontal
+    int markededge;
+    /// surface id
+    FaceRegionIndex surfid;
+
+    bool incorder;
+    unsigned int order:6;
+  };
+
+// BisectionInfo (mesh refinement), as upstream
+BisectionInfo::BisectionInfo()
+{
+  mtets = make_unique<T_MTETS>();
+  mprisms = make_unique<T_MPRISMS>();
+  mids = make_unique<T_MIDS>();
+  mtris = make_unique<T_MTRIS>();
+  mquads = make_unique<T_MQUADS>();
+}
 BisectionInfo::~BisectionInfo() {}
 
 // AnisotropicClusters (mesh quality) — has reference member
@@ -145,7 +224,7 @@ shared_ptr<NetgenGeometry> GeometryRegisterArray::LoadFromMeshFile(istream&) con
 
 // Forward-declared in headers but never used in our workflow
 namespace netgen {
-  bool AdFront2::SameSide(const Point<2>&, const Point<2>&, const FlatArray<int, size_t>*) const { return false; }
+  bool AdFront2::SameSide(const Point<2>&, const Point<2>&, const FlatArray<int>*) const { return false; }
   void AdFront3::GetFaceBoundingBox(int, Box3d&) const {}
-  int AdFront3::SameSide(const Point<3>&, const Point<3>&, const NgArray<int,0,int>*) const { return 0; }
+  int AdFront3::SameSide(const Point<3>&, const Point<3>&, const Array<int>*) const { return 0; }
 }

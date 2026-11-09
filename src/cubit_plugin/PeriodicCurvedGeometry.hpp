@@ -106,13 +106,13 @@ inline std::vector<PeriodicCurvedTransfer> synchronize_periodic_curvature(
   std::map<Edge, int> edges;
   std::map<Face, int> faces;
   for (int e = 0; e < int(top.GetNEdges()); ++e) {
-    const auto vertices = top.GetEdgeVertices(e);
+    const auto vertices = top.GetEdgeVertices(netgen::IndexBASE<netgen::EdgeIndex>() + e);
     Edge key{periodic_point_number(vertices[0]), periodic_point_number(vertices[1])};
     if (key[0] >= key[1] || !edges.emplace(key, e).second)
       throw std::runtime_error("Noncanonical or duplicate topology edge");
   }
   for (int f = 0; f < int(top.GetNFaces()); ++f) {
-    const auto vertices = top.GetFaceVertices(f);
+    const auto vertices = top.GetFaceVertices(netgen::IndexBASE<netgen::FaceIndex>() + f);
     if (vertices.Size() != 3) continue;
     Face key;
     for (int j = 0; j < 3; ++j) key[j] = periodic_point_number(vertices[j]);

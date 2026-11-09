@@ -216,7 +216,7 @@ These are volume errors, which hide the odd-order stall: Netgen's own
 fixed-parameter fit gains almost nothing from p=2 to p=3 or from p=4 to
 p=5 in boundary distance. Since 2.1.0 the exporter refits the coefficients
 to the CAD geometry (`netgen_workflow_guide`, "Geometric refit of the curving coefficients"), and
-the snapshot is Netgen 6.2.2607; `.vol` output needs NGSolve 6.2.2605+.
+the snapshot is Netgen 6.2.2608; `.vol` output needs NGSolve 6.2.2608.
 curvedelements Save/Load roundtrip works out of the box.
 
 ## Multi-Surface Topology Warning

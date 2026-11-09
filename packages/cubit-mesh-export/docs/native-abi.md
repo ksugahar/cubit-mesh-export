@@ -26,7 +26,7 @@ the plugin fail to load or crash.
 1. Keep the ABI-bound native surface minimal: mesh export and the curving
    trampoline only.
    - `cubit_mesh_export.ccm` compiles a vendored compact Netgen snapshot
-     (`src/cubit_plugin/compact_netgen`: 6.2.2607 with the same two pyramid
+     (`src/cubit_plugin/compact_netgen`: 6.2.2608 with the same two pyramid
      fixes), so it never loads a runtime `nglib.dll`.
    - `cubit_mesh_curver.pyd` links the Netgen C++ ABI of the runtime it runs
      in.

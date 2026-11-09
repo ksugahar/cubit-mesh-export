@@ -615,8 +615,8 @@ namespace ngcore
     template<typename=std::enable_if<N==2>>
     operator std::tuple<double&,double&> ()
     { 
-	double *p = (double*)this;
-	return std::tuple<double&,double&>(p[0], p[1]); 
+        double *p = (double*)this;
+        return std::tuple<double&,double&>(p[0], p[1]); 
     }
 
     template<typename=std::enable_if<N==4>>
@@ -908,7 +908,7 @@ namespace ngcore
   NETGEN_INLINE SIMD<T,N> IfPos (SIMD<T,N> a, SIMD<T,N> b, SIMD<T,N> c)
     {
       if constexpr(N==1) return a.Data()>0.0 ? b : c;
-      else               return { IfPos(a.Lo(), b.Lo(), c.Lo()), IfPos(a.Hi(), b.Hi(), c.Hi())};
+      else               return SIMD<T,N>(IfPos(a.Lo(), b.Lo(), c.Lo()), IfPos(a.Hi(), b.Hi(), c.Hi()));
 
     }
 
@@ -916,7 +916,7 @@ namespace ngcore
   NETGEN_INLINE SIMD<T,N> IfZero (SIMD<T,N> a, SIMD<T,N> b, SIMD<T,N> c)
     {
       if constexpr(N==1) return a.Data()==0.0 ? b : c;
-      else               return { IfZero(a.Lo(), b.Lo(), c.Lo()), IfZero(a.Hi(), b.Hi(), c.Hi())};
+      else               return SIMD<T,N>(IfZero(a.Lo(), b.Lo(), c.Lo()), IfZero(a.Hi(), b.Hi(), c.Hi()));
 
     }
 
@@ -1221,15 +1221,11 @@ namespace ngcore
 
   using std::atan2;
   template <int N>
-  NETGEN_INLINE ngcore::SIMD<double,N> atan2 (ngcore::SIMD<double,N> y, ngcore::SIMD<double,N> x) {
-    return ngcore::SIMD<double,N>([y,x](int i)->double { return atan2(y[i], x[i]); } );
-  }
+  SIMD<double,N> atan2 (ngcore::SIMD<double,N> y, ngcore::SIMD<double,N> x);
 
   using std::acos;
   template <int N>
-  NETGEN_INLINE ngcore::SIMD<double,N> acos (ngcore::SIMD<double,N> a) {
-    return ngcore::SIMD<double,N>([a](int i)->double { return acos(a[i]); } );
-  }
+  SIMD<double,N> acos (ngcore::SIMD<double,N> a);
 
   using std::asin;
   template <int N>

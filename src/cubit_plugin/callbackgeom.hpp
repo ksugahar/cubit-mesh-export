@@ -11,7 +11,7 @@
 /* ACIS) without requiring OCC or STEP files.                              */
 /* *************************************************************************/
 
-#include <meshing.hpp>
+#include "netgen_meshing.hpp"
 #include <functional>
 
 namespace netgen

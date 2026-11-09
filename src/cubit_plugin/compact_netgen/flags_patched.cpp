@@ -1,4 +1,4 @@
-// Modified from Netgen libsrc/core/flags.cpp at 9642315f7a930701df33c917c537a51a4f3b46cd.
+// Modified from Netgen libsrc/core/flags.cpp at v6.2.2608 (96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e) plus upstream 13b47c3a9fb2e7d53ca4be7227bdd4acbd6c6e73 (pyramid apex clamp).
 // Local modifications present in the source history on 2026-10-15.
 // Netgen licensing and attribution are provided with the distribution.
 
@@ -29,33 +29,33 @@ namespace ngcore
     string name;
     for (int i = 0; i < flags.GetNStringFlags(); i++)
       {
-	string str = flags.GetStringFlag (i, name);
-	SetFlag (name, str);
+        string str = flags.GetStringFlag (i, name);
+        SetFlag (name, str);
       }
     for (int i = 0; i < flags.GetNNumFlags(); i++)
       {
-	double val = flags.GetNumFlag (i, name);
-	SetFlag (name, val);
+        double val = flags.GetNumFlag (i, name);
+        SetFlag (name, val);
       }
     for (int i = 0; i < flags.GetNDefineFlags(); i++)
       {
-	bool val = flags.GetDefineFlag (i, name);
-	SetFlag (name, val);
+        bool val = flags.GetDefineFlag (i, name);
+        SetFlag (name, val);
       }
     for (int i = 0; i < flags.GetNNumListFlags(); i++)
       {
-	auto numa = flags.GetNumListFlag (i, name);
-	SetFlag (name, *numa);
+        auto numa = flags.GetNumListFlag (i, name);
+        SetFlag (name, *numa);
       }
     for (int i = 0; i < flags.GetNStringListFlags(); i++)
       {
-	auto stra = flags.GetStringListFlag (i, name);
-	SetFlag (name, *stra);
+        auto stra = flags.GetStringListFlag (i, name);
+        SetFlag (name, *stra);
       }
     for (int i = 0; i < flags.GetNFlagsFlags(); i++)
       {
-	auto lflags = flags.GetFlagsFlag (i, name);
-	SetFlag (name, lflags);
+        auto lflags = flags.GetFlagsFlag (i, name);
+        SetFlag (name, lflags);
       }
     for(auto i : Range(flags.anyflags.Size()))
       {
@@ -166,8 +166,8 @@ namespace ngcore
       /*
     for (int i = 0; i < val.Size(); i++)
       {
-	strarray->Append (new char[strlen(val[i])+1]);
-	strcpy (strarray->Last(), val[i]);
+        strarray->Append (new char[strlen(val[i])+1]);
+        strcpy (strarray->Last(), val[i]);
       }
       */
     strlistflags.Set (name, strarray);    
@@ -259,8 +259,8 @@ namespace ngcore
       return *strlistflags[name];
     else
       {
-	static Array<string> hstra(0);
-	return hstra;
+        static Array<string> hstra(0);
+        return hstra;
       }
   }
 
@@ -271,8 +271,8 @@ namespace ngcore
       return *numlistflags[name];
     else
       {
-	static Array<double> hnuma(0);
-	return hnuma;
+        static Array<double> hnuma(0);
+        return hnuma;
       }
   }
 
@@ -283,8 +283,8 @@ namespace ngcore
       return flaglistflags[name];
     else
       {
-	static Flags empty;
-	return empty;
+        static Flags empty;
+        return empty;
       }
   }
 
@@ -342,9 +342,9 @@ namespace ngcore
         int j = 0;
         for (j = 0; j + 1 < numlistflags[i]->Size(); ++j)
           str << (*numlistflags[i])[j] << ", ";
-	if (numlistflags[i]->Size())
-	  str << (*numlistflags[i])[j];
-	str << "]" << endl;
+        if (numlistflags[i]->Size())
+          str << (*numlistflags[i])[j];
+        str << "]" << endl;
       }
   }
 
@@ -400,23 +400,23 @@ namespace ngcore
         getline(line_stream, content);
         content.erase(std::remove(content.begin(), content.end(), ' '), content.end());
         
-	// if (name[0] == '/' && name[1] == '/')
-	//   {
-	//     ch = 0;
-	//     while (ch != '\n' && istr.good())
-	//       {
-	// 	ch = istr.get();
-	//       }
-	//     continue;
-	//   }
+        // if (name[0] == '/' && name[1] == '/')
+        //   {
+        //     ch = 0;
+        //     while (ch != '\n' && istr.good())
+        //       {
+        //      ch = istr.get();
+        //       }
+        //     continue;
+        //   }
 
         if (strlen(content.c_str())==0)
         {
           SetFlag (name);
           continue;
         }
-	else
-	  {
+        else
+          {
             std::istringstream content_stream(content);
             
             content_stream >> ch;
@@ -473,7 +473,7 @@ namespace ngcore
                 else
                   throw Exception (" no symboltable of flags ");
               }
-	  }
+          }
       }
   }
 
@@ -505,7 +505,7 @@ namespace ngcore
     if (st[0] != '-')
       {
         std::cerr << "flag must start with '-'" << endl;
-	return;
+        return;
       }
 
     // flag with double --
@@ -517,17 +517,17 @@ namespace ngcore
 
     if (!pos)
       {
-	//      (cout) << "Add def flag: " << st+1 << endl;
-	SetFlag (st+1);
+        //      (cout) << "Add def flag: " << st+1 << endl;
+        SetFlag (st+1);
       }
     else
       {
-	//cout << "pos = " << pos << endl;
+        //cout << "pos = " << pos << endl;
 
-	strncpy (name, st+1, (pos-st)-1);
-	name[pos-st-1] = 0;
+        strncpy (name, st+1, (pos-st)-1);
+        name[pos-st-1] = 0;
 
-	//cout << "name = " << name << endl;
+        //cout << "name = " << name << endl;
 
 	pos++;
 	char * endptr = NULL;
@@ -544,26 +544,26 @@ namespace ngcore
 
         /*
 #ifdef WIN32
-	if(endptr != pos && !_finite(val))
-	  endptr = const_cast<char *>(pos);
+        if(endptr != pos && !_finite(val))
+          endptr = const_cast<char *>(pos);
 #else
 #ifdef MACOS
-	if(endptr != pos && (__isnand(val) || __isinfd(val)))
-	  endptr = const_cast<char *>(pos);
+        if(endptr != pos && (__isnand(val) || __isinfd(val)))
+          endptr = const_cast<char *>(pos);
 #else
 #ifdef SUN
 #else
-	if(endptr != pos && (std::isnan(val) || std::isinf(val)))
-	  endptr = const_cast<char *>(pos);
+        if(endptr != pos && (std::isnan(val) || std::isinf(val)))
+          endptr = const_cast<char *>(pos);
 #endif
 #endif
 #endif
         */
-	
-	//cout << "val = " << val << endl;
+        
+        //cout << "val = " << val << endl;
 
-	if (!posbrack)
-	  {
+        if (!posbrack)
+          {
             if (posstar)
               {
                 pos++;
@@ -597,49 +597,49 @@ namespace ngcore
 		Array<double> values;
 		
                 std::istringstream ist(posbrack);
-		ist >> hc;   // '['
-		ist >> val;
-		while (ist.good())
-		  {
-		    values.Append (val);
-		    ist >> hc;  // ','
-		    ist >> val;
-		  }
-		SetFlag (name, values);
-	      }
-	    else
-	      {
+                ist >> hc;   // '['
+                ist >> val;
+                while (ist.good())
+                  {
+                    values.Append (val);
+                    ist >> hc;  // ','
+                    ist >> val;
+                  }
+                SetFlag (name, values);
+              }
+            else
+              {
                 // to be cleaned up ...
-		Array<char *> strs;
+                Array<char *> strs;
 
-		posbrack++;
-		char * hstr = new char[strlen(posbrack)+1];
-		strcpy (hstr, posbrack);
-		
-		char * chp = hstr;
+                posbrack++;
+                char * hstr = new char[strlen(posbrack)+1];
+                strcpy (hstr, posbrack);
+                
+                char * chp = hstr;
 
-		bool start = 1;
-		while (*chp && *chp != ']')
-		  {
-		    if (start)
-		      strs.Append (chp);
-		    start = 0;
-		    if (*chp == ',')
-		      {
-			*chp = 0;
-			start = 1;
-		      }
-		    chp++;
-		  }
-		*chp = 0;
+                bool start = 1;
+                while (*chp && *chp != ']')
+                  {
+                    if (start)
+                      strs.Append (chp);
+                    start = 0;
+                    if (*chp == ',')
+                      {
+                        *chp = 0;
+                        start = 1;
+                      }
+                    chp++;
+                  }
+                *chp = 0;
 
                 Array<string> strings;
                 for (int i = 0; i < strs.Size(); i++)
                   strings.Append (string (strs[i]));
-		SetFlag (name, strings);
+                SetFlag (name, strings);
                 delete [] hstr;
-	      }
-	  }
+              }
+          }
       }
   }
 } // namespace ngcore

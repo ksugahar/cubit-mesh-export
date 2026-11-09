@@ -42,8 +42,8 @@ if (-not (Test-Path "$pybind11CmakeDir\pybind11Config.cmake")) {
     throw "pybind11 CMake package not found under $pybind11CmakeDir"
 }
 
-# Auto-discover the latest Cubit install (was hardcoded 2025.3 until
-# 2026-05-25; LAB now has 2025.12 only). Override via CUBIT_INSTALL_DIR.
+# Coreform Cubit 2026.8 only: find_cubit.ps1 takes CUBIT_INSTALL_DIR or the
+# default 2026.8 path and checks BUILD_INFO.
 . "$PSScriptRoot\..\..\tools\find_cubit.ps1"
 if (-not $CubitCmakeDir) { throw "Cubit not found; set CUBIT_INSTALL_DIR" }
 $env:CUBIT_DIR = $CubitCmakeDir

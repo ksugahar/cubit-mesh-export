@@ -10,7 +10,7 @@
 //   # Supply mesh arrays and geometry callbacks to build_curved_mesh.
 // ============================================================
 
-#include <meshing.hpp>
+#include "netgen_meshing.hpp"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

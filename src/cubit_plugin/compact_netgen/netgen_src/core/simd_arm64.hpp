@@ -389,8 +389,8 @@ namespace ngcore
     
     SIMD (double const * p, SIMD<mask64,2> mask)
       {
-	data[0] = mask[0] ? p[0] : 0;
-	data[1] = mask[1] ? p[1] : 0;
+        data[0] = mask[0] ? p[0] : 0;
+        data[1] = mask[1] ? p[1] : 0;
       }
     SIMD (float64x2_t _data) { data = _data; }
     
@@ -528,7 +528,7 @@ namespace ngcore
   
   NETGEN_INLINE SIMD<int64_t,2> lround (SIMD<double,2> x)
   {
-    return vcvtq_s64_f64(x.Data());
+    return vcvtnq_s64_f64(x.Data());
   }
 
 

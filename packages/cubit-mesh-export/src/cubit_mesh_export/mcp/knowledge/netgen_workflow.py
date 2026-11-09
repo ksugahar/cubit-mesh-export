@@ -839,8 +839,8 @@ mesh = Mesh(vol_path)
 ## Requirements
 
 - Coreform Cubit 2026.8 with Cubit Mesh Export installed (`cubit-plugin-install`)
-- NGSolve 6.2.2605+ to load the `.vol` (the 6.2.2607 snapshot writes
-  `edgesegmentsgi3`); NGSolve up to 6.2.2607 mis-evaluates curved pyramids
+- NGSolve 6.2.2608 to load the `.vol` (the snapshot is 6.2.2608); curved
+  pyramids need its runtime with the apex clamp and the base-edge blend
   (see "Curved pyramids")
 """
 
