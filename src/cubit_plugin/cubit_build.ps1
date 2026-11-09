@@ -42,8 +42,8 @@ if (-not (Test-Path "$pybind11CmakeDir\pybind11Config.cmake")) {
     throw "pybind11 CMake package not found under $pybind11CmakeDir"
 }
 
-# Auto-discover the latest Cubit install (was hardcoded 2025.3 until
-# 2026-05-25; LAB now has 2025.12 only). Override via CUBIT_INSTALL_DIR.
+# Coreform Cubit 2026.8 only: find_cubit.ps1 takes CUBIT_INSTALL_DIR or the
+# default 2026.8 path and checks BUILD_INFO.
 . "$PSScriptRoot\..\..\tools\find_cubit.ps1"
 if (-not $CubitCmakeDir) { throw "Cubit not found; set CUBIT_INSTALL_DIR" }
 $env:CUBIT_DIR = $CubitCmakeDir
@@ -59,6 +59,14 @@ $src = $PSScriptRoot
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $src "..\.."))
 $packageDir = Join-Path $repoRoot `
     "packages\cubit-mesh-export\src\cubit_mesh_export"
+$provenanceScript = Join-Path $packageDir "_native_provenance.py"
+
+# Payload evidence names a clean, pushed commit. Check that before building, so
+# an unpublished or edited tree fails fast instead of after a full rebuild.
+& $pythonExecutable $provenanceScript check-source --repo-root $repoRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Native sources are not a clean, pushed commit"
+}
 
 function Reset-BuildDirectory([string]$Path) {
     if (-not $Rebuild -or -not (Test-Path -LiteralPath $Path)) {
@@ -172,7 +180,6 @@ foreach ($deployment in $deployments) {
     Write-Host "    sha256=$destinationHash" -ForegroundColor DarkGray
 }
 
-$provenanceScript = Join-Path $packageDir "_native_provenance.py"
 & $pythonExecutable $provenanceScript record `
     --repo-root $repoRoot --package-dir $packageDir
 if ($LASTEXITCODE -ne 0) {

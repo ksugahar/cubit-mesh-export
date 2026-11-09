@@ -147,7 +147,7 @@ def cubit_pyramid_source_plugin_replay_gate(
         and "export_3D_Nastran" in str(transforms.get("nastran_export_migration", ""))
         and "export nastran_bdf" in str(transforms.get("nastran_export_migration", "")),
         "current_cubit_version_recorded": str(summary.get("version", "")).startswith(
-            "2025.12"
+            "2026.8"
         ),
         "known_nonzero_headless_exit_classified": int(process.get("exit_code", -1))
         == 3

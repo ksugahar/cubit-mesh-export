@@ -4,7 +4,7 @@
 
 // Include Netgen BEFORE Cubit to manage namespace conflicts
 // Netgen defines: netgen::QUAD, netgen::HEX, netgen::PYRAMID, netgen::Surface
-#include <meshing/meshing.hpp>
+#include "netgen_meshing.hpp"
 #include "CurveIdentity.hpp"
 
 cubit_mesh_export::CurveIdentity NetgenCurver::curve_identities(
@@ -246,8 +246,8 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
       PRINT_ERROR("  Phase1c: AddPoint FAILED at node %d (unknown)\n", i);
       return false;
     }
-    cubit_nid_to_ng_pi_[nd.id] = pi;
-    ng_pi_to_cubit_nid_[pi] = nd.id;
+    cubit_nid_to_ng_pi_[nd.id] = pi.Nr1();
+    ng_pi_to_cubit_nid_[pi.Nr1()] = nd.id;
     if (i == 0 || i == num_nodes - 1)
       PRINT_INFO("  Phase1c: node %d/%d OK\n", i + 1, num_nodes);
   }
@@ -489,7 +489,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         if ((int)conn.size() < 3) continue;
 
         ng::Element2d el(ng::TRIG);
-        el.SetIndex(ng_fd);
+        el.SetIndex(ng::FaceRegionIndex::FromNr1(ng_fd));
         // Pass 1: collect UVs from per-node canonical UV map (computed above)
         double uu[3], vv[3];
         int pis[3];
@@ -498,7 +498,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
           auto it = cubit_nid_to_ng_pi_.find(conn[k]);
           if (it == cubit_nid_to_ng_pi_.end()) { uv_ok = false; goto skip_tri; }
           pis[k] = it->second;
-          el[k] = it->second;
+          el[k] = ng::PointIndex::FromNr1(it->second);
           int64_t ckey = ((int64_t)sid << 32) | (uint32_t)conn[k];
           auto cit = node_canon_uv.find(ckey);
           if (cit != node_canon_uv.end()) {
@@ -565,12 +565,12 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         if ((int)conn.size() < 4) continue;
 
         ng::Element2d el(ng::QUAD);
-        el.SetIndex(ng_fd);
+        el.SetIndex(ng::FaceRegionIndex::FromNr1(ng_fd));
         double qu[4], qv[4];
         for (int k = 0; k < 4; k++) {
           auto it = cubit_nid_to_ng_pi_.find(conn[k]);
           if (it == cubit_nid_to_ng_pi_.end()) goto skip_quad;
-          el[k] = it->second;
+          el[k] = ng::PointIndex::FromNr1(it->second);
 
           int64_t ckey = ((int64_t)sid << 32) | (uint32_t)conn[k];
           auto cit = node_canon_uv.find(ckey);
@@ -655,7 +655,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         for (const MeshElement *face : domain_faces.second) {
           ng::ELEMENT_TYPE etype = face->nv == 3 ? ng::TRIG : ng::QUAD;
           ng::Element2d el(etype);
-          el.SetIndex(ng_fd);
+          el.SetIndex(ng::FaceRegionIndex::FromNr1(ng_fd));
           bool complete = true;
           for (int k = 0; k < face->nv; k++) {
             auto it = cubit_nid_to_ng_pi_.find(face->conn[k]);
@@ -663,7 +663,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
               complete = false;
               break;
             }
-            el[k] = it->second;
+            el[k] = ng::PointIndex::FromNr1(it->second);
             ng::PointGeomInfo gi;
             gi.trignum = ng_fd;
             gi.u = 0.0;
@@ -715,8 +715,8 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
       // EdgeDescriptor table.  Its surface numbers are 1-based face
       // descriptor indices, passed to CallbackGeometry as-is.
       ng::EdgeDescriptor ed(edgenr, fd1, fd2);
-      ed.SetIndex(fd2);
-      const int edge_descriptor_index = ng_mesh_->AddEdgeDescriptor(ed);
+      ed.SetIndex(ng::FaceRegionIndex::FromNr1(fd2));
+      const auto edge_descriptor_index = ng_mesh_->AddEdgeDescriptor(ed);
 
       // Get curve length for dist normalization
       RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(cid);
@@ -746,8 +746,8 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         }
 
         ng::Segment nseg;
-        nseg[0] = itn0->second;
-        nseg[1] = itn1->second;
+        nseg[0] = ng::PointIndex::FromNr1(itn0->second);
+        nseg[1] = ng::PointIndex::FromNr1(itn1->second);
         nseg.SetIndex(edge_descriptor_index);
         nseg.EPGeomInfo(0).dist = dist0;
         nseg.EPGeomInfo(1).dist = dist1;
@@ -759,7 +759,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
             " exported only " + std::to_string(exported_segments) + "/" +
             std::to_string(edge_ids.size()) + " segments");
       if (exported_segments > 0)
-        cubit_curve_to_ng_edge_[cid] = edge_descriptor_index;
+        cubit_curve_to_ng_edge_[cid] = edge_descriptor_index.Nr1();
       edgenr++;
     }
     PRINT_INFO("  Phase1e2: %d edge groups added\n", edgenr - 1);
@@ -789,8 +789,8 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     if (nn == 4 && (et == ::TETRA4 || et == ::TETRA)) {
       ng::Element el(ng::TET);
       for (int k = 0; k < 4; k++)
-        el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
-      el.SetIndex(1);
+        el[k] = ng::PointIndex::FromNr1(cubit_nid_to_ng_pi_[elem.conn[k]]);
+      el.SetIndex(ng::VolumeRegionIndex::FromNr1(1));
       ng_mesh_->AddVolumeElement(el);
       vol_count++;
     }
@@ -801,24 +801,24 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
       // for HO node computation (face-surface mapping inconsistency in BuildCurvedElements).
       // Interior volume edges use Cubit coordinate linear interpolation instead.
       for (int k = 0; k < 8; k++)
-        el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
-      el.SetIndex(1);
+        el[k] = ng::PointIndex::FromNr1(cubit_nid_to_ng_pi_[elem.conn[k]]);
+      el.SetIndex(ng::VolumeRegionIndex::FromNr1(1));
       ng_mesh_->AddVolumeElement(el);
       vol_count++;
     }
     else if (nn == 6 && (et == ::WEDGE6 || et == ::WEDGE)) {
       ng::Element el(ng::PRISM);
       for (int k = 0; k < 6; k++)
-        el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
-      el.SetIndex(1);
+        el[k] = ng::PointIndex::FromNr1(cubit_nid_to_ng_pi_[elem.conn[k]]);
+      el.SetIndex(ng::VolumeRegionIndex::FromNr1(1));
       ng_mesh_->AddVolumeElement(el);
       vol_count++;
     }
     else if (nn == 5 && (et == ::PYRAMID5 || et == ::PYRAMID)) {
       ng::Element el(ng::PYRAMID);
       for (int k = 0; k < 5; k++)
-        el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
-      el.SetIndex(1);
+        el[k] = ng::PointIndex::FromNr1(cubit_nid_to_ng_pi_[elem.conn[k]]);
+      el.SetIndex(ng::VolumeRegionIndex::FromNr1(1));
       ng_mesh_->AddVolumeElement(el);
       vol_count++;
     }
@@ -1358,29 +1358,24 @@ bool NetgenCurver::curve_and_extract(int order)
                rs.face_dist_before, rs.face_dist_after);
   }
 
-  // NGSolve's vectorised element transformation (Netgen 6.2.2604-6.2.2607)
-  // omits the blending of curved pyramid base edges, so such pyramids do
-  // not conform with their neighbours during assembly and integration
-  // (the exporter's own snapshot is patched).  Warn instead of failing:
-  // the .vol itself is correct.
+  // Pyramids are evaluated correctly only by a Netgen 6.2.2608 runtime with
+  // the apex clamp and the base-edge blend in the vectorised map; this
+  // snapshot carries both, the stock wheel neither.  check-vol rejects
+  // pyramid meshes on an unpatched runtime, so say so at export time.
   {
     const auto & top = ng_mesh_->GetTopology();
     int curved_pyramids = 0;
     for (int e = 0; e < ng_mesh_->GetNE(); e++) {
-      ng::ElementIndex ei(e);
+      const auto ei = ng::ElementIndex::FromNr0(e);
       if ((*ng_mesh_)[ei].GetType() != ng::PYRAMID) continue;
       for (auto edge : top.GetEdges(ei))
-        if (curved.NumEdgeCoefficients(int(edge)) > 0) { curved_pyramids++; break; }
+        if (curved.NumEdgeCoefficients(edge.Nr0()) > 0) { curved_pyramids++; break; }
     }
     if (curved_pyramids > 0)
-      PRINT_WARNING("NetgenCurver: %d pyramids have curved edges: the hex/tet "
-                    "transition interface meets a curved boundary, and these "
-                    "interface pyramids share its curved edges. NGSolve up to "
-                    "6.2.2607 evaluates curved pyramids inconsistently in its "
-                    "vectorised path (volume/field errors that do not converge "
-                    "with order). Keep the hex/tet interface away from curved "
-                    "boundaries, or check the domain volume against the CAD "
-                    "value.\n",
+      PRINT_WARNING("NetgenCurver: %d pyramids have curved edges. Read this "
+                    ".vol only with the Netgen 6.2.2608 runtime that carries "
+                    "the pyramid apex clamp and base-edge blend; check-vol "
+                    "rejects it on any other runtime.\n",
                     curved_pyramids);
   }
 
@@ -1395,28 +1390,29 @@ bool NetgenCurver::curve_and_extract(int order)
   // --- Phase 1: Volume elements (CalcElementTransformation) ---
   // This is the primary source of edge HO nodes, consistent with .vol export.
   int nve = ng_mesh_->GetNE();
-  for (int ei = 0; ei < nve; ei++) {
+  for (int e0 = 0; e0 < nve; e0++) {
+    const auto ei = ng::ElementIndex::FromNr0(e0);
     if (!curved.IsElementCurved(ei)) continue;
 
-    const ng::Element & el = ng_mesh_->VolumeElement(ei+1);
+    const auto el = ng_mesh_->VolumeElement(ei);
     int np = el.GetNP();
 
     if (np == 4) {  // Tet
       // Edge points (6 edges) — register in edge_ho_nodes_ for connectivity
       static const int tet_edges[][2] = {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
 #ifdef DEBUG_HO_NODES
-      if (ei < 3) {
+      if (e0 < 3) {
         PRINT_INFO("  VE %d: el[0..3] ng=(%d,%d,%d,%d) cubit=(%d,%d,%d,%d)\n",
-          ei, (int)el[0], (int)el[1], (int)el[2], (int)el[3],
-          ng_pi_to_cubit_nid_[el[0]],
-          ng_pi_to_cubit_nid_[el[1]],
-          ng_pi_to_cubit_nid_[el[2]],
-          ng_pi_to_cubit_nid_[el[3]]);
+          ei, el[0].Nr1(), el[1].Nr1(), el[2].Nr1(), el[3].Nr1(),
+          ng_pi_to_cubit_nid_[(el[0]).Nr1()],
+          ng_pi_to_cubit_nid_[(el[1]).Nr1()],
+          ng_pi_to_cubit_nid_[(el[2]).Nr1()],
+          ng_pi_to_cubit_nid_[(el[3]).Nr1()]);
       }
 #endif
       for (auto &e : tet_edges) {
-        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
-        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        int v0_cubit = ng_pi_to_cubit_nid_[(el[e[0]]).Nr1()];
+        int v1_cubit = ng_pi_to_cubit_nid_[(el[e[1]]).Nr1()];
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
@@ -1447,9 +1443,9 @@ bool NetgenCurver::curve_and_extract(int order)
       if (order >= 3) {
         static const int tet_faces[][3] = {{0,1,2},{0,1,3},{0,2,3},{1,2,3}};
         for (auto &f : tet_faces) {
-          int fv0 = ng_pi_to_cubit_nid_[el[f[0]]];
-          int fv1 = ng_pi_to_cubit_nid_[el[f[1]]];
-          int fv2 = ng_pi_to_cubit_nid_[el[f[2]]];
+          int fv0 = ng_pi_to_cubit_nid_[(el[f[0]]).Nr1()];
+          int fv1 = ng_pi_to_cubit_nid_[(el[f[1]]).Nr1()];
+          int fv2 = ng_pi_to_cubit_nid_[(el[f[2]]).Nr1()];
           HoFaceKey3 fkey(fv0, fv1, fv2);
           if (face_ho_nodes_.count(fkey)) {
             // Already generated by adjacent element — skip generation
@@ -1484,10 +1480,10 @@ bool NetgenCurver::curve_and_extract(int order)
 
       // Volume interior points (for order >= 4)
       if (order >= 4) {
-        int tv0 = ng_pi_to_cubit_nid_[el[0]];
-        int tv1 = ng_pi_to_cubit_nid_[el[1]];
-        int tv2 = ng_pi_to_cubit_nid_[el[2]];
-        int tv3 = ng_pi_to_cubit_nid_[el[3]];
+        int tv0 = ng_pi_to_cubit_nid_[(el[0]).Nr1()];
+        int tv1 = ng_pi_to_cubit_nid_[(el[1]).Nr1()];
+        int tv2 = ng_pi_to_cubit_nid_[(el[2]).Nr1()];
+        int tv3 = ng_pi_to_cubit_nid_[(el[3]).Nr1()];
         HoElemKey4 vkey(tv0, tv1, tv2, tv3);
         std::vector<int> vol_nodes;
         for (int i = 1; i < order; i++) {
@@ -1526,7 +1522,7 @@ bool NetgenCurver::curve_and_extract(int order)
           // Find closest Cubit vertex
           int best_v = -1; double best_d = 1e30;
           for (int k = 0; k < 8; k++) {
-            int cid = ng_pi_to_cubit_nid_[el[k]];
+            int cid = ng_pi_to_cubit_nid_[(el[k]).Nr1()];
             auto cc = CubitInterface::get_nodal_coordinates(cid);
             double d = (cc[0]-phys[0])*(cc[0]-phys[0])
                      + (cc[1]-phys[1])*(cc[1]-phys[1])
@@ -1535,7 +1531,7 @@ bool NetgenCurver::curve_and_extract(int order)
           }
           PRINT_INFO("    ref(%g,%g,%g) -> el[%d] (cubit %d) dist=%.2e\n",
             ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2],
-            best_v, ng_pi_to_cubit_nid_[el[best_v]], sqrt(best_d));
+            best_v, ng_pi_to_cubit_nid_[(el[best_v]).Nr1()], sqrt(best_d));
         }
       }
 #endif
@@ -1553,8 +1549,8 @@ bool NetgenCurver::curve_and_extract(int order)
       };
 
       for (auto &e : hex_edges) {
-        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
-        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        int v0_cubit = ng_pi_to_cubit_nid_[(el[e[0]]).Nr1()];
+        int v1_cubit = ng_pi_to_cubit_nid_[(el[e[1]]).Nr1()];
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
@@ -1646,7 +1642,7 @@ bool NetgenCurver::curve_and_extract(int order)
           map_volume(curved, ei, ref, phys);
           int best_v = -1; double best_d = 1e30;
           for (int k = 0; k < 6; k++) {
-            int cid = ng_pi_to_cubit_nid_[el[k]];
+            int cid = ng_pi_to_cubit_nid_[(el[k]).Nr1()];
             auto cc = CubitInterface::get_nodal_coordinates(cid);
             double d = (cc[0]-phys[0])*(cc[0]-phys[0])
                      + (cc[1]-phys[1])*(cc[1]-phys[1])
@@ -1655,7 +1651,7 @@ bool NetgenCurver::curve_and_extract(int order)
           }
           PRINT_INFO("    ref(%g,%g,%g) -> el[%d] (cubit %d) dist=%.2e\n",
             ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2],
-            best_v, ng_pi_to_cubit_nid_[el[best_v]], sqrt(best_d));
+            best_v, ng_pi_to_cubit_nid_[(el[best_v]).Nr1()], sqrt(best_d));
         }
       }
 #endif
@@ -1678,8 +1674,8 @@ bool NetgenCurver::curve_and_extract(int order)
       };
 
       for (auto &e : prism_edges) {
-        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
-        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        int v0_cubit = ng_pi_to_cubit_nid_[(el[e[0]]).Nr1()];
+        int v1_cubit = ng_pi_to_cubit_nid_[(el[e[1]]).Nr1()];
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
@@ -1806,7 +1802,7 @@ bool NetgenCurver::curve_and_extract(int order)
           map_volume(curved, ei, ref, phys);
           int best_v = -1; double best_d = 1e30;
           for (int k = 0; k < 5; k++) {
-            int cid = ng_pi_to_cubit_nid_[el[k]];
+            int cid = ng_pi_to_cubit_nid_[(el[k]).Nr1()];
             auto cc = CubitInterface::get_nodal_coordinates(cid);
             double d = (cc[0]-phys[0])*(cc[0]-phys[0])
                      + (cc[1]-phys[1])*(cc[1]-phys[1])
@@ -1825,8 +1821,8 @@ bool NetgenCurver::curve_and_extract(int order)
       };
 
       for (auto &e : pyr_edges) {
-        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
-        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        int v0_cubit = ng_pi_to_cubit_nid_[(el[e[0]]).Nr1()];
+        int v1_cubit = ng_pi_to_cubit_nid_[(el[e[1]]).Nr1()];
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
@@ -1898,15 +1894,16 @@ bool NetgenCurver::curve_and_extract(int order)
   // Only for edges NOT already registered by volume elements,
   // and for face interior nodes (order >= 3).
   int nse = ng_mesh_->GetNSE();
-  for (int sei = 0; sei < nse; sei++) {
+  for (int s0 = 0; s0 < nse; s0++) {
+    const auto sei = ng::SurfaceElementIndex::FromNr0(s0);
     if (!curved.IsSurfaceElementCurved(sei)) continue;
-    const ng::Element2d & sel = ng_mesh_->SurfaceElement(sei+1);
+    const auto sel = ng_mesh_->SurfaceElement(sei);
     int snp = sel.GetNP();
 
     if (snp == 3) {  // Triangle
       for (int edge = 0; edge < 3; edge++) {
-        int v0_cubit = ng_pi_to_cubit_nid_[sel[edge]];
-        int v1_cubit = ng_pi_to_cubit_nid_[sel[(edge+1) % 3]];
+        int v0_cubit = ng_pi_to_cubit_nid_[(sel[edge]).Nr1()];
+        int v1_cubit = ng_pi_to_cubit_nid_[(sel[(edge+1) % 3]).Nr1()];
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
@@ -1931,9 +1928,9 @@ bool NetgenCurver::curve_and_extract(int order)
           edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
       }
       if (order >= 3) {
-        int sv0 = ng_pi_to_cubit_nid_[sel[0]];
-        int sv1 = ng_pi_to_cubit_nid_[sel[1]];
-        int sv2 = ng_pi_to_cubit_nid_[sel[2]];
+        int sv0 = ng_pi_to_cubit_nid_[(sel[0]).Nr1()];
+        int sv1 = ng_pi_to_cubit_nid_[(sel[1]).Nr1()];
+        int sv2 = ng_pi_to_cubit_nid_[(sel[2]).Nr1()];
         HoFaceKey3 fkey(sv0, sv1, sv2);
         if (!face_ho_nodes_.count(fkey)) {
           std::vector<int> face_nodes;
@@ -1956,8 +1953,8 @@ bool NetgenCurver::curve_and_extract(int order)
     }
     else if (snp == 4) {  // Quad
       for (int edge = 0; edge < 4; edge++) {
-        int v0_cubit = ng_pi_to_cubit_nid_[sel[edge]];
-        int v1_cubit = ng_pi_to_cubit_nid_[sel[(edge+1) % 4]];
+        int v0_cubit = ng_pi_to_cubit_nid_[(sel[edge]).Nr1()];
+        int v1_cubit = ng_pi_to_cubit_nid_[(sel[(edge+1) % 4]).Nr1()];
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
@@ -2051,8 +2048,9 @@ bool NetgenCurver::curve_and_extract(int order)
     int filled = 0;
 
     // Pass A: volume elements
-    for (int ei = 0; ei < nve; ei++) {
-      const ng::Element & el = ng_mesh_->VolumeElement(ei+1);
+    for (int e0 = 0; e0 < nve; e0++) {
+      const auto ei = ng::ElementIndex::FromNr0(e0);
+      const auto el = ng_mesh_->VolumeElement(ei);
       int np = el.GetNP();
 
       const int (*edges)[2] = nullptr;
@@ -2064,8 +2062,8 @@ bool NetgenCurver::curve_and_extract(int order)
       else continue;
 
       for (int e = 0; e < num_edges; e++)
-        if (fill_edge(ng_pi_to_cubit_nid_[el[edges[e][0]]],
-                      ng_pi_to_cubit_nid_[el[edges[e][1]]]))
+        if (fill_edge(ng_pi_to_cubit_nid_[(el[edges[e][0]]).Nr1()],
+                      ng_pi_to_cubit_nid_[(el[edges[e][1]]).Nr1()]))
           filled++;
     }
 
@@ -2074,8 +2072,9 @@ bool NetgenCurver::curve_and_extract(int order)
     static const int quad_edges[][2] = {{0,1},{1,2},{2,3},{3,0}};
 
     int nse = ng_mesh_->GetNSE();
-    for (int sei = 0; sei < nse; sei++) {
-      const ng::Element2d & el = ng_mesh_->SurfaceElement(sei+1);
+    for (int s0 = 0; s0 < nse; s0++) {
+      const auto sei = ng::SurfaceElementIndex::FromNr0(s0);
+      const auto el = ng_mesh_->SurfaceElement(sei);
       int np = el.GetNP();
 
       const int (*edges)[2] = nullptr;
@@ -2085,8 +2084,8 @@ bool NetgenCurver::curve_and_extract(int order)
       else continue;
 
       for (int e = 0; e < num_edges; e++)
-        if (fill_edge(ng_pi_to_cubit_nid_[el[edges[e][0]]],
-                      ng_pi_to_cubit_nid_[el[edges[e][1]]]))
+        if (fill_edge(ng_pi_to_cubit_nid_[(el[edges[e][0]]).Nr1()],
+                      ng_pi_to_cubit_nid_[(el[edges[e][1]]).Nr1()]))
           filled++;
     }
 
@@ -2100,14 +2099,15 @@ bool NetgenCurver::curve_and_extract(int order)
   if (order >= 3) {
     int filled_faces = 0, filled_vols = 0;
     int nve = ng_mesh_->GetNE();
-    for (int ei = 0; ei < nve; ei++) {
-      const ng::Element & el = ng_mesh_->VolumeElement(ei+1);
+    for (int e0 = 0; e0 < nve; e0++) {
+      const auto ei = ng::ElementIndex::FromNr0(e0);
+      const auto el = ng_mesh_->VolumeElement(ei);
       int np = el.GetNP();
       if (np != 4) continue;  // Only tet needs complete Lagrange face/vol nodes
 
       int v[4];
       for (int k = 0; k < 4; k++)
-        v[k] = ng_pi_to_cubit_nid_[el[k]];
+        v[k] = ng_pi_to_cubit_nid_[(el[k]).Nr1()];
 
       // Get vertex coordinates
       std::array<double,3> vc[4];
@@ -2173,13 +2173,14 @@ bool NetgenCurver::curve_and_extract(int order)
 
     // Also fill missing face nodes for surface triangles
     int nse = ng_mesh_->GetNSE();
-    for (int sei = 0; sei < nse; sei++) {
-      const ng::Element2d & sel = ng_mesh_->SurfaceElement(sei+1);
+    for (int s0 = 0; s0 < nse; s0++) {
+      const auto sei = ng::SurfaceElementIndex::FromNr0(s0);
+      const auto sel = ng_mesh_->SurfaceElement(sei);
       if (sel.GetNP() != 3) continue;
 
       int sv[3];
       for (int k = 0; k < 3; k++)
-        sv[k] = ng_pi_to_cubit_nid_[sel[k]];
+        sv[k] = ng_pi_to_cubit_nid_[(sel[k]).Nr1()];
 
       HoFaceKey3 fkey(sv[0], sv[1], sv[2]);
       if (face_ho_nodes_.count(fkey)) continue;

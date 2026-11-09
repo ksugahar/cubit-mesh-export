@@ -95,27 +95,25 @@ settles in a worse minimum than the one the hierarchical basis contains.  Set
 `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` to export Netgen's coefficients for A/B
 comparison.
 
-### Curved pyramids and NGSolve's vectorised transformation
+### Pyramids require the patched Netgen 6.2.2608 runtime
 
-Netgen 6.2.2604-6.2.2607 evaluates a curved pyramid in two ways: the scalar
-path blends each curved base edge with the adjacent bilinear weights, the
-vectorised path (`EvaluateMapping`, used by assembly and `Integrate`) omits
-that factor.  A pyramid with a curved base edge then does not conform with
-its neighbours: on a hex/pyramid/tet cylinder the element volumes miss
-2.4e-3 of the boundary-enclosed volume at every order >= 2, and the two
-paths differ by 1e-2.  The exported `.vol` is correct and the exporter's own
-snapshot is patched, but NGSolve up to 6.2.2607 reads it through the
-unpatched path; `export netgen` warns when curved pyramids are written.
-Pyramids are the hex/tet interface elements; their faces are interior, and
-they are curved only where the transition interface meets a curved boundary
-(on the cylinder, 18 of 37 pyramids share the rim circle where the z=0
-interface meets the side face).  Keep the hex/tet interface away from curved
-boundaries, or compare the integrated volume with the CAD value (a 1 %
-check-vol tolerance does not catch a 4e-4 deficit).  `check-vol` compares
-NGSolve's scalar and vectorised maps on every curved pyramid and lists the
-disagreeing ones as an advisory (`advisories`,
-`quality.curved_pyramid_map`); the check still passes, since the `.vol` is
-correct and a fixed NGSolve reports none.
+Pyramids (the hex/tet transition elements) are supported only on Netgen
+6.2.2608 with two fixes; the stock 6.2.2608 wheel has neither, and an
+unpatched runtime is rejected, not worked around.
+- Apex clamp (Netgen upstream 13b47c3a9): the stock map scales every pyramid
+  z by 1 - 1e-10, so even straight pyramids are off by ~3e-11.
+- Base-edge blend in the vectorised map (`EvaluateMapping`, used by assembly
+  and `Integrate`): the scalar map blends each curved base-edge bubble with
+  the adjacent bilinear weights; the stock vectorised map omits that factor,
+  so curvature leaks onto the opposite base edge and side faces.  On the
+  order-2 hex/pyramid/tet cylinder fixture (18 of 37 pyramids on the rim
+  circle) the two maps then differ by ~1e-2 of the element size and the
+  volume error is 2.6e-3; with the blend they agree to round-off and the
+  volume error drops to 2.9e-4.
+The exporter's compact Netgen snapshot carries both fixes.  `check-vol`
+integrates a unit pyramid (apex) and compares the two maps on every curved
+pyramid's base face, where vertical-edge bubbles vanish (blend); either
+failure raises with the missing patch named.
 
 On Windows PowerShell, prefer `coreform_cubit.com -nographics -batch script.py`
 or the lab launcher background path when you need to wait for batch completion
@@ -841,8 +839,8 @@ mesh = Mesh(vol_path)
 ## Requirements
 
 - Coreform Cubit 2026.8 with Cubit Mesh Export installed (`cubit-plugin-install`)
-- NGSolve 6.2.2605+ to load the `.vol` (the 6.2.2607 snapshot writes
-  `edgesegmentsgi3`); NGSolve up to 6.2.2607 mis-evaluates curved pyramids
+- NGSolve 6.2.2608 to load the `.vol` (the snapshot is 6.2.2608); curved
+  pyramids need its runtime with the apex clamp and the base-edge blend
   (see "Curved pyramids")
 """
 

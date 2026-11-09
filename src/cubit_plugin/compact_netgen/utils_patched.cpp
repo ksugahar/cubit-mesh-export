@@ -1,4 +1,4 @@
-// Modified from Netgen libsrc/core/utils.cpp at 9642315f7a930701df33c917c537a51a4f3b46cd.
+// Modified from Netgen libsrc/core/utils.cpp at v6.2.2608 (96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e) plus upstream 13b47c3a9fb2e7d53ca4be7227bdd4acbd6c6e73 (pyramid apex clamp).
 // Local modifications present in the source history on 2026-10-15.
 // Netgen licensing and attribution are provided with the distribution.
 

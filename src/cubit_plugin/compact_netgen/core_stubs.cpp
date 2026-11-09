@@ -74,7 +74,9 @@ int NgProfiler::CreateTimer(const std::string &) {
 // PajeTrace — no-op stubs
 // ============================================================
 PajeTrace *trace = nullptr;
-std::vector<PajeTrace::MemoryEvent> PajeTrace::memory_events;
+PajeTrace *memtrace = nullptr;
+void MemTraceRecord(const void *, size_t, unsigned char) {}
+size_t PajeTrace::mem_trace_threshold = 0;
 size_t PajeTrace::max_tracefile_size = 0;
 bool PajeTrace::trace_thread_counter = false;
 bool PajeTrace::trace_threads = false;

@@ -52,7 +52,7 @@ def _source() -> dict:
             "cubit_runtime": "2024.3 Python init -> 2025.12 combined journal startup",
             "nastran_export_migration": "cubit_mesh_export.export_3D_Nastran -> export nastran_bdf",
         },
-        "version": "2025.12",
+        "version": "2026.8",
         "process": {
             "exit_code": 3,
             "error_lines": ["ERROR: known startup diagnostic"],

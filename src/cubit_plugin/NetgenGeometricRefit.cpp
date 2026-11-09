@@ -2,7 +2,7 @@
 
 #ifdef HAVE_NETGEN
 
-#include <meshing/meshing.hpp>
+#include "netgen_meshing.hpp"
 
 #include <algorithm>
 #include <array>
@@ -199,7 +199,7 @@ struct Refitter
                const ng::Point<3> & x, ng::Point<3> & q,
                std::vector<ng::Vec<3>> & dirs)
   {
-    const ng::Element2d & el = mesh[e.sei];
+    const auto el = mesh[e.sei];
     q = x;
     dirs.clear();
     if (e.on_curve) {
@@ -584,7 +584,7 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   // Edges that lie on a geometric curve (mesh segments).
   std::unordered_map<int, int> curve_edge;   // edge -> segment
   for (int i = 0; i < mesh.GetNSeg(); i++)
-    curve_edge[int(top.GetEdge(ng::SegmentIndex(i)))] = i;
+    curve_edge[top.GetEdge(ng::SegmentIndex::FromNr0(i)).Nr0()] = i;
 
   std::vector<double> g1, w1;
   gauss_rule(order + 6, g1, w1);
@@ -594,22 +594,22 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   std::vector<char> done(top.GetNEdges(), 0);
   std::vector<int> edge_surf(top.GetNEdges(), -2);
   for (int s = 0; s < mesh.GetNSE(); s++) {
-    ng::SurfaceElementIndex sei(s);
+    const auto sei = ng::SurfaceElementIndex::FromNr0(s);
     int sn = mesh.GetFaceDescriptor(mesh[sei].GetIndex()).SurfNr();
     for (auto e : top.GetEdges(sei)) {
-      int ei = int(e);
+      int ei = e.Nr0();
       if (edge_surf[ei] == -2) edge_surf[ei] = sn;
       else if (edge_surf[ei] != sn) edge_surf[ei] = -1;   // two surfaces
     }
   }
 
   for (int s = 0; s < mesh.GetNSE(); s++) {
-    ng::SurfaceElementIndex sei(s);
-    const ng::Element2d & el = mesh[sei];
+    const auto sei = ng::SurfaceElementIndex::FromNr0(s);
+    const auto el = mesh[sei];
     auto edges = top.GetEdges(sei);
     auto local = ng::MeshTopology::GetEdges(el.GetType());
     for (int i = 0; i < edges.Size(); i++) {
-      int ei = int(edges[i]);
+      int ei = edges[i].Nr0();
       if (done[ei]) continue;
       done[ei] = 1;
       int n = R.curved.NumEdgeCoefficients(ei);
@@ -620,7 +620,7 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
       auto it = curve_edge.find(ei);
       if (it != curve_edge.end()) {
         const ng::EdgeDescriptor & ed =
-            mesh.GetEdgeDescriptor(mesh[ng::SegmentIndex(it->second)]);
+            mesh.GetEdgeDescriptor(mesh[ng::SegmentIndex::FromNr0(it->second)]);
         E.on_curve = true;
         E.surfnr1 = ed.SurfNr(0);
         E.surfnr2 = ed.SurfNr(1);
@@ -670,9 +670,9 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
 
   // ---- Faces (after the edges they are blended with) ---------------------
   for (int s = 0; s < mesh.GetNSE(); s++) {
-    ng::SurfaceElementIndex sei(s);
-    const ng::Element2d & el = mesh[sei];
-    int fi = top.GetFace(sei);
+    const auto sei = ng::SurfaceElementIndex::FromNr0(s);
+    const auto el = mesh[sei];
+    int fi = top.GetFace(sei).Nr0();
     int n = R.curved.NumFaceCoefficients(fi);
     if (n <= 0) continue;
 

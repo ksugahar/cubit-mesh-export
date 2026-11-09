@@ -15,6 +15,7 @@
 #include <unistd.h>
 #endif
 #include "NamedPeriodicMeshAdapter.hpp"
+#include "NativeVolWriter.hpp"
 #include "PeriodicCurvedGeometry.hpp"
 #include <array>
 #include <algorithm>
@@ -391,8 +392,7 @@ inline void publish_named_periodic_bundle(const NamedPeriodicOutputPaths &paths,
   move_named_periodic_no_replace(paths.temporary, paths.final);
 }
 
-// Single-owner output: preserve the native .vol text writer and its newline
-// convention. Unknown suffixes cause Mesh::Save(path) to append .vol.gz.
+// Single-owner output through the exporter's LF .vol writer.
 inline NamedPeriodicOutputPaths stage_named_periodic_vol(
     const netgen::Mesh &mesh, const std::filesystem::path &filename)
 {
@@ -401,12 +401,12 @@ inline NamedPeriodicOutputPaths stage_named_periodic_vol(
   std::ostringstream expected;
   mesh.Save(expected);
   if (!expected) throw std::runtime_error("Named periodic serialization failed");
-  mesh.Save(paths.temporary);
+  save_native_mesh(mesh, paths.temporary);
   if (!std::filesystem::is_regular_file(paths.temporary))
     throw std::runtime_error("Native writer did not create the exact periodic temporary path");
-  // Text input reverses the platform newline translation of the native text
-  // writer, without changing the on-disk bytes. A short/silent write must fail.
-  std::ifstream input(paths.temporary);
+  // The on-disk bytes must equal the serialization exactly. A short/silent
+  // write must fail.
+  std::ifstream input(paths.temporary, std::ios::binary);
   input.exceptions(std::ios::badbit);
   if (!input) throw std::runtime_error("Cannot read periodic temporary output");
   const std::string actual((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());

@@ -11,7 +11,7 @@
 #ifdef HAVE_NETGEN
 #include "NetgenCurver.hpp"
 #include "NamedPeriodicIdentification.hpp"
-#include <meshing.hpp>
+#include "netgen_meshing.hpp"
 #endif
 
 // Cubit geometry for CAD reference values (companion JSON)
@@ -147,8 +147,8 @@ static double surface_descriptor_mesh_area(netgen::Mesh &mesh, int descriptor)
 {
   double area = 0.0;
   for (int sei = 1; sei <= mesh.GetNSE(); sei++) {
-    const auto &element = mesh.SurfaceElement(sei);
-    if (element.GetIndex() != descriptor)
+    const auto element = mesh.SurfaceElement(netgen::SurfaceElementIndex::FromNr1(sei));
+    if (element.GetIndex().Nr1() != descriptor)
       continue;
     int np = element.GetNP();
     if (np != 3 && np != 4)
@@ -558,7 +558,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     if (elem_i < (int)md.elements.size()) {
       auto it = block_to_domain.find(md.elements[elem_i].group_id);
       int di = (it != block_to_domain.end()) ? it->second : 1;
-      ng_mesh->VolumeElement(ve_idx).SetIndex(di);
+      ng_mesh->VolumeElement(netgen::ElementIndex::FromNr1(ve_idx))
+          .SetIndex(netgen::VolumeRegionIndex::FromNr1(di));
     }
   }
 
@@ -595,15 +596,15 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     int nfd_fix = ng_mesh->GetNFD();
     for (int fi = 1; fi <= nfd_fix; fi++) {
       // BCProperty still holds original Cubit surface ID at this point
-      int cubit_sid = ng_mesh->GetFaceDescriptor(fi).BCProperty();
+      int cubit_sid = ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).BCProperty();
       if (cubit_sid > 0)
         mesh_support_surface_ids.insert(cubit_sid);
       if (cubit_sid < 0) {
         // NetgenCurver recovered this direct/free face's owner from adjacent
         // volume elements.  Validate that handoff instead of overwriting every
         // synthetic descriptor with domain 1.
-        int domin = ng_mesh->GetFaceDescriptor(fi).DomainIn();
-        int domout = ng_mesh->GetFaceDescriptor(fi).DomainOut();
+        int domin = ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).DomainIn();
+        int domout = ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).DomainOut();
         bool valid_domin = domin >= 1 && domin <= ndomains;
         bool valid_domout = domout == 0 || (domout >= 1 && domout <= ndomains);
         if (!valid_domin || !valid_domout || domin == domout) {
@@ -629,8 +630,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         auto it = vol_to_domain.find(parent_vols[1]);
         domout = (it != vol_to_domain.end()) ? it->second : 0;
       }
-      ng_mesh->GetFaceDescriptor(fi).SetDomainIn(domin);
-      ng_mesh->GetFaceDescriptor(fi).SetDomainOut(domout);
+      ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).SetDomainIn(domin);
+      ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).SetDomainOut(domout);
       if (domin > 0 && domin == domout) {
         std::string explicit_label;
         auto sideset = surf_to_ssname.find(cubit_sid);
@@ -667,9 +668,10 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   if (!same_material_face_descriptors.empty()) {
     int removed_same_material_surfaces = 0;
     for (int sei = ng_mesh->GetNSE() - 1; sei >= 0; --sei) {
-      auto &surface_element = ng_mesh->SurfaceElements()[sei];
-      if (same_material_face_descriptors.count(surface_element.GetIndex())) {
-        ng_mesh->SurfaceElements().DeleteElement(sei);
+      const auto sei_index = netgen::SurfaceElementIndex::FromNr0(sei);
+      auto surface_element = ng_mesh->SurfaceElements()[sei_index];
+      if (same_material_face_descriptors.count(surface_element.GetIndex().Nr1())) {
+        ng_mesh->SurfaceElements().DeleteElement(sei_index);
         removed_same_material_surfaces++;
       }
     }
@@ -682,7 +684,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     for (int fi = 1; fi <= old_nfd; ++fi) {
       if (same_material_face_descriptors.count(fi))
         continue;
-      const auto &old_fd = ng_mesh->GetFaceDescriptor(fi);
+      const auto &old_fd = ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi));
       netgen::FaceDescriptor new_fd(
           old_fd.SurfNr(), old_fd.DomainIn(), old_fd.DomainOut(),
           old_fd.TLOSurface());
@@ -693,14 +695,15 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       retained_descriptors.push_back(new_fd);
       old_to_new[fi] = static_cast<int>(retained_descriptors.size());
     }
-    for (auto &surface_element : ng_mesh->SurfaceElements()) {
-      const int old_index = surface_element.GetIndex();
+    for (auto &&surface_element : ng_mesh->SurfaceElements()) {
+      const int old_index = surface_element.GetIndex().Nr1();
       if (old_index <= 0 || old_index > old_nfd || old_to_new[old_index] == 0) {
         PRINT_ERROR("Cannot remap retained surface element descriptor %d.\n",
                     old_index);
         return false;
       }
-      surface_element.SetIndex(old_to_new[old_index]);
+      surface_element.SetIndex(
+          netgen::FaceRegionIndex::FromNr1(old_to_new[old_index]));
     }
     ng_mesh->ClearFaceDescriptors();
     for (const auto &descriptor : retained_descriptors)
@@ -722,7 +725,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Save original Cubit surface IDs before remapping (for companion JSON)
   std::vector<int> orig_surf_ids(nfd);
   for (int fi = 1; fi <= nfd; fi++)
-    orig_surf_ids[fi - 1] = ng_mesh->GetFaceDescriptor(fi).BCProperty();
+    orig_surf_ids[fi - 1] = ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).BCProperty();
 
   // Set BCName and remap BCProperty to contiguous 1-based index
   ng_mesh->SetNBCNames(nfd);
@@ -742,9 +745,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     for (auto &ch : label) if (ch == ' ') ch = '_';
 
     // Remap BCProperty: Cubit surface ID -> contiguous index fi
-    ng_mesh->GetFaceDescriptor(fi).SetBCProperty(fi);
+    ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).SetBCProperty(fi);
     ng_mesh->SetBCName(fi - 1, label);
-    ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
   }
 
   // For order=1: reset curving
@@ -778,8 +780,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     if (air_dom > 0 && kelvin_dom > 0) {
       int n_int = 0, n_ext = 0, n_skipped = 0;
       for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
-        int di = ng_mesh->GetFaceDescriptor(fi).DomainIn();
-        int dout = ng_mesh->GetFaceDescriptor(fi).DomainOut();
+        int di = ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).DomainIn();
+        int dout = ng_mesh->GetFaceDescriptor(netgen::FaceRegionIndex::FromNr1(fi)).DomainOut();
         // Skip faces the user has already named via a sideset.  Lookup
         // by original Cubit surface ID (orig_surf_ids[fi-1]) matches
         // the sideset's surface-list exactly; the remapped BCProperty
@@ -792,16 +794,12 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         if ((di == air_dom && dout == kelvin_dom) ||
             (di == kelvin_dom && dout == air_dom)) {
           ng_mesh->SetBCName(fi - 1, "kelvin_int");
-          ng_mesh->GetFaceDescriptor(fi).SetBCName(
-              ng_mesh->GetBCNamePtr(fi - 1));
           n_int++;
         }
         // Outer boundary of kelvin shell (one side is kelvin, other is 0)
         else if ((di == kelvin_dom && dout == 0) ||
                  (di == 0 && dout == kelvin_dom)) {
           ng_mesh->SetBCName(fi - 1, "kelvin_ext");
-          ng_mesh->GetFaceDescriptor(fi).SetBCName(
-              ng_mesh->GetBCNamePtr(fi - 1));
           n_ext++;
         }
       }
@@ -957,8 +955,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       for (int nid : mesh_nodes) {
         auto it = nid_to_pi.find(nid);
         if (it == nid_to_pi.end()) continue;
-        netgen::PointIndex pi(it->second);
-        ng_mesh->pointelements.Append(netgen::Element0d(pi, cd3_idx));
+        const auto pi = netgen::PointIndex::FromNr1(it->second);
+        ng_mesh->pointelements.Append(netgen::Element0d(
+            pi, netgen::VertexRegionIndex::FromNr1(cd3_idx)));
         point_elements_written++;
       }
     }
@@ -990,7 +989,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
   if (!has_periodic) {
-    ng_mesh->Save(u8_string_to_path(filename));
+    cubit_mesh_export::save_native_mesh(*ng_mesh, u8_string_to_path(filename));
   }
 
   int ne = ng_mesh->GetNE();

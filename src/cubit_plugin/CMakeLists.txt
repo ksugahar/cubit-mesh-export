@@ -30,7 +30,8 @@ set(COMPACT_NETGEN_OVERRIDES "" CACHE PATH "Compact Netgen overrides directory")
 
 # Option 1: Compact Netgen (source compiled directly into plugin)
 # Netgen sources are snapshotted in compact_netgen/netgen_src/ (no external dependency).
-# Snapshot: upstream v6.2.2607 plus local patches (static-library macros in
+# Snapshot: upstream v6.2.2608 plus upstream 13b47c3a9 (pyramid apex clamp)
+# and local patches (static-library macros in
 # ngcore_api.hpp/mydefs.hpp, BlockAllocator mutex lifetime, CurvedElements
 # coefficient accessors, pyramid base-edge blending in EvaluateMapping).
 # To update, run compact_netgen/update_snapshot.py (three-way merge).
@@ -49,6 +50,7 @@ if(EXISTS "${NETGEN_SNAP}/meshing/meshing.hpp" AND EXISTS "${COMPACT_NETGEN_OVER
     list(APPEND COMPACT_NETGEN_SOURCES
       ${NETGEN_SNAP}/core/archive.cpp
       ${NETGEN_SNAP}/core/bitarray.cpp
+      ${NETGEN_SNAP}/core/blockallocator.cpp
       ${NETGEN_SNAP}/core/exception.cpp
       ${COMPACT_NETGEN_OVERRIDES}/flags_patched.cpp
       ${NETGEN_SNAP}/core/localheap.cpp
@@ -58,10 +60,7 @@ if(EXISTS "${NETGEN_SNAP}/meshing/meshing.hpp" AND EXISTS "${COMPACT_NETGEN_OVER
       ${COMPACT_NETGEN_OVERRIDES}/statushandler_patched.cpp
     )
     list(APPEND COMPACT_NETGEN_SOURCES
-      ${NETGEN_SNAP}/general/hashtabl.cpp
-      ${NETGEN_SNAP}/general/mystring.cpp
       ${NETGEN_SNAP}/general/table.cpp
-      ${NETGEN_SNAP}/general/optmem.cpp
       ${NETGEN_SNAP}/gprim/geom3d.cpp
       ${NETGEN_SNAP}/gprim/transform3d.cpp
       ${NETGEN_SNAP}/linalg/densemat.cpp

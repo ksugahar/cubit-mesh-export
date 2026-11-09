@@ -8,7 +8,7 @@
 
 #include "NetgenCurverPure.hpp"
 
-#include <meshing.hpp>
+#include "netgen_meshing.hpp"
 #include "callbackgeom.hpp"
 
 #include <cstdio>

@@ -87,8 +87,8 @@ public:
   Array<size_t> par_project_boundaries;
 
   bool have_single_segments;
-  Array<Segment> old_segments, free_segments, segments, new_segments, new_segments_on_moved_bnd;
-  Array<int> seg_face;  // per-segment face descriptor index (replaces seg.si usage in BL)
+  Array<Segment, SegmentIndex> old_segments, free_segments, segments, new_segments, new_segments_on_moved_bnd;
+  Array<int, SegmentIndex> seg_face;  // per-segment face descriptor index (replaces seg.si usage in BL)
   Array<Element2d, SurfaceElementIndex> new_sels, new_sels_on_moved_bnd;
   Array<Array<PointIndex>, PointIndex> mapto;
   Array<PointIndex, PointIndex> mapfrom;
@@ -117,7 +117,7 @@ public:
   void AddSegments ();
   void AddSurfaceElements ();
 
-  Vec<3> getNormal (const Element2d& el)
+  Vec<3> getNormal (const Element2dRef & el)
   {
     auto v0 = mesh[el[0]];
     return Cross(mesh[el[1]] - v0, mesh[el[2]] - v0).Normalize();

@@ -352,24 +352,37 @@ endmesh
     assert "volume domains missing material labels: 2" in ownership["issues"]
 
 
-def test_compressed_crlf_vol_labels_are_transport_normalized(tmp_path):
+def test_crlf_vol_reports_normalized_labels_measures_stored_ones_and_fails(tmp_path):
+    """Guards: a CRLF copy of a .vol stores names like "body\\r" in Netgen.
+
+    Reports keep the normalised label; measures select the stored name, so the
+    volume is not 0; and the check fails, because a solver selecting "body"
+    by name would select nothing.
+    """
     _, vol_path = _save_box(tmp_path)
     compressed = tmp_path / "box.vol.gz"
     with vol_path.open("rb") as source, gzip.open(compressed, "wb") as target:
         for line in source:
             target.write(line.rstrip(b"\r\n") + b"\r\n")
 
+    lf = check_consistency(vol_path)
     result = check_consistency(
         compressed,
         required_materials=("body",),
         required_boundaries=("outer",),
     )
 
-    assert result["passed"]
     assert result["labels"]["materials"] == ["body"]
     assert result["labels"]["boundaries"] == ["outer"]
     assert result["quality"]["materials"] == ["body"]
     assert result["quality"]["boundaries"] == ["outer"]
+    volumes = [m["ng_volume"] for m in result["materials"]]
+    # NGSolve's threaded Integrate may differ in the last bit between runs.
+    assert volumes == pytest.approx([m["ng_volume"] for m in lf["materials"]], rel=1e-12), (
+        volumes, lf["materials"])
+    assert volumes[0] > 0.0
+    assert not result["passed"]
+    assert any("is stored as 'body\\r'" in w for w in result["warnings"]), result["warnings"]
 
 
 def test_auto_discovered_cad_sidecar_checks_geometry_and_metadata(tmp_path):
@@ -557,28 +570,82 @@ MIXED_CYLINDER = (
 )
 
 
-def test_curved_pyramid_map_is_an_advisory_not_a_failure():
-    # Stored order-2 export from Cubit 2026.8. The rim at z=0 touches
-    # 18 of the 37 transition pyramids. Diagnose any inconsistency
-    # in their curved maps separately from file validity.
-    result = check_consistency(str(MIXED_CYLINDER))
-    pyramids = result["quality"]["curved_pyramid_map"]
+def _pyramid_runtime_patched():
+    from cubit_mesh_export import check
 
-    assert result["passed"]
-    assert pyramids["pyramid_count"] == 37
-    assert pyramids["inconsistent_count"] in (0, 18)
-    if pyramids["inconsistent_count"]:
-        assert pyramids["max_relative_deviation"] > 1.0e-3
-        assert len(result["advisories"]) == 1
-        assert result["advisories"][0].startswith("18 of 37 pyramids are curved")
-    else:
-        assert pyramids["max_relative_deviation"] <= pyramids["tolerance"]
-        assert result["advisories"] == []
+    try:
+        check.require_pyramid_netgen()
+    except RuntimeError:
+        return False
+    return True
 
 
-def test_straight_elements_have_no_curved_pyramid_advisory(tmp_path):
+def test_pyramids_require_the_patched_netgen_runtime():
+    """Guards: pyramids fail loudly unless Netgen carries both pyramid fixes.
+
+    Assumes: the stored order-2 Cubit 2026.8 export of a radius-1, height-2
+    cylinder, hexes above z=0, tets below, 37 transition pyramids; the rim at
+    z=0 touches 18 of them.  Stock 6.2.2608 lacks the apex clamp and the
+    base-edge blend and must raise; the patched runtime maps every base
+    consistently.
+    """
+    # The runtime gate does not depend on optional quality sampling.
+    for quality in (True, False):
+        if not _pyramid_runtime_patched():
+            with pytest.raises(RuntimeError, match="pyramid apex clamp"):
+                check_consistency(str(MIXED_CYLINDER), quality=quality)
+            continue
+        try:
+            result = check_consistency(str(MIXED_CYLINDER), quality=quality)
+        except RuntimeError as error:
+            # Apex clamp present, blend missing: the curved rim pyramids must fail.
+            assert "lacks the base-edge blend" in str(error)
+            assert str(error).startswith("18 of 37 curved pyramids")
+            continue
+        pyramids = result["curved_pyramid_map"]
+        assert result["passed"], result["warnings"]
+        assert pyramids["pyramid_count"] == 37
+        assert pyramids["max_relative_deviation"] <= pyramids["tolerance"], pyramids
+
+
+def test_cli_without_quality_still_gates_the_pyramid_runtime(tmp_path):
+    """Guards: --no-quality cannot pass a pyramid mesh on a deficient runtime."""
+    from cubit_mesh_export.check import main
+
+    report = tmp_path / "report.json"
+    argv = [str(MIXED_CYLINDER), "--no-quality", "--report-json", str(report)]
+    try:
+        check_consistency(str(MIXED_CYLINDER), quality=False)
+    except RuntimeError:
+        assert main(argv) != 0
+        payload = json.loads(report.read_text(encoding="utf-8"))
+        assert payload["passed"] is False and "pyramid" in payload["error"], payload
+        return
+    assert main(argv) == 0
+    assert json.loads(report.read_text(encoding="utf-8"))["passed"] is True
+
+
+def test_material_volume_selects_the_stored_region():
+    """Guards: the per-material volume of the one-material order-2 cylinder equals
+    its whole-mesh volume; a selector that matches no stored name gives 0.
+
+    Assumes: the stored fixture has one material, "body".
+    """
+    import ngsolve as ng
+
+    try:
+        result = check_consistency(str(MIXED_CYLINDER), quality=False)
+    except RuntimeError as error:
+        pytest.skip(f"needs the Netgen runtime with both pyramid fixes: {error}")
+    whole = ng.Integrate(ng.CF(1), ng.Mesh(str(MIXED_CYLINDER)))
+    (body,) = result["materials"]
+    assert body["name"] == "body"
+    assert body["ng_volume"] == pytest.approx(whole, rel=1e-12), (body, whole)
+
+
+def test_straight_elements_need_no_pyramid_runtime(tmp_path):
     _, vol_path = _save_box(tmp_path)
     result = check_consistency(str(vol_path))
 
     assert result["quality"]["curved_pyramid_map"]["pyramid_count"] == 0
-    assert result["advisories"] == []
+    assert "advisories" not in result

@@ -1,7 +1,7 @@
 # Third-party notices
 
 The Cubit command plugin (cubit_mesh_export.ccm) incorporates a modified
-Compact Netgen snapshot from Netgen 6.2.2607 (9642315f7a930701df33c917c537a51a4f3b46cd) under LGPL-2.1-only.
+Compact Netgen snapshot from Netgen 6.2.2608 (96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e) under LGPL-2.1-only.
 See NETGEN-AUTHORS.txt for upstream attribution.
 The corresponding source and build recipe are in src/cubit_plugin, including
 compact_netgen/netgen_src. See LICENSE-NETGEN.txt and the copyright notices in

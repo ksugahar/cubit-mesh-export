@@ -36,7 +36,7 @@ def live_summary() -> dict:
     return {
         "schema": "coreform-cubit.embedded-pipe-mixed-transition-live.v1",
         "pass": True,
-        "version": "2025.12",
+        "version": "2026.8",
         "source_kind": "source_native_coreform_forum_journal_with_version_recovery",
         "source_journal": "embedded_pipe.jou",
         "source_sha256": "a" * 64,

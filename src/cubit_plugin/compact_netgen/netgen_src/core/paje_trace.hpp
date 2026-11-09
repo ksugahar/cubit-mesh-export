@@ -2,6 +2,7 @@
 #define NETGEN_CORE_PAJE_TRACE_HPP
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -27,18 +28,17 @@ namespace ngcore
       NGCORE_API static bool mem_tracing_enabled;
       NGCORE_API static bool write_paje_file;
 
+      NGCORE_API static size_t mem_trace_threshold;
+
       bool tracing_enabled;
       TTimePoint start_time;
+      TTimePoint end_time = 0;
       int nthreads;
-      size_t n_memory_events_at_start;
 
     public:
       NGCORE_API void Write();
       NGCORE_API void WritePajeFile( const std::string & filename );
       NGCORE_API void WriteTimingChart();
-#ifdef NETGEN_TRACE_MEMORY
-      NGCORE_API void WriteMemoryChart( std::string fname );
-#endif // NETGEN_TRACE_MEMORY
 
       // Approximate number of events to trace. Tracing will
       // be stopped if any thread reaches this number of events
@@ -47,6 +47,11 @@ namespace ngcore
       static void SetTraceMemory( bool trace_memory )
         {
           mem_tracing_enabled = trace_memory;
+        }
+
+      static void SetMemoryTraceThreshold( size_t bytes )
+        {
+          mem_trace_threshold = bytes;
         }
 
       static void SetTraceThreads( bool atrace_threads )
@@ -129,11 +134,9 @@ namespace ngcore
       struct MemoryEvent
         {
           TTimePoint time;
-          size_t size;
-          int id;
-          bool is_alloc;
-
-          bool operator < (const MemoryEvent & other) const { return time < other.time; }
+          size_t bytes;
+          uintptr_t addr;
+          unsigned char kind;   // 0 host alloc, 1 host free, 2 device alloc, 3 device free
         };
 
       std::vector<std::vector<Task> > tasks;
@@ -143,7 +146,7 @@ namespace ngcore
       std::vector<std::tuple<std::string, int>> user_containers;
       std::vector<TimerEvent> gpu_events;
       std::vector<std::vector<ThreadLink> > links;
-      NGCORE_API static std::vector<MemoryEvent> memory_events;
+      std::vector<std::vector<MemoryEvent> > memory_events;   // per thread
 
     public:
       NGCORE_API void StopTracing();
@@ -170,14 +173,14 @@ namespace ngcore
       {
           if(!tracing_enabled) return;
           if(unlikely(user_events.size() == max_num_events_per_thread))
-            StopTracing();
+            { StopTracing(); return; }
           user_events.push_back(ue);
       }
       void StartGPU(int timer_id = 0, int user_value = -1)
         {
           if(!tracing_enabled) return;
           if(unlikely(gpu_events.size() == max_num_events_per_thread))
-            StopTracing();
+            { StopTracing(); return; }
           gpu_events.push_back(TimerEvent{GetTimeCounter(), timer_id, 0, user_value, true});
         }
 
@@ -185,7 +188,7 @@ namespace ngcore
         {
           if(!tracing_enabled) return;
           if(unlikely(gpu_events.size() == max_num_events_per_thread))
-            StopTracing();
+            { StopTracing(); return; }
           gpu_events.push_back(TimerEvent{GetTimeCounter(), timer_id, 0, -1, false});
         }
 
@@ -194,7 +197,7 @@ namespace ngcore
         {
           if(!tracing_enabled) return;
           if(unlikely(gpu_events.size()+2 >= max_num_events_per_thread))
-            StopTracing();
+            { StopTracing(); return; }
           gpu_events.push_back(TimerEvent{t_start, timer_id, 0, -1, true});
           gpu_events.push_back(TimerEvent{t_stop, timer_id, 0, -1, false});
         }
@@ -203,7 +206,7 @@ namespace ngcore
         {
           if(!tracing_enabled) return;
           if(unlikely(timer_events.size() == max_num_events_per_thread))
-            StopTracing();
+            { StopTracing(); return; }
           timer_events.push_back(TimerEvent{GetTimeCounter(), timer_id, 0, user_value, true});
         }
 
@@ -211,37 +214,20 @@ namespace ngcore
         {
           if(!tracing_enabled) return;
           if(unlikely(timer_events.size() == max_num_events_per_thread))
-            StopTracing();
+            { StopTracing(); return; }
           timer_events.push_back(TimerEvent{GetTimeCounter(), timer_id, 0, -1, false});
         }
 
-      void AllocMemory(int id, size_t size)
-        {
-          if(!mem_tracing_enabled) return;
-          memory_events.push_back(MemoryEvent{GetTimeCounter(), size, id, true});
-        }
-
-      void FreeMemory(int id, size_t size)
-        {
-          if(!mem_tracing_enabled) return;
-          memory_events.push_back(MemoryEvent{GetTimeCounter(), size, id, false});
-        }
-
-      void ChangeMemory(int id, long long size)
-        {
-          if(size>0)
-            AllocMemory(id, size);
-          if(size<0)
-            FreeMemory(id, -size);
-        }
+      // called through the MemTrace* hooks in memtrace.hpp
+      NGCORE_API void AddMemoryEvent(const void * p, size_t bytes, unsigned char kind);
 
 
       int StartTask(int thread_id, int id, int id_type = Task::ID_NONE, int additional_value = -1)
         {
           if(!tracing_enabled) return -1;
           if(!trace_threads && !trace_thread_counter) return -1;
-	  if(unlikely(tasks[thread_id].size() == max_num_events_per_thread))
-            StopTracing();
+          if(unlikely(tasks[thread_id].size() == max_num_events_per_thread))
+            { StopTracing(); return -1; }
           int task_num = tasks[thread_id].size();
           tasks[thread_id].push_back( Task{thread_id, id, id_type, additional_value, GetTimeCounter(), true} );
           return task_num;
@@ -249,29 +235,31 @@ namespace ngcore
 
       void StopTask(int thread_id, int id, int id_type = Task::ID_NONE)
         {
+          if(!tracing_enabled) return;
           if(!trace_threads && !trace_thread_counter) return;
           tasks[thread_id].push_back( Task{thread_id, id, id_type, 0, GetTimeCounter(), false} );
         }
 
-      void StartJob(int job_id, const std::type_info & type)
+      int StartJob(int job_id, const std::type_info & type)
         {
-          if(!tracing_enabled) return;
+          if(!tracing_enabled) return -1;
           if(jobs.size() == max_num_events_per_thread)
-            StopTracing();
+            { StopTracing(); return -1; }
           jobs.push_back( Job{job_id, &type, GetTimeCounter()} );
+          return jobs.size()-1;
         }
 
-      void StopJob()
+      void StopJob(int index)
         {
-          if(tracing_enabled)
-            jobs.back().stop_time = GetTimeCounter();
+          if(index >= 0)
+            jobs[index].stop_time = GetTimeCounter();
         }
 
       void StartLink(int thread_id, int key)
         {
           if(!tracing_enabled) return;
           if(links[thread_id].size() == max_num_events_per_thread)
-            StopTracing();
+            { StopTracing(); return; }
           links[thread_id].push_back( ThreadLink{thread_id, key, GetTimeCounter(), true} );
         }
 
@@ -279,7 +267,7 @@ namespace ngcore
         {
           if(!tracing_enabled) return;
           if(links[thread_id].size() == max_num_events_per_thread)
-            StopTracing();
+            { StopTracing(); return; }
           links[thread_id].push_back( ThreadLink{thread_id, key, GetTimeCounter(), false} );
         }
 
@@ -306,7 +294,8 @@ namespace ngcore
 
       bool Active() const { return trace != nullptr; }
 
-      void AddTicks (const std::string & label, TTimePoint t0, TTimePoint t1)
+      // value: one integer stored with the event (e.g. bytes of a transfer)
+      void AddTicks (const std::string & label, TTimePoint t0, TTimePoint t1, int value = 0)
         {
           if(!trace) return;
           if(id_trace != trace)
@@ -314,7 +303,7 @@ namespace ngcore
               id = trace->AddUserContainer(name);
               id_trace = trace;
             }
-          trace->AddUserEvent({t0, t1, label, id, 0});
+          trace->AddUserEvent({t0, t1, label, id, value});
         }
 
       void Anchor (double clock_now)
@@ -323,8 +312,8 @@ namespace ngcore
           anchor_time = clock_now;
         }
 
-      void AddInterval (const std::string & label, double t0, double t1)
-        { AddTicks(label, Tick(t0), Tick(t1)); }
+      void AddInterval (const std::string & label, double t0, double t1, int value = 0)
+        { AddTicks(label, Tick(t0), Tick(t1), value); }
 
     private:
       TTimePoint Tick (double t) const

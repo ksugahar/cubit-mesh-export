@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Find the latest Coreform Cubit install. Dot-source from build scripts.
+    Find the Coreform Cubit 2026.8 install. Dot-source from build scripts.
 
 .DESCRIPTION
     Centralizes Cubit install discovery so Build.ps1, cubit_plugin
@@ -9,13 +9,11 @@
         $env:CUBIT_DIR = 'C:\Program Files\Coreform Cubit 2026.6\cmake'
     with:
         . tools/find_cubit.ps1
-        $env:CUBIT_DIR = $CubitCmakeDir   # always points at latest
+        $env:CUBIT_DIR = $CubitCmakeDir
 
-    Discovery rules (first hit wins):
-      1. $env:CUBIT_INSTALL_DIR if set and exists
-      2. Latest 'C:\Program Files\Coreform Cubit *' dir
-         (version-aware sort: 2026.8 > 2026.6)
-      3. $null + warning if nothing found
+    Only Coreform Cubit 2026.8 is supported. The install is
+    $env:CUBIT_INSTALL_DIR when set, else 'C:\Program Files\Coreform Cubit 2026.8'.
+    Its BUILD_INFO must record short=2026.8; any other install throws.
 
     When dot-sourced, sets script-scoped variables:
       $CubitInstallDir   = e.g. 'C:\Program Files\Coreform Cubit 2026.8'
@@ -47,31 +45,17 @@
 #>
 
 function Find-CubitInstall {
-    # Honor explicit env-var override first.
-    if ($env:CUBIT_INSTALL_DIR -and (Test-Path $env:CUBIT_INSTALL_DIR)) {
-        return $env:CUBIT_INSTALL_DIR
+    $root = if ($env:CUBIT_INSTALL_DIR) { $env:CUBIT_INSTALL_DIR } `
+            else { Join-Path $env:ProgramFiles 'Coreform Cubit 2026.8' }
+    if (-not (Test-Path $root)) { return $null }
+    $info = Join-Path $root 'BUILD_INFO'
+    $short = if (Test-Path $info) {
+        (Get-Content $info | Where-Object { $_ -match '^short=' } | Select-Object -First 1) -replace '^short=', ''
     }
-    # Scan C:\Program Files for the highest-version install.
-    $base = 'C:\Program Files'
-    $cands = Get-ChildItem -Path $base -Filter 'Coreform Cubit*' `
-        -Directory -ErrorAction SilentlyContinue
-    if (-not $cands) { return $null }
-    # Version-aware sort: parse "Coreform Cubit X.Y" -> (X, Y).
-    $sorted = $cands | Sort-Object @{
-        Expression = {
-            $verStr = ($_.Name -replace '^Coreform Cubit\s*', '').Trim()
-            $parts  = $verStr -split '\.'
-            $major  = 0; $minor = 0
-            [int]::TryParse($parts[0], [ref]$major) | Out-Null
-            if ($parts.Length -gt 1) {
-                [int]::TryParse($parts[1], [ref]$minor) | Out-Null
-            }
-            # 5-digit minor handles future "Cubit 2026.12345" without overflow.
-            $major * 100000 + $minor
-        }
-        Descending = $true
+    if ($short -ne '2026.8') {
+        throw "Coreform Cubit 2026.8 is required; $root records '$short'."
     }
-    return $sorted[0].FullName
+    return $root
 }
 
 # ===== Compute discovery results (always runs, dot-sourced or scripted) =====
@@ -79,8 +63,7 @@ $script:CubitInstallDir = Find-CubitInstall
 if ($script:CubitInstallDir) {
     $script:CubitBinDir   = Join-Path $script:CubitInstallDir 'bin'
     $script:CubitCmakeDir = Join-Path $script:CubitInstallDir 'cmake'
-    $script:CubitVersion  = (Split-Path -Leaf $script:CubitInstallDir) `
-        -replace '^Coreform Cubit\s*', ''
+    $script:CubitVersion  = '2026.8'
 } else {
     $script:CubitBinDir   = $null
     $script:CubitCmakeDir = $null
@@ -95,7 +78,7 @@ if ($MyInvocation.InvocationName -ne '.') {
         "CubitCmakeDir=$($script:CubitCmakeDir)"
         "CubitVersion=$($script:CubitVersion)"
     } else {
-        Write-Error "No Coreform Cubit install found under C:\Program Files. Set CUBIT_INSTALL_DIR to override."
+        Write-Error "Coreform Cubit 2026.8 is not installed. Set CUBIT_INSTALL_DIR to its directory."
         exit 1
     }
 }
