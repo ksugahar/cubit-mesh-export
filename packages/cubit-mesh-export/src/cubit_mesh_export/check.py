@@ -30,9 +30,20 @@ import numpy as np
 
 REPORT_SCHEMA = "cubit-mesh-export.vol-check.v1"
 LABEL_CONTRACT_SCHEMA = "radia.vol-label-contract.v1"
-# Scalar and vectorised curved-pyramid maps, relative to the element size.
-# Consistent paths agree to round-off; the NGSolve defect gives ~1e-2.
+# Pyramids are supported only on a Netgen 6.2.2608 runtime that carries both
+# pyramid fixes (Netgen upstream 13b47c3a9 apex clamp, and the base-edge blend
+# in the vectorised map).  The stock 6.2.2608 wheel has neither.
+# Apex: the stock map scales every pyramid z by 1 - 1e-10, which puts the
+# volume of a unit pyramid off by ~3e-11; the clamp leaves round-off (~1e-14).
+PYRAMID_APEX_VOLUME_TOLERANCE = 1.0e-12
+# Blend: on the pyramid base (z = 0) the vertical-edge bubbles vanish, so the
+# scalar map (which blends base-edge bubbles) and the vectorised map must agree
+# there.  Without the blend they differ by ~1e-2 of the element size.
 PYRAMID_MAP_TOLERANCE = 1.0e-8
+_PYRAMID_RUNTIME_HELP = (
+    "pyramids need the Netgen 6.2.2608 runtime with the pyramid apex clamp and "
+    "base-edge blend patches; install that nglib before checking this mesh"
+)
 
 _MATERIAL_LABEL_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _BOUNDARY_LABEL_RE = re.compile(
@@ -731,15 +742,14 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
     # this keeps the quality gate on the same geometry evaluation route as
     # solver forms and Integrate().
     jacobian_cf = ng.specialcf.JacobianMatrix(3)
-    # Curved pyramids: NGSolve's vectorised map (assembly, Integrate) omits
-    # the base-edge blend that the scalar map applies (Netgen 6.2.2604 up to
-    # at least 6.2.2607).  The two paths must agree; where they do not, the
-    # installed NGSolve evaluates these pyramids wrongly.  Reported as an
-    # advisory, not a failure: the .vol itself is correct.
+    # Pyramids: require the patched Netgen runtime (see PYRAMID_* above).  A
+    # curved pyramid whose two maps disagree on its base is evaluated wrongly
+    # by assembly and Integrate, so it fails the check loudly.
     position_cf = ng.CoefficientFunction((ng.x, ng.y, ng.z))
     pyramid_count = 0
     inconsistent_pyramids = []
     max_pyramid_deviation = 0.0
+    pyramid_base_rule = None
 
     for element in mesh.Elements(ng.VOL):
         volume_element_count += 1
@@ -749,10 +759,14 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
         rule = ng.IntegrationRule(element.type, sample_order)
         mapped_points = trafo(rule)
         if element.type == ng.ET.PYRAMID:
+            if pyramid_count == 0:
+                require_pyramid_netgen()
             pyramid_count += 1
             if curve_order > 1:
+                if pyramid_base_rule is None:
+                    pyramid_base_rule = _pyramid_base_rule(ng)
                 deviation = _pyramid_map_deviation(
-                    mesh, element, trafo, rule, mapped_points, position_cf)
+                    mesh, element, trafo, pyramid_base_rule, position_cf)
                 max_pyramid_deviation = max(max_pyramid_deviation, deviation)
                 if not deviation <= PYRAMID_MAP_TOLERANCE:
                     inconsistent_pyramids.append(_element_number(element))
@@ -854,16 +868,12 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
     if missing_boundaries:
         warnings.append("missing boundaries: " + ", ".join(missing_boundaries))
 
-    advisories = []
     if inconsistent_pyramids:
-        advisories.append(
-            f"{len(inconsistent_pyramids)} of {pyramid_count} pyramids are curved "
-            "and NGSolve's vectorised element map disagrees with its scalar map "
-            f"(max {max_pyramid_deviation:.1e} of the element size): NGSolve "
-            f"{getattr(ng, '__version__', '?')} evaluates curved pyramids "
-            "inconsistently, so volumes and fields on them do not converge with "
-            "order. The hex/tet interface meets a curved boundary here; move it "
-            "away, or check the domain volume against the CAD value."
+        raise RuntimeError(
+            f"{len(inconsistent_pyramids)} of {pyramid_count} curved pyramids map "
+            f"inconsistently on their base (max {max_pyramid_deviation:.1e} of the "
+            f"element size) under NGSolve {getattr(ng, '__version__', '?')}: the "
+            f"runtime lacks the base-edge blend; {_PYRAMID_RUNTIME_HELP}"
         )
 
     return {
@@ -902,20 +912,53 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
         "adjacency": adjacency,
         "curved_pyramid_map": {
             "pyramid_count": pyramid_count,
-            "inconsistent_count": len(inconsistent_pyramids),
-            "inconsistent_elements": inconsistent_pyramids[:50],
             "max_relative_deviation": max_pyramid_deviation,
             "tolerance": PYRAMID_MAP_TOLERANCE,
         },
         "warnings": warnings,
-        "advisories": advisories,
     }
 
 
-def _pyramid_map_deviation(mesh, element, trafo, rule, mapped_points, position_cf):
-    """Largest scalar-vs-vectorised map difference, relative to element size."""
+def require_pyramid_netgen():
+    """Fail unless the Netgen runtime carries the pyramid apex clamp.
 
-    vectorised = np.asarray(position_cf(mapped_points), dtype=float).reshape(-1, 3)
+    Integrates one straight unit pyramid; the stock 6.2.2608 map is off by
+    ~3e-11, the patched one by round-off.  The base-edge blend is checked per
+    mesh in :func:`check_mesh_quality`, where curved pyramids exist.
+    """
+    global _PYRAMID_NETGEN_CHECKED
+    if _PYRAMID_NETGEN_CHECKED:
+        return
+    import ngsolve as ng
+    from netgen.meshing import Element3D, MeshPoint, Mesh as NetgenMesh
+    from netgen.meshing import Pnt
+
+    probe = NetgenMesh(dim=3)
+    corners = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0.3, 0.4, 1)]
+    probe.Add(Element3D(1, [probe.Add(MeshPoint(Pnt(*c))) for c in corners]))
+    error = abs(ng.Integrate(1, ng.Mesh(probe), order=6) - 1.0 / 3.0)
+    if not error <= PYRAMID_APEX_VOLUME_TOLERANCE:
+        raise RuntimeError(
+            f"NGSolve {getattr(ng, '__version__', '?')} integrates a unit pyramid "
+            f"with error {error:.1e} (> {PYRAMID_APEX_VOLUME_TOLERANCE:.0e}): the "
+            f"runtime lacks the pyramid apex clamp; {_PYRAMID_RUNTIME_HELP}"
+        )
+    _PYRAMID_NETGEN_CHECKED = True
+
+
+_PYRAMID_NETGEN_CHECKED = False
+
+
+def _pyramid_base_rule(ng):
+    grid = np.linspace(0.05, 0.95, 6)
+    points = [[a, b, 0.0] for a in grid for b in grid]
+    return ng.IntegrationRule(points, [0.0] * len(points))
+
+
+def _pyramid_map_deviation(mesh, element, trafo, rule, position_cf):
+    """Largest base-face scalar-vs-vectorised map difference, relative to size."""
+
+    vectorised = np.asarray(position_cf(trafo(rule)), dtype=float).reshape(-1, 3)
     scalar = np.asarray(
         [position_cf(trafo(point)) for point in rule], dtype=float
     ).reshape(-1, 3)
@@ -1220,9 +1263,6 @@ def check_consistency(
                 )
 
     warnings = _unique_messages(warnings)
-    advisories = _unique_messages(
-        quality_result.get("advisories", []) if quality_result is not None else []
-    )
     result = {
         "schema": REPORT_SCHEMA,
         **_runtime_metadata(),
@@ -1255,7 +1295,6 @@ def check_consistency(
         },
         "warnings": warnings,
         # Findings that do not fail the gate (see check_mesh_quality).
-        "advisories": advisories,
     }
     if total_edge_length is not None:
         result["total_edge_length"] = total_edge_length
@@ -1372,11 +1411,6 @@ def print_table(results):
             print(f"  {'TOTAL':<20s}{tot['cad']:>14.6e}  {tot['ng']:>14.6e}  {err_s}{flag}")
         print()
 
-    if results.get("advisories"):
-        print(f"  ADVISORIES ({len(results['advisories'])}, do not fail the check):")
-        for advisory in results["advisories"]:
-            print(f"    - {advisory}")
-        print()
 
     # Warnings summary
     if results.get("warnings"):

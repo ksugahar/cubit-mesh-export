@@ -36,7 +36,7 @@ from cubit_mesh_export.mcp.vol_inventory import (
 
 
 LIVE_MIXED_SUMMARY = {
-    "version": "2025.12",
+    "version": "2026.8",
     "source_journal": "mixed_hex_pyramid_tet.jou",
     "execution_mode": "python_api_headless",
     "mesh_s": 0.113,
@@ -757,7 +757,7 @@ def test_cubit_mesh_quality_ledger_identity_gate_binds_quality_to_mesh_artifact(
         "negative_jacobian_count": 0,
         "element_type_counts": {"hex": 4},
         "routing_hint": "cubit_hex_or_mixed_path",
-        "version": "2025.12",
+        "version": "2026.8",
         "created_at_utc": "2026-07-01T10:07:11Z",
         "elapsed_s": 0.010,
         "parameter_set_artifact_id": "coreform_slot390_hex_quality_parameter_set_v1",
@@ -795,7 +795,7 @@ def test_cubit_mesh_quality_ledger_identity_gate_binds_quality_to_mesh_artifact(
         expected_geometry_id="unit_brick_quality_ledger_v1",
         expected_mesh_artifact_id="slot369_hex_quality_ledger_vol_v1",
         expected_mesh_digest="sha256:vol369",
-        expected_version="2025.12",
+        expected_version="2026.8",
         expected_parameter_set_artifact_id="coreform_slot390_hex_quality_parameter_set_v1",
         expected_parameter_set_digest="sha256:coreform-slot390-hex-quality-parameter-set-v1",
         expected_parameter_set_path=r"artifacts/cubit/slot390_hex_quality_parameter_set.json",
@@ -907,7 +907,7 @@ def test_cubit_mesh_quality_ledger_identity_gate_binds_quality_to_mesh_artifact(
 
     stale_version = cubit_mesh_quality_ledger_identity_gate(
         {**ledger, "version": "2024.8"},
-        expected_version="2025.12",
+        expected_version="2026.8",
         require_execution_metadata=True,
         require_timing_breakdown=True,
     )

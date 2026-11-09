@@ -322,7 +322,7 @@ def cubit_mixed_transition_source_gate(
             set(summary.get("headless_flags") or [])
         )
         and summary.get("gui_daemon_enabled") is False,
-        "cubit_version_recorded": bool(str(summary.get("version", "")).strip()),
+        "cubit_version_recorded": str(summary.get("version", "")).startswith("2026.8"),
         "unsupported_aggregate_quality_probe_is_diagnosed": quality_probe.get(
             "command_supported"
         )

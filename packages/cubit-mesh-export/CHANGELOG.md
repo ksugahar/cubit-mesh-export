@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.0
+
+- Support only Coreform Cubit 2026.8. Installers, the toolbar registration,
+  the MCP daemon and build discovery reject every other release; source
+  gates require 2026.8 evidence.
+- Add the upstream pyramid apex clamp (13b47c3a9) to the compact Netgen
+  6.2.2607 snapshot, which already carries the base-edge blend for pyramids.
+- Pyramids require a Netgen 6.2.2608 runtime with both pyramid fixes.
+  `check-vol` integrates a unit pyramid (apex clamp) and compares the scalar
+  and vectorised maps on every curved pyramid's base (base-edge blend), and
+  raises with the missing patch named. The `advisories` report field is
+  removed.
+
 ## 2.3.1
 
 - Include an example JMAG JCF settings JSON in the wheel and link to the settings guide from PyPI.

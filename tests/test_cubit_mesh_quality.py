@@ -557,28 +557,45 @@ MIXED_CYLINDER = (
 )
 
 
-def test_curved_pyramid_map_is_an_advisory_not_a_failure():
-    # Stored order-2 export from Cubit 2026.8. The rim at z=0 touches
-    # 18 of the 37 transition pyramids. Diagnose any inconsistency
-    # in their curved maps separately from file validity.
-    result = check_consistency(str(MIXED_CYLINDER))
+def _pyramid_runtime_patched():
+    from cubit_mesh_export import check
+
+    try:
+        check.require_pyramid_netgen()
+    except RuntimeError:
+        return False
+    return True
+
+
+def test_pyramids_require_the_patched_netgen_runtime():
+    """Guards: pyramids fail loudly unless Netgen carries both pyramid fixes.
+
+    Assumes: the stored order-2 Cubit 2026.8 export of a radius-1, height-2
+    cylinder, hexes above z=0, tets below, 37 transition pyramids; the rim at
+    z=0 touches 18 of them.  Stock 6.2.2608 lacks the apex clamp and the
+    base-edge blend and must raise; the patched runtime maps every base
+    consistently.
+    """
+    if not _pyramid_runtime_patched():
+        with pytest.raises(RuntimeError, match="pyramid apex clamp"):
+            check_consistency(str(MIXED_CYLINDER))
+        return
+    try:
+        result = check_consistency(str(MIXED_CYLINDER))
+    except RuntimeError as error:
+        # Apex clamp present, blend missing: the curved rim pyramids must fail.
+        assert "lacks the base-edge blend" in str(error)
+        assert str(error).startswith("18 of 37 curved pyramids")
+        return
     pyramids = result["quality"]["curved_pyramid_map"]
-
-    assert result["passed"]
+    assert result["passed"], result["warnings"]
     assert pyramids["pyramid_count"] == 37
-    assert pyramids["inconsistent_count"] in (0, 18)
-    if pyramids["inconsistent_count"]:
-        assert pyramids["max_relative_deviation"] > 1.0e-3
-        assert len(result["advisories"]) == 1
-        assert result["advisories"][0].startswith("18 of 37 pyramids are curved")
-    else:
-        assert pyramids["max_relative_deviation"] <= pyramids["tolerance"]
-        assert result["advisories"] == []
+    assert pyramids["max_relative_deviation"] <= pyramids["tolerance"], pyramids
 
 
-def test_straight_elements_have_no_curved_pyramid_advisory(tmp_path):
+def test_straight_elements_need_no_pyramid_runtime(tmp_path):
     _, vol_path = _save_box(tmp_path)
     result = check_consistency(str(vol_path))
 
     assert result["quality"]["curved_pyramid_map"]["pyramid_count"] == 0
-    assert result["advisories"] == []
+    assert "advisories" not in result

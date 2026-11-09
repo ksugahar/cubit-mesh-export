@@ -9,7 +9,7 @@ def _summary():
         "source_journal": "sweep_along-curve.jou",
         "execution_mode": "python_api_headless",
         "persistent_gui_started": False,
-        "version": "2025.12",
+        "version": "2026.8",
         "process_exit_code": 2,
         "startup_diagnostics": [
             "Could not open file: <install>/plugins",

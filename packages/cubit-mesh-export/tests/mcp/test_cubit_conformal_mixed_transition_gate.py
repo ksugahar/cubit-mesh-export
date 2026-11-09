@@ -11,7 +11,7 @@ from cubit_mesh_export.mcp.server import (
 
 def summary() -> dict:
     return {
-        "version": "2025.12",
+        "version": "2026.8",
         "source_kind": "source_native_local_mixed_element_journal_path_adapted",
         "source_journal": "01_Tet_Hex_Pyramid.jou",
         "source_sha256": "a" * 64,

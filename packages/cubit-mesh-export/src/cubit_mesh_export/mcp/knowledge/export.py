@@ -255,9 +255,9 @@ No STEP files, no OCC geometry, no SetGeomInfo needed.
   accepted/tried refit counts.  `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` keeps
   Netgen's coefficients (A/B comparison only).
 - The `.vol` carries `edgesegmentsgi3` and needs NGSolve 6.2.2605 or newer.
-- A warning about curved pyramids means the hex/tet transition interface
-  meets a curved boundary; NGSolve up to 6.2.2607 evaluates those pyramids
-  inconsistently.  See `netgen_workflow_guide` ("Curved pyramids").
+- Pyramids need the patched Netgen 6.2.2608 runtime (apex clamp and
+  base-edge blend); `check-vol` rejects them on any other runtime.  See
+  `netgen_workflow_guide` ("Pyramids require the patched Netgen").
 - MCP batch sessions load the plugin installed in Cubit's `plugins`
   directory; after an upgrade, `cubit-plugin-install` must have run for the
   new behaviour to appear there.
