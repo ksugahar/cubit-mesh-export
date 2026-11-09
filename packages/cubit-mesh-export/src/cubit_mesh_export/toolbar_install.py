@@ -1,5 +1,5 @@
 """
-Cubit toolbar installer for Coreform Cubit 2026.8+.
+Cubit toolbar installer for Coreform Cubit 2026.8.
 
 Registers the Cubit Mesh Export toolbar and menu at Cubit startup.
 
@@ -35,8 +35,8 @@ _LEGACY_MARKERS = [
     ("## BEGIN cubit_mesh_export toolbar", "## END cubit_mesh_export toolbar"),
 ]
 
-_MIN_CUBIT_VERSION = (2026, 8)
-_MIN_CUBIT_VERSION_TEXT = "2026.8"
+_SUPPORTED_CUBIT_VERSION = (2026, 8)
+_SUPPORTED_CUBIT_VERSION_TEXT = "2026.8"
 
 
 def _parse_cubit_version(path: str | os.PathLike[str]) -> tuple[int, ...]:
@@ -61,16 +61,16 @@ def _is_supported_cubit_bin(path: str | os.PathLike[str]) -> bool:
     cubit_bin = Path(path)
     return (
         has_python_binding(cubit_bin)
-        and _parse_cubit_version(cubit_bin) >= _MIN_CUBIT_VERSION
+        and _parse_cubit_version(cubit_bin) == _SUPPORTED_CUBIT_VERSION
     )
 
 
 def find_cubit_bin():
-    """Find the Coreform Cubit 2026.8+ bin directory.
+    """Find the Coreform Cubit 2026.8 bin directory.
 
     Search order:
       1. CUBIT_PATH environment variable
-      2. Platform-specific common install locations, newest version first
+      2. Platform-specific common install locations, Cubit 2026.8
 
     Returns:
       Path to Cubit ``bin/`` directory, or None if no supported Cubit is found.
@@ -736,7 +736,7 @@ def verify_panel_installation(all_users=False, verbose=True):
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
         issues.append(
-            f"Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found; "
+            f"Coreform Cubit {_SUPPORTED_CUBIT_VERSION_TEXT} not found; "
             "set CUBIT_PATH to the selected Cubit bin directory"
         )
 
@@ -781,7 +781,7 @@ def verify_panel_installation(all_users=False, verbose=True):
 
 
 def install_panels(all_users=False):
-    """Register the Cubit Mesh Export toolbar for Cubit 2026.8+."""
+    """Register the Cubit Mesh Export toolbar for Cubit 2026.8."""
     print("=== Coreform Cubit - Panel Installer ===\n")
 
     panels_dir = _get_panels_dir()
@@ -792,7 +792,7 @@ def install_panels(all_users=False):
 
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
-        print(f"ERROR: Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found.")
+        print(f"ERROR: Coreform Cubit {_SUPPORTED_CUBIT_VERSION_TEXT} not found.")
         print("       Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 

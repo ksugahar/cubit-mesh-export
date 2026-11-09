@@ -2761,11 +2761,10 @@ def test_netgen_workflow_records_mapped_hex_quality_replay_gate():
     assert "quality element kind" in doc
 
 
-def test_netgen_workflow_records_coreform_2026_6_release_routing_gate():
+def test_netgen_workflow_records_supported_cubit_feature_routing():
     doc = get_netgen_documentation("overview")
 
-    assert "Coreform Cubit 2026.6 release routing gate" in doc
-    assert "released on 1 June 2026" in doc
+    assert "Coreform Cubit 2026.8 feature routing" in doc
     assert "anisotropic tetrahedral meshing" in doc
     assert "cohesive element generation" in doc
     assert "Tetra10/Tri6 Jacobian" in doc
@@ -2784,13 +2783,9 @@ def test_netgen_workflow_records_coreform_2026_6_release_routing_gate():
     assert "projection_quality.max_distance <= projection_quality.tolerance" in doc
     assert "negative_jacobian_count = 0" in doc
     assert "hex-led or mixed curvilinear\nhandoff lane" in doc
-    assert "Slot226 rechecked the installed-version lane" in doc
-    assert "coreform_cubit.com -version" in doc
-    assert "status: ValidStudent" in doc
-    assert "Coreform Cubit Version 2025.12 Build 3d8d3af7" in doc
-    assert "Slot354 tightens installed-version evidence" in doc
-    assert "coreform_cubit.exe` stub" in doc
-    assert "`.com -version` probe command to use that same recorded binary" in doc
+    assert "Use Coreform Cubit 2026.8 for the live headless route" in doc
+    assert "console binary (`cubitx.exe` on Windows)" in doc
+    assert "installed 2025.12 headless executable" not in doc
 
 
 def test_netgen_workflow_records_mixed_order_series_gate():
@@ -2840,12 +2835,9 @@ def test_netgen_workflow_records_two_block_interface_bnd_gate():
     assert "Integrate(1, mesh, BND)" in doc
     assert "returns 48, not 42" in doc
     assert "get_relatives" in doc
-    assert "slot90 replay" in doc
-    assert "Coreform Cubit `2025.12`" in doc
-    assert "Coreform 2026.6 release notes" in doc
     assert "anisotropic tetrahedral meshing" in doc
     assert "cohesive element generation" in doc
-    assert "higher-order Tetra10/Tri6 Jacobian metrics" in doc
+    assert "Tetra10/Tri6 Jacobian" in doc
     assert "216 hexes, 270 quad surface records" in doc
     assert "BND equals external area plus the shared\ninterface once" in doc
     assert "avoid top-level\nmulti-line dict literals" in doc

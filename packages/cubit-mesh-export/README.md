@@ -121,7 +121,7 @@ execution tools and `cubit_check_vol` before handing a mesh to a solver.
 Combined Radia installations must also pass Radia's declared exporter
 compatibility check; standalone operation does not import Radia.
 
-- **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2026.8+):
+- **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2026.8 only):
   - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
   - Cubit-owned **Export** menu plus the Cubit Mesh Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection

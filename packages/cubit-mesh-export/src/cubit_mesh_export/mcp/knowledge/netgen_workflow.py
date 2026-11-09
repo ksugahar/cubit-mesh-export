@@ -267,7 +267,7 @@ row in notebooks or solver-ready imports.  The ledger should carry
 element-type counts, `min_scaled_jacobian`, and `negative_jacobian_count`.
 Negative controls should include a stale quality digest, a nonzero
 negative-Jacobian count, and a tri/tet-only inventory paired with a Cubit
-hex-led quality row.  This turns Cubit 2026.6-style quality-metric learning and
+hex-led quality row.  This turns Cubit quality-metric evidence and
 high-order mesh literature into a reusable artifact contract instead of a loose
 table of nice-looking minimum values.
 
@@ -323,13 +323,8 @@ the mixed mesh is promoted.  This prevents a good mixed topology package from
 being accidentally paired with a GUI run, stale batch script, or undocumented
 nonzero exit.
 
-Slot354 tightens installed-version evidence.  When replaying
-`cubit_headless_installation_route_gate`, record the actual console binary path
-as `coreform_cubit.com`, not the GUI `coreform_cubit.exe` stub, and require the
-`.com -version` probe command to use that same recorded binary.  Release-note
-knowledge such as Coreform Cubit 2026.6 stays a watchlist until that installed
-binary reports the same version.  This keeps live headless evidence separate
-from documentation-only release learning and from GUI daemon paths.
+Record the Cubit 2026.8 console binary (`cubitx.exe` on Windows) and use
+that same binary for the installed-version probe and batch export.
 
 Slot346 adds the downstream solver-route manifest.  A mixed Cubit
 hex+pyramid+tet package should say how each element family will be consumed:
@@ -373,9 +368,7 @@ wrong counts.  When sidecar count metadata is available, pass
 `01_Tet_Hex_Pyramid_order1.vol` fixture this means 12 volume elements, 13
 points, and order 1.  A stale sidecar element count should fail before a mixed
 mesh is promoted to a panel, notebook, or solver-ready route.  Also do not infer
-order from the filename: in a headless Cubit 2025.12 smoke run, omitting the
-`order` argument while writing an `*_order1.vol` filename produced a sidecar
-with `order=2`; adding `order 1` made the sidecar record `order=1`.
+order from the filename. Pass `order` explicitly and verify the stored order.
 
 Slot411 adds schema identity for the same sidecar.  Counts and order protect
 against stale data, but an old `.vol.json` layout can still carry plausible
@@ -388,21 +381,19 @@ consume the package.  A stale legacy sidecar schema or a missing schema id
 should fail even when the sidecar filename and counts still match the parsed
 `.vol`.
 
-### Continuous-loop Coreform Cubit 2026.6 release routing gate
+### Coreform Cubit 2026.8 feature routing
 
-Coreform Cubit 2026.6 was released on 1 June 2026.  The official release notes
-list anisotropic tetrahedral meshing, cohesive element generation, higher-order
-Tetra10/Tri6 Jacobian and scaled-Jacobian metrics, improved triangle/tet
-robustness, lower-memory Sculpt refinement, expanded solver/file compatibility
-including 64-bit Exodus IDs, namespaces for tracking names through operations,
-GNN feature extraction, and an included Python 3.12 runtime:
-`https://coreform.com/coreform-cubit/release-notes/v2026-6/`.
+Use the Cubit 2026.8 headless runtime for the active route. Record the
+runtime version, exact command and output evidence before qualifying
+anisotropic tetrahedral meshing, cohesive element generation, Tetra10/Tri6 Jacobian
+metrics, or 64-bit Exodus IDs. The supported Python 3.12 runtime is part
+of the Cubit installation.
 
 Use `cubit_release_feature_routing_gate` to turn that public release knowledge
 into lab routing before treating it as validation evidence.  The CAE-AI Lab
 policy remains: Cubit is the hex-led and mixed hex+pyramid+tet lane; tet-only
 education stays on Netgen/OCC unless a slot explicitly needs Coreform's advanced
-tet controls.  For 2026.6, map higher-order Tetra10/Tri6 metrics into archived
+tet controls.  Map higher-order Tetra10/Tri6 metrics into archived
 quality replay, cohesive elements into explicit interface/block identity
 examples, anisotropic tet meshing into an advanced reference lane, and solver
 I/O improvements into format-compatibility notes rather than `.vol` parser
@@ -599,31 +590,9 @@ multi-material blocks share an internal face.  Use Cubit's
 `get_relatives("surface", sid, "volume")` or equivalent inventory to separate
 external boundary surfaces from material interfaces before FEM/BEM coupling.
 
-The 2026-06-29 slot90 replay keeps the same rule but records the Cubit version
-explicitly before making any feature claim: the installed headless executable was
-Coreform Cubit `2025.12`, while public Coreform 2026.6 release notes list newer
-features such as anisotropic tetrahedral meshing, cohesive element generation,
-higher-order Tetra10/Tri6 Jacobian metrics, improved triangle/tet robustness,
-and expanded solver/file compatibility.  For the CAE-AI Lab loop this means:
-keep Cubit as the hex-led and mixed hex+pyramid+tet lane; route ordinary tet-only
-education meshes to Netgen/OCC; use 2026.6 tet/cohesive features only when that
-version is actually installed and the artifact records the version.
-
-Slot98 turns the 2026.6 higher-order quality-metric lesson into a replayable MCP
-gate: archive the raw Tetra10/Tri6 metric list and pass it through
-`cubit_element_quality_gate(element_type="Tetra10"|"Tri6", metric="scaled
-Jacobian"|"Jacobian", min_value=...)` before routing the mesh downstream.  This
-does not claim that 2026.6 is installed on development host; it records that higher-order
-tet/tri Jacobian metrics are a lower-bound quality contract, while live hex-led
-Coreform work on this machine targets the installed 2025.12 headless executable.
-
-Slot226 rechecked the installed-version lane directly with
-`coreform_cubit.com -version`.  The synchronous console probe reported
-`status: ValidStudent` and `Coreform Cubit Version 2025.12 Build 3d8d3af7`.
-Record this as installation/session evidence only: it proves the local headless
-route can report a valid license and installed version, but it is not a mesh
-quality result.  The public 2026.6 release-note features remain a watchlist
-until a 2026.6 executable is installed and replayed.
+Use Coreform Cubit 2026.8 for the live headless route. Record the actual
+version and the console binary used for the export. Archive the measured
+element quality before promoting the mesh downstream.
 
 Slot90 used two mapped blocks with dimensions `1.25 x 1.5 x 0.75` and
 `1.75 x 1.5 x 0.75`, exported Netgen orders 1 and 3.  The live inventory was
@@ -871,7 +840,7 @@ mesh = Mesh(vol_path)
 
 ## Requirements
 
-- Coreform Cubit 2026.8+ with Cubit Mesh Export installed (`cubit-plugin-install`)
+- Coreform Cubit 2026.8 with Cubit Mesh Export installed (`cubit-plugin-install`)
 - NGSolve 6.2.2605+ to load the `.vol` (the 6.2.2607 snapshot writes
   `edgesegmentsgi3`); NGSolve up to 6.2.2607 mis-evaluates curved pyramids
   (see "Curved pyramids")

@@ -3,6 +3,21 @@ from pathlib import Path
 import os
 
 
+SUPPORTED_CUBIT_RELEASE = "2026.8"
+
+
+def is_supported_cubit_root(root: Path) -> bool:
+    """Match the recorded release; allow standard install names for discovery."""
+    info = root / "BUILD_INFO"
+    try:
+        fields = dict(line.split("=", 1) for line in
+                      info.read_text(encoding="utf-8").splitlines()
+                      if "=" in line and not line.startswith("#"))
+    except FileNotFoundError:
+        return root.name == f"Coreform Cubit {SUPPORTED_CUBIT_RELEASE}"
+    return fields.get("short") == SUPPORTED_CUBIT_RELEASE
+
+
 def has_python_binding(bin_dir: Path) -> bool:
     return any((bin_dir / name).is_file() for name in (
         'cubit.py', '_cubit3.pyd', '_cubit3.so')) or (

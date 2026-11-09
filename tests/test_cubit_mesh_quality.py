@@ -558,12 +558,9 @@ MIXED_CYLINDER = (
 
 
 def test_curved_pyramid_map_is_an_advisory_not_a_failure():
-    # Cubit export (2.1.0): radius-1, height-2 cylinder, hexes above z=0, tets
-    # below, 37 transition pyramids, order 2.  18 of them share the rim circle
-    # where the z=0 interface meets the curved side, so their base edge is
-    # curved.  NGSolve up to 6.2.2607 maps those inconsistently (~3e-2 of the
-    # element size); a fixed NGSolve maps them consistently.  Either way the
-    # .vol is correct and the gate passes.
+    # Stored order-2 export from Cubit 2026.8. The rim at z=0 touches
+    # 18 of the 37 transition pyramids. Diagnose any inconsistency
+    # in their curved maps separately from file validity.
     result = check_consistency(str(MIXED_CYLINDER))
     pyramids = result["quality"]["curved_pyramid_map"]
 

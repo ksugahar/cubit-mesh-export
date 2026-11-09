@@ -21,6 +21,7 @@ def test_install_directory_environment_is_honored(tmp_path, monkeypatch):
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
     (bin_dir / 'cubit.py').touch()
+    (tmp_path / 'BUILD_INFO').write_text('short=2026.8\n', encoding='utf-8')
     monkeypatch.delenv('CUBIT_BIN_DIR', raising=False)
     monkeypatch.setenv('CUBIT_INSTALL_DIR', str(tmp_path))
     assert session.find_cubit_install() == bin_dir.resolve()

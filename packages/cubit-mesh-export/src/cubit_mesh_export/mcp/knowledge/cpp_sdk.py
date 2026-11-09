@@ -86,7 +86,7 @@ CPP_SDK_PREREQUISITES = """
 
 | Tool        | Version             | Reason                              |
 |-------------|---------------------|-------------------------------------|
-| Cubit       | 2026.8+ recommended| SDK directory shipped + supported   |
+| Cubit       | 2026.8 only| SDK directory shipped + supported   |
 | CMake       | 3.20+               | Cross-platform build system Cubit uses |
 | C++ compiler| C++17 minimum       | Cubit headers require it            |
 |   Windows   | Build Tools 2022 | MSVC toolset 14.44.35207, x64; no other toolset fallback |

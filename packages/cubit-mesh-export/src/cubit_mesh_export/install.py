@@ -2,7 +2,7 @@
 Cubit plugin installer for cubit-mesh-export.
 
 Deploys the Cubit plugin binaries (.ccm, .pyd) and Netgen DLLs to the
-Coreform Cubit 2026.8+ installation directory.
+Coreform Cubit 2026.8 installation directory.
 
 After ``pip install cubit-mesh-export``, run::
 
@@ -41,8 +41,8 @@ from pathlib import Path
 
 from cubit_mesh_export._layout import plugin_directory, command_plugin_path
 
-MIN_CUBIT_VERSION = (2026, 8)
-MIN_CUBIT_VERSION_TEXT = "2026.8"
+SUPPORTED_CUBIT_VERSION = (2026, 8)
+SUPPORTED_CUBIT_VERSION_TEXT = "2026.8"
 _REQUIRED_PACKAGE_BINARIES = (
     "cubit_mesh_export.ccm",
     "cubit_mesh_curver.pyd",
@@ -69,7 +69,7 @@ def _find_cubit_dir():
 
     Search order:
       1. CUBIT_PATH environment variable
-      2. Common install locations (newest supported version first)
+      2. Common install locations (Cubit 2026.8)
     """
     def _cubit_version_key(p):
         name = os.path.basename(os.path.normpath(p))
@@ -84,7 +84,7 @@ def _find_cubit_dir():
     def _supported(root: Path) -> bool:
         return (
             plugin_directory(root).is_dir()
-            and _cubit_version_key(str(root)) >= MIN_CUBIT_VERSION
+            and _cubit_version_key(str(root)) == SUPPORTED_CUBIT_VERSION
         )
 
     cubit_path = os.environ.get("CUBIT_PATH") or os.environ.get("CUBIT_INSTALL_DIR")
@@ -565,7 +565,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     print()
 
     if not cubit_dir:
-        print(f"  [FAIL] Coreform Cubit {MIN_CUBIT_VERSION_TEXT}+ not found.")
+        print(f"  [FAIL] Coreform Cubit {SUPPORTED_CUBIT_VERSION_TEXT} not found.")
         print("         Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 
