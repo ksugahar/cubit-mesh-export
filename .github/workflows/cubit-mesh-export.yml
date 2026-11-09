@@ -208,6 +208,7 @@ jobs:
           python -m pytest tests\test_cubit_installers.py `
             tests\test_cubit_mesh_quality.py `
             tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
+            tests\test_cubit_pytest_boundary.py `
             tests\test_cubit_auto_kelvin_entry.py `
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
             packages\cubit-mesh-export\tests\test_jcf_export.py `
@@ -272,16 +273,20 @@ jobs:
           python -I packages\cubit-mesh-export\tools\check_mcp_standalone.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           @'
+          import importlib.util
           import os
           from pathlib import Path
           import shutil
+          import sys
           import sysconfig
           import tempfile
 
-          import cubit_mesh_export
           import pytest
 
-          package = Path(cubit_mesh_export.__file__).resolve()
+          spec = importlib.util.find_spec('cubit_mesh_export')
+          if spec is None or not spec.origin:
+              raise SystemExit('The candidate wheel is not importable')
+          package = Path(spec.origin).resolve()
           install_dirs = {Path(sysconfig.get_path(key)).resolve()
                           for key in ('purelib', 'platlib')}
           if not any(package.is_relative_to(path) for path in install_dirs):
@@ -294,11 +299,17 @@ jobs:
               root = Path(tmp)
               tests = root / 'tests' / 'mcp'
               shutil.copytree(checkout / 'packages/cubit-mesh-export/tests/mcp', tests)
+              shutil.copyfile(checkout / 'conftest.py', root / 'conftest.py')
+              tools = root / 'tools'
+              tools.mkdir()
+              for name in ('cubit_pytest_guard.py', 'cubit_qt_test_env.py'):
+                  shutil.copyfile(checkout / 'tools' / name, tools / name)
+              sys.path.insert(0, str(root))
               config = root / 'pytest.ini'
               config.write_bytes(b'[pytest]\n')
               os.chdir(root)
               try:
-                  result = pytest.main(['-c', str(config), '--confcutdir', str(tests),
+                  result = pytest.main(['-c', str(config), '--confcutdir', str(root),
                                         str(tests), '-q'])
               finally:
                   os.chdir(checkout)

@@ -25,7 +25,7 @@ NOTE: This is *different* from two adjacent topics:
 """
 
 TOOLBAR_OVERVIEW = """
-# In-Cubit Custom Toolbar Overview (Coreform Cubit 2026.8+)
+# In-Cubit Custom Toolbar Overview (Coreform Cubit 2026.8)
 
 The standalone GUI candidate packages its menu and toolbar installer under
 `cubit_mesh_export.cubit_gui` and `cubit_mesh_export.toolbar_install`; Radia is
@@ -625,7 +625,7 @@ TOOLBAR_TROUBLESHOOTING = """
 
 - Parenthesized multi-line imports break Cubit's importer. Switch to
   backslash continuations or single-line imports.
-- cubit-mesh-export targets Coreform Cubit 2026.8+. Do not add a PyQt5 fallback or
+- cubit-mesh-export targets Coreform Cubit 2026.8. Do not add a PyQt5 fallback or
   patch older Cubit bundles; upgrade Cubit and re-run `cubit-plugin-install`.
 
 ## Symptom: "cubit.cmd raises 'not initialized'"

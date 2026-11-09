@@ -18,7 +18,7 @@ Releases retain the existing PyPI project name and use
 
 Run source checks from this checkout with `python -m pytest`. The release
 workflow runs its explicit dependency and platform checks in an isolated
-runner. The Cubit menu contract can also be exercised with
-`python validation_test/panels/test_cubit_export_menu.py` in an environment
-with PySide6. The cold-start check requires the explicit
-`CUBIT_MESH_EXPORT_RUN_GUI_TESTS=1` opt-in and a licensed Cubit setup.
+runner. To exercise the offscreen Qt dialogs, run
+`python tools/audit_pyside6_only.py --licensed-smoke` on the licensed Cubit 2026.8 host.
+The separate GUI cold-start check requires the explicit
+`CUBIT_MESH_EXPORT_RUN_GUI_TESTS=1` opt-in.

@@ -20,7 +20,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from cubit_mesh_export._layout import has_python_binding, console_executable, runtime_environment
+from cubit_mesh_export._layout import (
+    console_executable, has_python_binding, is_supported_cubit_root, runtime_environment,
+)
 
 PROTOCOL_VERSION = 1
 
@@ -224,7 +226,7 @@ def find_cubit_install(explicit: str | None = None) -> Path | None:
             candidates.append(Path(path))
 
     for c in candidates:
-        if has_python_binding(c):
+        if has_python_binding(c) and is_supported_cubit_root(c.parent):
             return c.resolve()
     return None
 

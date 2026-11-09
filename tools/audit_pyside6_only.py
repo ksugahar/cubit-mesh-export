@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import ast
 import json
-import importlib.util
 import os
 import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+if __name__ == "__main__":
+    from cubit_qt_test_env import configure_cubit_qt, offscreen_environment, suppress_windows_error_dialogs
+else:
+    from tools.cubit_qt_test_env import configure_cubit_qt, offscreen_environment, suppress_windows_error_dialogs
 
 ROOT = Path(__file__).resolve().parent.parent
 GUI_ROOT = ROOT / 'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui'
@@ -217,14 +221,14 @@ class _StubCubit:
 
 def _run_smoke() -> int:
     """--smoke mode: construct ExportDialog under offscreen Qt."""
-    os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    sys.path.insert(0, str(GUI_ROOT))
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-
     fails: list[str] = []
-
     try:
+        dll_directory = configure_cubit_qt()
+        sys.path.insert(0, str(GUI_ROOT))
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance() or QApplication([])
+        if app.platformName() != "offscreen":
+            raise RuntimeError(f"Unexpected Qt platform: {app.platformName()}")
         import cubit_export_menu as rem
         stub = _StubCubit()
         for fmt in (rem.FMT_NETGEN, rem.FMT_GMSH, rem.FMT_NASTRAN,
@@ -236,7 +240,7 @@ def _run_smoke() -> int:
     except Exception as e:  # noqa: BLE001
         fails.append(f"ExportDialog: {type(e).__name__}: {e}")
 
-    print(json.dumps({"ok": not fails, "fails": fails}))
+    print(json.dumps({"ok": not fails, "fails": fails}), flush=True)
     return 1 if fails else 0
 
 
@@ -254,35 +258,39 @@ def _find_cubit_python() -> Path | None:
             return candidate
     if os.name == "nt":
         program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-        candidates = sorted(
-            program_files.glob("Coreform Cubit */bin/python3/python.exe"),
-            reverse=True,
-        )
-        if candidates:
-            return candidates[0]
+        candidate = program_files / "Coreform Cubit 2026.8/bin/python3/python.exe"
+        if candidate.is_file():
+            return candidate
     return None
 
 
-def _qt_runtime_python() -> tuple[Path | None, str]:
-    if importlib.util.find_spec("PySide6") is not None:
-        return Path(sys.executable), "current Python"
-    cubit_python = _find_cubit_python()
-    if cubit_python is not None:
-        return cubit_python, "Cubit embedded Python"
-    return None, "unavailable"
-
-
 def check_panel_smoke(python_executable: Path) -> list[str]:
-    """Spawn the toolbar smoke in the selected PySide6 runtime."""
+    """Spawn the licensed Cubit PySide6 smoke without opening a window."""
+    suppress_windows_error_dialogs()
     env = os.environ.copy()
-    env["QT_QPA_PLATFORM"] = "offscreen"
-    r = subprocess.run([str(python_executable), str(Path(__file__).resolve()), "--smoke"],
-                       capture_output=True, text=True, env=env, timeout=120)
+    offscreen_environment(env)
+    for name in ("PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV"):
+        env.pop(name, None)
+    bin_dir = python_executable.resolve().parent.parent
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    kwargs = {}
+    if os.name == "nt":
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = subprocess.SW_HIDE
+        kwargs.update(creationflags=subprocess.CREATE_NEW_CONSOLE, startupinfo=startup)
+    try:
+        r = subprocess.run([str(python_executable), str(Path(__file__).resolve()), "--smoke"],
+                           capture_output=True, text=True, env=env, timeout=30, **kwargs)
+    except subprocess.TimeoutExpired:
+        return ["Cubit offscreen toolbar smoke timed out after 30 seconds"]
     line = next((ln for ln in reversed(r.stdout.splitlines()) if ln.strip().startswith("{")), "")
     if not line:
         return [f"toolbar smoke produced no JSON (rc={r.returncode}); stderr tail:\n{r.stderr[-800:]}"]
     data = json.loads(line)
-    return list(data.get("fails", [])) if not data.get("ok") else []
+    if r.returncode or not data.get("ok"):
+        return list(data.get("fails") or [f"toolbar smoke failed (rc={r.returncode})"])
+    return []
 
 
 # ----------------------------------------------------------------------
@@ -317,12 +325,12 @@ def main(argv: list[str]) -> int:
     print(f"[{'FAIL' if ccm_issues else 'OK'}] cubit_mesh_export.ccm Qt-free  ({ccm_status})")
     all_issues += ccm_issues
 
-    deploy_status, deploy_issues = check_deployed_panel_source()
-    print(f"[{'FAIL' if deploy_issues else 'OK'}] Cubit startup source "
-          f"matches audited checkout  ({deploy_status})")
-    for issue in deploy_issues:
-        print("       " + issue)
-    all_issues += deploy_issues
+    if "--deployed" in argv:
+        deploy_status, deploy_issues = check_deployed_panel_source()
+        print(f"Cubit startup source: {deploy_status}")
+        for issue in deploy_issues:
+            print("       " + issue)
+        all_issues += deploy_issues
 
     toolbar_contract = check_official_toolbar_contract()
     print(f"[{'FAIL' if toolbar_contract else 'OK'}] official Coreform "
@@ -331,24 +339,21 @@ def main(argv: list[str]) -> int:
         print("       " + issue)
     all_issues += toolbar_contract
 
-    qt_python, qt_runtime = _qt_runtime_python()
-    if qt_python is None:
-        smoke = []
-        print("[OK] headless Cubit toolbar smoke skipped "
-              "(no PySide6 runtime or Cubit embedded Python found)")
-    else:
-        smoke = check_panel_smoke(qt_python)
-        print(f"[{'FAIL' if smoke else 'OK'}] headless Cubit toolbar smoke "
-              f"(ExportDialog x4; {qt_runtime}: {qt_python})")
-        for s in smoke:
-            print("       " + s)
-        all_issues += [f"panel smoke: {s}" for s in smoke]
+    if "--licensed-smoke" in argv:
+        qt_python = _find_cubit_python()
+        smoke = (check_panel_smoke(qt_python) if qt_python else
+                 ["Coreform Cubit 2026.8 embedded Python is required for --licensed-smoke"])
+        if not smoke:
+            print(f"[OK] Cubit 2026.8 offscreen ExportDialog x4 ({qt_python})")
+        for issue in smoke:
+            print("[FAIL] " + issue)
+        all_issues += smoke
 
     print("-" * 64)
     if all_issues:
         print(f"RESULT: {len(all_issues)} ISSUE(S) -- Cubit toolbar audit NOT clean")
         return 1
-    print("RESULT: CLEAN -- no legacy Qt; Cubit toolbar smoke is healthy/skipped")
+    print("RESULT: CLEAN")
     return 0
 
 

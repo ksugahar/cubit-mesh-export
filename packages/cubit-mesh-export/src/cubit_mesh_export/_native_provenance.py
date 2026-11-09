@@ -11,7 +11,17 @@ from importlib import metadata
 from pathlib import Path
 
 
-SCHEMA = "cubit-mesh-export.native-payloads.v2"
+def _layout():
+    """The package's single BUILD_INFO reader, loaded by path (this also runs as a script)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_cubit_mesh_export_layout", Path(__file__).with_name("_layout.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+SCHEMA ="cubit-mesh-export.native-payloads.v2"
 HASH_FORMAT = "sha256-path-nul-lf-content-nul-v1"
 REQUIRED_PAYLOADS = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd")
 SOURCE_SUFFIXES = {
@@ -157,14 +167,13 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         sdk = re.search(r"^Cubit_DIR:[^=]+=([^\r\n]*)$", cache, re.MULTILINE)
         if not sdk or not sdk[1].strip():
             raise ValueError(f"Missing Cubit_DIR entry in {cache_path}")
-        build_info = Path(sdk[1].strip()).parent / "BUILD_INFO"
-        if not build_info.is_file():
-            raise ValueError(f"Missing Cubit SDK version file: {build_info}")
-        info = build_info.read_text(encoding="utf-8")
-        version = re.search(r"^short=([^\r\n]*)$", info, re.MULTILINE)
-        if not version or not version[1].strip():
-            raise ValueError(f"Missing short version in {build_info}")
-        payload["cubit_version"] = version[1].strip()
+        sdk_root = Path(sdk[1].strip()).parent
+        layout = _layout()
+        version = layout.cubit_release(sdk_root)
+        if not version:
+            raise ValueError(
+                f"Missing Cubit SDK release: {layout.build_info_path(sdk_root)} has no short= value")
+        payload["cubit_version"] = version
         configs = sorted((repo_root / "src/cubit_plugin" / build_dir / "CMakeFiles").glob(
             "*/CMakeCXXCompiler.cmake"), key=lambda item: item.stat().st_mtime)
         if configs:

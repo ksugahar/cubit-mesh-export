@@ -1,5 +1,5 @@
 """
-Cubit toolbar installer for Coreform Cubit 2026.8+.
+Cubit toolbar installer for Coreform Cubit 2026.8.
 
 Registers the Cubit Mesh Export toolbar and menu at Cubit startup.
 
@@ -25,7 +25,9 @@ import uuid
 from pathlib import Path
 
 
-from cubit_mesh_export._layout import has_python_binding, plugin_directory
+from cubit_mesh_export._layout import (
+    SUPPORTED_CUBIT_RELEASE, has_python_binding, is_supported_cubit_root, plugin_directory,
+)
 
 _MARKER_BEGIN = "## BEGIN cubit-mesh-export toolbar"
 _MARKER_END = "## END cubit-mesh-export toolbar"
@@ -35,42 +37,17 @@ _LEGACY_MARKERS = [
     ("## BEGIN cubit_mesh_export toolbar", "## END cubit_mesh_export toolbar"),
 ]
 
-_MIN_CUBIT_VERSION = (2026, 8)
-_MIN_CUBIT_VERSION_TEXT = "2026.8"
-
-
-def _parse_cubit_version(path: str | os.PathLike[str]) -> tuple[int, ...]:
-    """Return the Cubit version tuple encoded in an install path."""
-    p = Path(path)
-    parts = [p.name]
-    if p.name.lower() == "bin":
-        parts.append(p.parent.name)
-    text = " ".join(parts)
-    match = re.search(r"(\d{4})[.\-_ ](\d+)", text)
-    if not match:
-        return (0,)
-    return tuple(int(g) for g in match.groups())
-
-
-def _version_key(path: str | os.PathLike[str]) -> tuple[int, ...]:
-    version = _parse_cubit_version(path)
-    return version if version else (0,)
-
-
 def _is_supported_cubit_bin(path: str | os.PathLike[str]) -> bool:
     cubit_bin = Path(path)
-    return (
-        has_python_binding(cubit_bin)
-        and _parse_cubit_version(cubit_bin) >= _MIN_CUBIT_VERSION
-    )
+    return has_python_binding(cubit_bin) and is_supported_cubit_root(cubit_bin.parent)
 
 
 def find_cubit_bin():
-    """Find the Coreform Cubit 2026.8+ bin directory.
+    """Find the Coreform Cubit 2026.8 bin directory.
 
     Search order:
       1. CUBIT_PATH environment variable
-      2. Platform-specific common install locations, newest version first
+      2. Platform-specific common install locations, Cubit 2026.8
 
     Returns:
       Path to Cubit ``bin/`` directory, or None if no supported Cubit is found.
@@ -104,7 +81,7 @@ def find_cubit_bin():
         ]
 
     for pattern in search_patterns:
-        candidates = sorted(glob.glob(pattern), key=_version_key, reverse=True)
+        candidates = glob.glob(pattern)
         for candidate in candidates:
             if _is_supported_cubit_bin(candidate):
                 return candidate
@@ -736,7 +713,7 @@ def verify_panel_installation(all_users=False, verbose=True):
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
         issues.append(
-            f"Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found; "
+            f"Coreform Cubit {SUPPORTED_CUBIT_RELEASE} not found; "
             "set CUBIT_PATH to the selected Cubit bin directory"
         )
 
@@ -781,7 +758,7 @@ def verify_panel_installation(all_users=False, verbose=True):
 
 
 def install_panels(all_users=False):
-    """Register the Cubit Mesh Export toolbar for Cubit 2026.8+."""
+    """Register the Cubit Mesh Export toolbar for Cubit 2026.8."""
     print("=== Coreform Cubit - Panel Installer ===\n")
 
     panels_dir = _get_panels_dir()
@@ -792,7 +769,7 @@ def install_panels(all_users=False):
 
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
-        print(f"ERROR: Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found.")
+        print(f"ERROR: Coreform Cubit {SUPPORTED_CUBIT_RELEASE} not found.")
         print("       Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 

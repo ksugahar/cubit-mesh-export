@@ -43,32 +43,34 @@ import traceback
 _REAL_STDOUT_FD = os.dup(1)
 os.dup2(2, 1)    # fd 1 -> fd 2: any C-level print to stdout now hits stderr
 
-# Find Cubit binding directory (sibling of bin/python3/).
-# Was hardcoded "Cubit 2025.3" until 2026-05-25; now auto-discovers the
-# highest-version "Coreform Cubit *" under C:\Program Files. Honors
-# CUBIT_BIN_DIR and CUBIT_INSTALL_DIR overrides.
+# Keep the binding lookup independent of package imports before Cubit startup.
 _HERE = os.path.dirname(os.path.abspath(__file__))
+
+def _load_layout():
+    """The package's single BUILD_INFO reader, loaded by path (this runs as a script)."""
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_layout.py")
+    spec = importlib.util.spec_from_file_location("_cubit_mesh_export_layout", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _discover_cubit_bin():
-    """Mirror of tools/find_cubit.py logic, inlined to avoid a
-    sys.path bootstrap dependency in this daemon's import order."""
-    if (override := os.environ.get("CUBIT_BIN_DIR")):
-        return override
-    if (inst := os.environ.get("CUBIT_INSTALL_DIR")):
-        return os.path.join(inst, "bin")
-    import glob as _g
-    cands = _g.glob(r"C:\Program Files\Coreform Cubit *")
-    if not cands:
-        raise RuntimeError("Coreform Cubit 2026.8 is not installed")
-    def _ver(p):
-        name = os.path.basename(p).replace("Coreform Cubit", "", 1).strip()
-        try:
-            return tuple(int(x) for x in name.split("."))
-        except ValueError:
-            return (0,)
-    return os.path.join(max(cands, key=_ver), "bin")
-
+    if override := os.environ.get("CUBIT_BIN_DIR"):
+        cubit_bin = override
+    else:
+        root = os.environ.get("CUBIT_INSTALL_DIR") or os.path.join(
+            os.environ.get("ProgramFiles", r"C:\Program Files"), "Coreform Cubit 2026.8"
+        )
+        cubit_bin = os.path.join(root, "bin")
+    layout = _load_layout()
+    root = os.path.dirname(os.path.normpath(cubit_bin))
+    if not layout.is_supported_cubit_root(root):
+        raise RuntimeError(
+            f"The headless MCP runtime requires Coreform Cubit {layout.SUPPORTED_CUBIT_RELEASE}; "
+            f"BUILD_INFO under {root} records {layout.cubit_release(root)!r}")
+    return cubit_bin
 
 
 

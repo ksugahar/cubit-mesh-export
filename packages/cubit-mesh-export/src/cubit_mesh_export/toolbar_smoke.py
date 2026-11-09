@@ -20,6 +20,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from cubit_mesh_export._layout import is_supported_cubit_root
+
 SCHEMA = "cubit-mesh-export.toolbar-smoke.v1"
 PROBE_SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
@@ -35,8 +37,9 @@ EXPECTED_ACTIONS = [
 
 def _find_cubit_exe() -> Path | None:
     explicit = os.environ.get("CUBIT_EXE")
-    if explicit and Path(explicit).is_file():
-        return Path(explicit)
+    if explicit:
+        path = Path(explicit)
+        return path if path.is_file() and is_supported_cubit_root(path.resolve().parent.parent) else None
     if sys.platform == "win32":
         program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
         candidates = sorted(
@@ -46,11 +49,13 @@ def _find_cubit_exe() -> Path | None:
                           / "coreform_cubit.exe")),
             reverse=True,
         )
-        if candidates:
-            return Path(candidates[0])
+        for candidate in candidates:
+            path = Path(candidate)
+            if is_supported_cubit_root(path.parent.parent):
+                return path
     for name in ("coreform_cubit", "cubit"):
         found = shutil.which(name)
-        if found:
+        if found and is_supported_cubit_root(Path(found).resolve().parent.parent):
             return Path(found)
     return None
 

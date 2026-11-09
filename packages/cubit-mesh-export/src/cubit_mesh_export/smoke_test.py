@@ -38,13 +38,14 @@ import time
 from pathlib import Path
 
 
-from cubit_mesh_export._layout import console_executable, runtime_environment, plugin_directory
+from cubit_mesh_export._layout import console_executable, runtime_environment, plugin_directory, is_supported_cubit_root
 
 def _find_cubit_exe():
     """Locate Cubit's headless console (cubitx/.com on Windows)."""
     env_path = os.environ.get("CUBIT_EXE")
-    if env_path and Path(env_path).is_file():
-        return Path(env_path)
+    if env_path:
+        path = Path(env_path)
+        return path if path.is_file() and is_supported_cubit_root(path.resolve().parent.parent) else None
     if sys.platform == "win32":
         import glob
         for base in [os.environ.get("ProgramFiles", "")]:
@@ -54,13 +55,15 @@ def _find_cubit_exe():
                     glob.glob(os.path.join(base, "Coreform Cubit *",
                                            "bin")),
                     reverse=True):
+                if not is_supported_cubit_root(Path(c).parent):
+                    continue
                 console = console_executable(Path(c))
                 if console is not None:
                     return console
     else:
         for name in ("coreform_cubit", "cubit"):
             found = shutil_which_fallback(name)
-            if found:
+            if found and is_supported_cubit_root(Path(found).resolve().parent.parent):
                 return Path(found)
     return None
 

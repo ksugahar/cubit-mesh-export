@@ -50,6 +50,8 @@ def _fake_cubit(program_files: Path, version: str) -> Path:
     bin_dir = root / "bin"
     (bin_dir / "plugins").mkdir(parents=True)
     (bin_dir / "cubit.py").write_text("# fake cubit\n", encoding="utf-8")
+    # The release is BUILD_INFO's short field, never the directory name.
+    (root / "BUILD_INFO").write_text(f"short={version}\n", encoding="utf-8")
     return root
 
 
@@ -136,14 +138,18 @@ def test_2026_8_package_layout_is_shared_by_installer_and_headless_mcp(monkeypat
     assert all(install._is_cubit_process_name(name) for name in ("cubitx.exe", "clarox.exe"))
 
 
-def test_find_cubit_bin_rejects_pre_2026_8(monkeypatch, tmp_path):
+@pytest.mark.parametrize("version", ["2025.6", "2026.10"])
+def test_installers_reject_other_cubit_releases(monkeypatch, tmp_path, version):
+    from cubit_mesh_export import install as cme_install
+
     install_panels = _load_install_panels()
 
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
-    _fake_cubit(program_files, "2025.6")
+    _fake_cubit(program_files, version)
 
     assert install_panels.find_cubit_bin() is None
+    assert cme_install._find_cubit_dir() is None
 
 
 def test_cubit_mesh_export_installer_requires_2026_8(monkeypatch, tmp_path):
