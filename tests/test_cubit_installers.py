@@ -50,6 +50,8 @@ def _fake_cubit(program_files: Path, version: str) -> Path:
     bin_dir = root / "bin"
     (bin_dir / "plugins").mkdir(parents=True)
     (bin_dir / "cubit.py").write_text("# fake cubit\n", encoding="utf-8")
+    # The release is BUILD_INFO's short field, never the directory name.
+    (root / "BUILD_INFO").write_text(f"short={version}\n", encoding="utf-8")
     return root
 
 

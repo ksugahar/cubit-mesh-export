@@ -40,7 +40,7 @@ import time
 from pathlib import Path
 
 from cubit_mesh_export._layout import (
-    SUPPORTED_CUBIT_RELEASE, command_plugin_path, is_supported_cubit_root, plugin_directory,
+    SUPPORTED_CUBIT_RELEASE, command_plugin_path, cubit_release, is_supported_cubit_root, plugin_directory,
 )
 
 _REQUIRED_PACKAGE_BINARIES = (
@@ -496,11 +496,7 @@ def _require_native_sdk_runtime(pkg_dir: Path, cubit_dir: Path) -> None:
     """A native command plugin is accepted only by its recorded SDK release."""
     manifest = json.loads((pkg_dir / "native_payloads.json").read_text(encoding="utf-8"))
     expected = manifest["payloads"]["cubit_mesh_export.ccm"]["cubit_version"]
-    build_info = cubit_dir / "BUILD_INFO"
-    fields = dict(line.split("=", 1) for line in
-                  build_info.read_text(encoding="utf-8").splitlines()
-                  if "=" in line and not line.startswith("#"))
-    actual = fields.get("short")
+    actual = cubit_release(cubit_dir)
     if actual != expected:
         raise RuntimeError(
             f"Native plugin requires Cubit SDK/runtime {expected}; found {actual!r}. "

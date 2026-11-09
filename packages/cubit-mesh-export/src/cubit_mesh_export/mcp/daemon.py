@@ -46,6 +46,15 @@ os.dup2(2, 1)    # fd 1 -> fd 2: any C-level print to stdout now hits stderr
 # Keep the binding lookup independent of package imports before Cubit startup.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
+def _load_layout():
+    """The package's single BUILD_INFO reader, loaded by path (this runs as a script)."""
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_layout.py")
+    spec = importlib.util.spec_from_file_location("_cubit_mesh_export_layout", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 def _discover_cubit_bin():
     if override := os.environ.get("CUBIT_BIN_DIR"):
@@ -55,12 +64,12 @@ def _discover_cubit_bin():
             os.environ.get("ProgramFiles", r"C:\Program Files"), "Coreform Cubit 2026.8"
         )
         cubit_bin = os.path.join(root, "bin")
-    manifest = os.path.join(os.path.dirname(os.path.normpath(cubit_bin)), "BUILD_INFO")
-    with open(manifest, encoding="utf-8") as stream:
-        fields = dict(line.strip().split("=", 1) for line in stream
-                      if "=" in line and not line.startswith("#"))
-    if fields.get("short") != "2026.8":
-        raise RuntimeError("The headless MCP runtime requires Coreform Cubit 2026.8")
+    layout = _load_layout()
+    root = os.path.dirname(os.path.normpath(cubit_bin))
+    if not layout.is_supported_cubit_root(root):
+        raise RuntimeError(
+            f"The headless MCP runtime requires Coreform Cubit {layout.SUPPORTED_CUBIT_RELEASE}; "
+            f"BUILD_INFO under {root} records {layout.cubit_release(root)!r}")
     return cubit_bin
 
 

@@ -66,6 +66,7 @@ def test_standalone_registration_in_scratch_profile(monkeypatch, tmp_path):
     (cubit / 'cubit/_cubit3.pyd').touch()
     (cubit / 'cubitx.exe').touch()
     (cubit.parent / 'plugins').mkdir()
+    (cubit.parent / 'BUILD_INFO').write_text('short=2026.8\n', encoding='utf-8')
     monkeypatch.setenv('CUBIT_PATH', str(cubit))
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'local'))
     monkeypatch.setenv('APPDATA', str(tmp_path / 'roaming'))
