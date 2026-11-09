@@ -12,7 +12,7 @@
 
 ## 基本例
 
-[settings.json をダウンロード](https://raw.githubusercontent.com/ksugahar/cubit-mesh-export/refs/heads/codex/standalone-baseline/packages/cubit-mesh-export/docs/settings.json) · [GitHub で内容を表示](settings.json)
+[settings.json をダウンロード](https://raw.githubusercontent.com/ksugahar/cubit-mesh-export/refs/heads/main/packages/cubit-mesh-export/docs/settings.json) · [GitHub で内容を表示](settings.json)
 
 このファイルは下の基本例と同一です。Cubit に `air` と `coil` のブロック、`symmetry_plane` の sideset があり、例の解析条件を使う場合はそのまま選択できます。別のモデルでは名前、座標、物理条件を合わせてください。
 

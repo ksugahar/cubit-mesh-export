@@ -33,7 +33,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/ksugahar/cubit-mesh-export"
-"JCF Settings" = "https://github.com/ksugahar/cubit-mesh-export/blob/codex/standalone-baseline/packages/cubit-mesh-export/docs/jcf_settings_ja.md"
+"JCF Settings" = "https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/jcf_settings_ja.md"
 
 [project.optional-dependencies]
 mesh-quality = ["gmsh>=5.0.0.dev0"]
