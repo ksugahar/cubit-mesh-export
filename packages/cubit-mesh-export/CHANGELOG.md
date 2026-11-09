@@ -27,8 +27,10 @@
 - Named periodic boundary labels resolve through face descriptors for
   compact and full Netgen alike.
 - Qt stays inside Cubit's runtime: the test guard detects Cubit and Qt DLLs
-  loaded into ordinary pytest processes, and Qt platform failures no longer
-  open dialogs.
+  loaded into ordinary pytest processes, and in those guarded tests a Qt
+  platform failure is reported instead of opening a dialog.
+- The README and `docs/native-abi.md` give the pinned build and install
+  recipe for the patched Netgen runtime that pyramid meshes need.
 
 ## 2.3.1
 

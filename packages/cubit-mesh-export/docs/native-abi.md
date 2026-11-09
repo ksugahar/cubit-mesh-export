@@ -53,6 +53,32 @@ the plugin fail to load or crash.
    - the scalar and vectorised maps disagree on a curved pyramid's base
      (base-edge blend missing).
 
+## Patched Netgen runtime for pyramids
+
+The stock `netgen-mesher==6.2.2608` wheel has neither pyramid fix. The patched
+library is built from upstream `v6.2.2608` (96e5682f) plus one patch carrying
+the apex clamp (13b47c3a9) and the base-edge blend, and replaces only
+`nglib.dll` in an isolated virtual environment. The recipe is
+[`tools/netgen_overlay.py`](https://github.com/ksugahar/Radia/blob/5ef740446ad7a29623f78878863147a69e8e675e/tools/netgen_overlay.py)
+with
+[`tools/patches/netgen-pyramid.patch`](https://github.com/ksugahar/Radia/blob/5ef740446ad7a29623f78878863147a69e8e675e/tools/patches/netgen-pyramid.patch),
+pinned at Radia commit 5ef74044.
+
+From an MSVC 14.44 x64 developer shell:
+
+    git clone https://github.com/ksugahar/Radia radia-overlay
+    git -C radia-overlay checkout 5ef740446ad7a29623f78878863147a69e8e675e
+    python radia-overlay/tools/netgen_overlay.py build --work <new empty dir> --out <overlay dir>
+    python -m venv <isolated venv>
+    <isolated venv>\Scripts\python -m pip install cubit-mesh-export==2.4.0
+    python radia-overlay/tools/netgen_overlay.py install --overlay <overlay dir> --python <isolated venv>\Scripts\python.exe
+
+`build` writes a receipt binding the library to the upstream commit and the
+patch; `install` checks that receipt and accepts only a virtual environment
+holding `netgen-mesher` 6.2.2608. Never point it at a shared runtime; any other
+environment keeps the stock library, and `check-vol` refuses pyramid meshes
+there.
+
 ## Not yet implemented
 
 - A small `extern "C"` function table at the native boundary.
