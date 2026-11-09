@@ -30,7 +30,8 @@ set(COMPACT_NETGEN_OVERRIDES "" CACHE PATH "Compact Netgen overrides directory")
 
 # Option 1: Compact Netgen (source compiled directly into plugin)
 # Netgen sources are snapshotted in compact_netgen/netgen_src/ (no external dependency).
-# Snapshot: upstream v6.2.2607 plus local patches (static-library macros in
+# Snapshot: upstream v6.2.2607 plus the upstream pyramid apex clamp
+# (13b47c3a9) and local patches (static-library macros in
 # ngcore_api.hpp/mydefs.hpp, BlockAllocator mutex lifetime, CurvedElements
 # coefficient accessors, pyramid base-edge blending in EvaluateMapping).
 # To update, run compact_netgen/update_snapshot.py (three-way merge).

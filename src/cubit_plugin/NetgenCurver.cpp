@@ -1358,11 +1358,10 @@ bool NetgenCurver::curve_and_extract(int order)
                rs.face_dist_before, rs.face_dist_after);
   }
 
-  // NGSolve's vectorised element transformation (Netgen 6.2.2604-6.2.2607)
-  // omits the blending of curved pyramid base edges, so such pyramids do
-  // not conform with their neighbours during assembly and integration
-  // (the exporter's own snapshot is patched).  Warn instead of failing:
-  // the .vol itself is correct.
+  // Pyramids are evaluated correctly only by a Netgen 6.2.2608 runtime with
+  // the apex clamp and the base-edge blend in the vectorised map; this
+  // snapshot carries both, the stock wheel neither.  check-vol rejects
+  // pyramid meshes on an unpatched runtime, so say so at export time.
   {
     const auto & top = ng_mesh_->GetTopology();
     int curved_pyramids = 0;
@@ -1373,14 +1372,10 @@ bool NetgenCurver::curve_and_extract(int order)
         if (curved.NumEdgeCoefficients(int(edge)) > 0) { curved_pyramids++; break; }
     }
     if (curved_pyramids > 0)
-      PRINT_WARNING("NetgenCurver: %d pyramids have curved edges: the hex/tet "
-                    "transition interface meets a curved boundary, and these "
-                    "interface pyramids share its curved edges. NGSolve up to "
-                    "6.2.2607 evaluates curved pyramids inconsistently in its "
-                    "vectorised path (volume/field errors that do not converge "
-                    "with order). Keep the hex/tet interface away from curved "
-                    "boundaries, or check the domain volume against the CAD "
-                    "value.\n",
+      PRINT_WARNING("NetgenCurver: %d pyramids have curved edges. Read this "
+                    ".vol only with the Netgen 6.2.2608 runtime that carries "
+                    "the pyramid apex clamp and base-edge blend; check-vol "
+                    "rejects it on any other runtime.\n",
                     curved_pyramids);
   }
 

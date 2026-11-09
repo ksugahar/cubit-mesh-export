@@ -288,6 +288,6 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
     // Version and capability info
     // --------------------------------------------------------
     // Must equal packages/cubit-mesh-export/pyproject.toml (contract test).
-    m.attr("__version__") = "2.3.1";
+    m.attr("__version__") = "2.4.0";
     m.attr("has_netgen") = true;
 }

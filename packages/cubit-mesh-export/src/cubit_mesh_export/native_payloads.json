@@ -2,9 +2,9 @@
   "schema": "cubit-mesh-export.native-payloads.v2",
   "payloads": {
     "cubit_mesh_curver.pyd": {
-      "asset_name": "cubit_mesh_curver-f8b5ad95d8e884575be454fdd5e02f2bb3036190927ab4c1f2c1b36ef37129f4.pyd",
+      "asset_name": "cubit_mesh_curver-47350b7658dbf6fc2d56141443ed526c12b40718e92e682bc86e701a20db7f16.pyd",
       "github_release_tag": "binaries",
-      "sha256": "f8b5ad95d8e884575be454fdd5e02f2bb3036190927ab4c1f2c1b36ef37129f4",
+      "sha256": "47350b7658dbf6fc2d56141443ed526c12b40718e92e682bc86e701a20db7f16",
       "size": 697856,
       "python_abi": "cp312",
       "platform": "win_amd64",
@@ -13,8 +13,8 @@
       "toolchain": "MSVC 19.44.35229.0 / CMake / Ninja"
     },
     "cubit_mesh_export.ccm": {
-      "sha256": "8616e10a057f07c2ddb4532b0090c34dac7346623bae03f94375b33ae9e01888",
-      "size": 2496512,
+      "sha256": "00a5ecf12ad7fa781798344a22bc04837fa3a4f3c32986b5ff577707cc8f323e",
+      "size": 2489856,
       "platform": "win_amd64",
       "cubit_version": "2026.8",
       "toolchain": "MSVC 19.44.35229.0 / CMake / Ninja"
@@ -22,9 +22,8 @@
   },
   "source": {
     "hash_format": "sha256-path-nul-lf-content-nul-v1",
-    "tree_sha256": "00a1be16968f0f2918010d11c7c1773e07444ee8a7735310e811e7b7b9c49337",
+    "tree_sha256": "872d964bbe7155d2679eef984a1c0f52f99e9eeb6d8b33f983a3c9b7569b6fff",
     "file_count": 221,
-    "commit": "41018dbad46f728489cbafdcd40874fb8288bbec",
-    "archive_sha256": "65da27ef123af099078f471c2e60c85f2791050f81f0b9c0e91959470c3da12b"
+    "commit": "e2cae5e59fec3afc3f41ca2a683db069bbadc96b"
   }
 }
