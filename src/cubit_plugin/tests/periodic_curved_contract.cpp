@@ -22,8 +22,8 @@ static std::unique_ptr<Mesh> fixture(int order, const std::array<int,4> &mapped 
     const auto &p = corners[found-mapped.begin()]; mesh->AddPoint(Point<3>(p[0]+3,p[1],p[2]));
   }
   for (const auto &nodes : {std::array<int,4>{1,2,3,4}, mapped}) {
-    Element tet(TET); tet.SetIndex(1);
-    for (int j = 0; j < 4; ++j) tet[j] = PointIndex(nodes[j]);
+    Element tet(TET); tet.SetIndex(VolumeRegionIndex::FromNr1(1));
+    for (int j = 0; j < 4; ++j) tet[j] = PointIndex::FromNr1(nodes[j]);
     mesh->AddVolumeElement(tet);
   }
   const std::array<std::array<int,3>,8> exterior{{{1,2,3},{2,4,3},
@@ -47,10 +47,10 @@ static std::unique_ptr<Mesh> fixture(int order, const std::array<int,4> &mapped 
     for (int point : tet_nodes)
       if (std::find(nodes.begin(),nodes.end(),point) == nodes.end()) opposite = point;
     if (!opposite) throw std::runtime_error("Fixture boundary has no unique opposite vertex");
-    const auto &a = mesh->Point(PointIndex(nodes[0]));
-    const auto &b = mesh->Point(PointIndex(nodes[1]));
-    const auto &c = mesh->Point(PointIndex(nodes[2]));
-    const auto &inside = mesh->Point(PointIndex(opposite));
+    const auto &a = mesh->Point(PointIndex::FromNr1(nodes[0]));
+    const auto &b = mesh->Point(PointIndex::FromNr1(nodes[1]));
+    const auto &c = mesh->Point(PointIndex::FromNr1(nodes[2]));
+    const auto &inside = mesh->Point(PointIndex::FromNr1(opposite));
     std::array<double,3> ab, ac, inward;
     for (int axis = 0; axis < 3; ++axis) {
       ab[axis]=b(axis)-a(axis); ac[axis]=c(axis)-a(axis); inward[axis]=inside(axis)-a(axis);
@@ -60,13 +60,9 @@ static std::unique_ptr<Mesh> fixture(int order, const std::array<int,4> &mapped 
     if (side == 0) throw std::runtime_error("Degenerate fixture boundary face");
     if (side > 0) std::swap(nodes[1],nodes[2]); // outward from domain 1
     Element2d triangle(TRIG); triangle.SetIndex(fd);
-    for (int j = 0; j < 3; ++j) triangle[j] = PointIndex(nodes[j]);
+    for (int j = 0; j < 3; ++j) triangle[j] = PointIndex::FromNr1(nodes[j]);
     mesh->AddSurfaceElement(triangle); ++index;
   }
-  mesh->SetNBCNames(5);
-  for (int bc : {4,2}) mesh->SetBCName(bc-1,"source");
-  for (int bc : {1,3}) mesh->SetBCName(bc-1,"target");
-  mesh->SetBCName(4,"other_boundary");
   mesh->GetTopology().Update();
   if (order > 1) {
     auto &curved = mesh->GetCurvedElements();
@@ -75,16 +71,16 @@ static std::unique_ptr<Mesh> fixture(int order, const std::array<int,4> &mapped 
     auto inactive_target_edge = std::array<int,2>{mapped[0],mapped[3]};
     std::sort(inactive_target_edge.begin(),inactive_target_edge.end());
     for (int e = 0; e < int(mesh->GetTopology().GetNEdges()); ++e) {
-      const auto v = mesh->GetTopology().GetEdgeVertices(e);
-      const std::array<int,2> key{int(v[0]),int(v[1])};
+      const auto v = mesh->GetTopology().GetEdgeVertices(EdgeIndex::FromNr0(e));
+      const std::array<int,2> key{v[0].Nr1(),v[1].Nr1()};
       const bool active = key != std::array<int,2>{1,4} && key != inactive_target_edge;
       for (int mode = 0; mode < curved.NumEdgeCoefficients(e); ++mode)
         for (int axis = 0; axis < 3; ++axis)
           curved.EdgeCoefficients(e)[mode](axis) = active ? (e+1)*(mode+1)*(axis+1)/1024.0 : 0;
     }
     for (int f = 0; f < int(mesh->GetTopology().GetNFaces()); ++f) {
-      const auto v = mesh->GetTopology().GetFaceVertices(f);
-      std::array<int,3> key{int(v[0]),int(v[1]),int(v[2])}; std::sort(key.begin(),key.end());
+      const auto v = mesh->GetTopology().GetFaceVertices(FaceIndex::FromNr0(f));
+      std::array<int,3> key{v[0].Nr1(),v[1].Nr1(),v[2].Nr1()}; std::sort(key.begin(),key.end());
       for (int mode = 0; mode < curved.NumFaceCoefficients(f); ++mode)
         for (int axis = 0; axis < 3; ++axis)
           curved.FaceCoefficients(f)[mode](axis) = seeded_faces.count(key) ? (f+1)*(axis+1)/2048.0 : 0;
@@ -105,14 +101,36 @@ int main()
           periodic_geometry_serialization(*mesh) != before)
         throw std::runtime_error("Rejected fixture must preserve geometry and empty IDs");
     };
+    {
+      // FD and BC numbers deliberately differ (FD1->BC4, FD2->BC2, FD3->BC1,
+      // FD4->BC3, FD5..8->BC5): labels resolve by BC property, never by
+      // treating a BC number as a descriptor position.
+      auto labels = fixture(1);
+      const std::map<int,std::string> expected{
+        {4,"source"},{2,"source"},{1,"target"},{3,"target"},{5,"other_boundary"}};
+      for (const auto &[bc, label] : expected)
+        if (periodic_boundary_label(*labels,bc) != label)
+          throw std::runtime_error("BC " + std::to_string(bc) + " resolves to '" +
+              periodic_boundary_label(*labels,bc) + "', expected '" + label + "'");
+      bool missing = false;
+      try { periodic_boundary_label(*labels,6); } catch (const std::runtime_error &) { missing = true; }
+      if (!missing) throw std::runtime_error("A BC with no descriptor must be rejected");
+      labels->GetFaceDescriptor(periodic_face_index(8)).SetBCName("conflicting");
+      bool conflicting = false;
+      try { periodic_boundary_label(*labels,5); } catch (const std::runtime_error &) { conflicting = true; }
+      if (!conflicting) throw std::runtime_error("Descriptors of one BC with different labels must be rejected");
+      reject_unchanged(labels,[&]{
+        auto relabelled = contract; relabelled.boundary_pairs = {{4,5}};
+        apply_named_periodic_identification(*labels,relabelled);});
+    }
     auto wrong_faces = fixture(3);
     // Same point sets, different diagonal: node coverage alone cannot detect it.
-    wrong_faces->GetFaceDescriptor(2).SetBCProperty(4);
-    wrong_faces->GetFaceDescriptor(4).SetBCProperty(1);
-    auto &first = (*wrong_faces)[SurfaceElementIndex(2)];
-    first[0] = PointIndex(8); first[1] = PointIndex(7); first[2] = PointIndex(5);
-    auto &second = (*wrong_faces)[SurfaceElementIndex(3)];
-    second[0] = PointIndex(8); second[1] = PointIndex(5); second[2] = PointIndex(6);
+    wrong_faces->GetFaceDescriptor(periodic_face_index(2)).SetBCProperty(4);
+    wrong_faces->GetFaceDescriptor(periodic_face_index(4)).SetBCProperty(1);
+    auto &first = (*wrong_faces)[SurfaceElementIndex::FromNr0(2)];
+    first[0] = PointIndex::FromNr1(8); first[1] = PointIndex::FromNr1(7); first[2] = PointIndex::FromNr1(5);
+    auto &second = (*wrong_faces)[SurfaceElementIndex::FromNr0(3)];
+    second[0] = PointIndex::FromNr1(8); second[1] = PointIndex::FromNr1(5); second[2] = PointIndex::FromNr1(6);
     auto one_patch = contract; one_patch.boundary_pairs = {{4,1}};
     reject_unchanged(wrong_faces,[&]{apply_named_periodic_identification(*wrong_faces,one_patch);});
     auto missing_face = fixture(2);
@@ -131,25 +149,26 @@ int main()
     nonfinite->GetCurvedElements().EdgeCoefficients(0)[0](0) = std::numeric_limits<double>::quiet_NaN();
     reject_unchanged(nonfinite,[&]{apply_named_periodic_identification(*nonfinite,contract);});
     auto layout_guard = fixture(3);
-    NgArray<int> orders, indices;
-    NgArray<Vec<3>> coefficients;
-    orders.SetSize(3); orders = 3;
-    indices.SetSize(4); indices[0]=0; indices[1]=2; indices[2]=4; indices[3]=4;
-    coefficients.SetSize(5); coefficients = Vec<3>(1,2,3);
+    std::vector<int> orders(3, 3), indices{0,2,4,4};
+    std::vector<Vec<3>> coefficients(5, Vec<3>(1,2,3));
+    auto validate = [&](bool triangular_faces) {
+      CurvedElements::ValidatePeriodicLayout(orders.data(), orders.size(), indices.data(),
+          indices.size(), coefficients.data(), coefficients.size(), 3, triangular_faces);
+    };
     // The first two entities are valid; the unpaired last entity is not.
-    reject_unchanged(layout_guard,[&]{CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,false);});
+    reject_unchanged(layout_guard,[&]{validate(false);});
     orders[2]=1;
-    CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,false); // finite unused tail allowed
+    validate(false); // finite unused tail allowed
     orders[2]=4;
-    reject_unchanged(layout_guard,[&]{CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,false);});
+    reject_unchanged(layout_guard,[&]{validate(false);});
     orders[2]=0;
-    reject_unchanged(layout_guard,[&]{CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,false);});
-    orders=3; indices[1]=1; indices[2]=2; indices[3]=2;
-    reject_unchanged(layout_guard,[&]{CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,true);});
+    reject_unchanged(layout_guard,[&]{validate(false);});
+    std::fill(orders.begin(), orders.end(), 3); indices[1]=1; indices[2]=2; indices[3]=2;
+    reject_unchanged(layout_guard,[&]{validate(true);});
     orders[2]=1;
-    CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,true);
+    validate(true);
     indices[3]=6;
-    reject_unchanged(layout_guard,[&]{CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,true);});
+    reject_unchanged(layout_guard,[&]{validate(true);});
     // Frozen oracle: odd bubble l_i*l_j*(l_i-l_j) at (3/4,1/4)
     // is +3/32, and exchanging its endpoints gives -3/32. The signs
     // below were tabulated for edges12,13,23,24,34, independently of
@@ -201,8 +220,8 @@ int main()
         std::sort(target_a.begin(),target_a.end()); std::sort(target_b.begin(),target_b.end());
         const std::set<std::array<int,3>> nonzero_faces{{1,2,3},{2,3,4},target_a,target_b};
         for (int e = 0; e < int(top.GetNEdges()); ++e) {
-          auto v = top.GetEdgeVertices(e);
-          const std::array<int,2> key{int(v[0]),int(v[1])};
+          auto v = top.GetEdgeVertices(EdgeIndex::FromNr0(e));
+          const std::array<int,2> key{v[0].Nr1(),v[1].Nr1()};
           edge_ids[key] = e;
           for (int mode = 0; mode < curved.NumEdgeCoefficients(e); ++mode) {
             auto &expected = expected_coefficients[{0,e,mode}];
@@ -212,8 +231,8 @@ int main()
           }
         }
         for (int f = 0; f < int(top.GetNFaces()); ++f) {
-          auto v = top.GetFaceVertices(f);
-          std::array<int,3> key{int(v[0]),int(v[1]),int(v[2])};
+          auto v = top.GetFaceVertices(FaceIndex::FromNr0(f));
+          std::array<int,3> key{v[0].Nr1(),v[1].Nr1(),v[2].Nr1()};
           std::sort(key.begin(),key.end()); face_ids[key] = f;
           for (int mode = 0; mode < curved.NumFaceCoefficients(f); ++mode) {
             auto &expected = expected_coefficients[{1,f,mode}];
@@ -261,8 +280,8 @@ int main()
         auto *target = row.face ? curved.FaceCoefficients(row.slave) : curved.EdgeCoefficients(row.slave);
         int expected_sign = 1;
         if (!row.face && row.mode == 1) {
-          const auto vertices = top.GetEdgeVertices(row.master);
-          expected_sign = odd_signs.at({int(vertices[0]),int(vertices[1])});
+          const auto vertices = top.GetEdgeVertices(EdgeIndex::FromNr0(row.master));
+          expected_sign = odd_signs.at({vertices[0].Nr1(),vertices[1].Nr1()});
           negative += expected_sign < 0;
         }
         if (row.sign != expected_sign) throw std::runtime_error("Wrong independently derived mode sign");

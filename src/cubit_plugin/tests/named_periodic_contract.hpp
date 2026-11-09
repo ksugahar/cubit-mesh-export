@@ -34,11 +34,6 @@ inline void named_periodic_contract_test()
       }
       ++index;
     }
-#ifdef COMPACT_NETGEN
-    mesh->SetNBCNames(4);
-    for (int bc : {4, 2}) mesh->SetBCName(bc - 1, "source_patch");
-    for (int bc : {1, 3}) mesh->SetBCName(bc - 1, "target_patch");
-#endif
     if (mesh->GetNFD() != 4)
       throw std::runtime_error("Fixture must contain exactly four explicitly added descriptors");
     return mesh;

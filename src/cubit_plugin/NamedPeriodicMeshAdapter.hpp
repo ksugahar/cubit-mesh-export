@@ -24,14 +24,12 @@ inline netgen::FaceRegionIndex periodic_face_index(int number)
 inline int periodic_face_number(netgen::FaceRegionIndex index) { return index.Nr1(); }
 
 // Resolve a boundary-condition property, never reinterpret it as a face index.
-// Compact Netgen owns a separate BC-name table; full Netgen stores names on
-// face descriptors. Multiple descriptors for one BC must agree on the name.
+// Netgen stores boundary names on the face descriptors (face regions); a BC
+// property may own several descriptors, and they must agree on the name. The
+// compact snapshot and full Netgen share this one lookup.
 inline std::string periodic_boundary_label(const netgen::Mesh &mesh, int bc)
 {
   if (bc < 1) throw std::runtime_error("Invalid boundary-condition property");
-#ifdef COMPACT_NETGEN
-  return mesh.GetBCName(bc - 1);
-#else
   bool found = false;
   std::string label;
   for (int fd = 1; fd <= mesh.GetNFD(); ++fd) {
@@ -45,7 +43,6 @@ inline std::string periodic_boundary_label(const netgen::Mesh &mesh, int bc)
   }
   if (!found) throw std::runtime_error("Missing descriptor for BC " + std::to_string(bc));
   return label;
-#endif
 }
 
 } // namespace cubit_mesh_export
