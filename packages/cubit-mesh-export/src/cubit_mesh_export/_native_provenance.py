@@ -73,15 +73,35 @@ def _file_evidence(path: Path) -> tuple[str, int]:
     return hashlib.sha256(data).hexdigest(), len(data)
 
 
+NATIVE_SOURCE_PATHS = ("src/cubit_plugin", "tools/find_cubit.ps1")
+
+
+def _git(repo_root: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo_root), *args],
+                          check=True, capture_output=True, text=True).stdout
+
+
 def _source_commit(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo_root), "log", "-1", "--format=%H", "--",
-         "src/cubit_plugin", "tools/find_cubit.ps1"],
-        check=True, capture_output=True, text=True,
-    )
-    commit = result.stdout.strip()
+    """The published commit the native payloads were built from.
+
+    Evidence must name source that anyone can check out: the native tree has to
+    be clean (no edits, no untracked files) and its last commit has to be on a
+    remote-tracking branch. Commit and push first, then build and record.
+    """
+    dirty = _git(repo_root, "status", "--porcelain", "--untracked-files=all",
+                 "--", *NATIVE_SOURCE_PATHS)
+    if dirty.strip():
+        raise RuntimeError(
+            "native sources differ from the committed tree; commit and push "
+            "them, rebuild, then record:\n" + dirty.rstrip())
+    commit = _git(repo_root, "log", "-1", "--format=%H", "--",
+                  *NATIVE_SOURCE_PATHS).strip()
     if len(commit) != 40:
         raise RuntimeError("could not resolve the native source commit")
+    if not _git(repo_root, "branch", "-r", "--contains", commit).strip():
+        raise RuntimeError(
+            f"native source commit {commit} is not on any remote-tracking "
+            "branch; push it before recording")
     return commit
 
 
@@ -200,10 +220,20 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("verify", "record"))
+    parser.add_argument("action", choices=("verify", "record", "check-source"))
     parser.add_argument("--repo-root", type=Path, required=True)
-    parser.add_argument("--package-dir", type=Path, required=True)
+    parser.add_argument("--package-dir", type=Path)
     args = parser.parse_args()
+    if args.action == "check-source":
+        try:
+            commit = _source_commit(args.repo_root)
+        except RuntimeError as error:
+            print(f"ERROR: {error}")
+            return 1
+        print(f"native source commit {commit} is clean and pushed")
+        return 0
+    if args.package_dir is None:
+        parser.error(f"{args.action} requires --package-dir")
     if args.action == "record":
         manifest = record_manifest(args.repo_root, args.package_dir)
         print(

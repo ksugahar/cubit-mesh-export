@@ -522,6 +522,8 @@ def test_native_build_is_worktree_relative_and_propagates_both_payloads():
         assert payload in build_script
     assert "_native_provenance.py" in build_script
     assert "record" in build_script
+    # The clean-pushed-source check runs before any build directory is touched.
+    assert build_script.index("check-source") < build_script.index("Reset-BuildDirectory $")
     assert "verify_manifest(repo_root, pkg_dir)" in setup_script
     assert "st_mtime" not in setup_script
     assert 'cmdclass={"build_py": CleanPackageBuild}' in setup_script

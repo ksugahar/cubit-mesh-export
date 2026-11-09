@@ -294,6 +294,9 @@ worktree with:
 pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild
 ```
 
+The build refuses to start unless `src/cubit_plugin` and
+`tools/find_cubit.ps1` are a clean commit on a remote-tracking branch, so the
+recorded commit is one anyone can check out: commit and push, then build.
 The command fails unless both artifacts are produced and their copied
 SHA-256 hashes match, then records the source-tree digest, source commit, and
 both payload hashes in `native_payloads.json`. Wheel creation independently

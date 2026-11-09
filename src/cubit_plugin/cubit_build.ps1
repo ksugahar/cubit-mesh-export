@@ -59,6 +59,14 @@ $src = $PSScriptRoot
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $src "..\.."))
 $packageDir = Join-Path $repoRoot `
     "packages\cubit-mesh-export\src\cubit_mesh_export"
+$provenanceScript = Join-Path $packageDir "_native_provenance.py"
+
+# Payload evidence names a clean, pushed commit. Check that before building, so
+# an unpublished or edited tree fails fast instead of after a full rebuild.
+& $pythonExecutable $provenanceScript check-source --repo-root $repoRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Native sources are not a clean, pushed commit"
+}
 
 function Reset-BuildDirectory([string]$Path) {
     if (-not $Rebuild -or -not (Test-Path -LiteralPath $Path)) {
@@ -172,7 +180,6 @@ foreach ($deployment in $deployments) {
     Write-Host "    sha256=$destinationHash" -ForegroundColor DarkGray
 }
 
-$provenanceScript = Join-Path $packageDir "_native_provenance.py"
 & $pythonExecutable $provenanceScript record `
     --repo-root $repoRoot --package-dir $packageDir
 if ($LASTEXITCODE -ne 0) {
