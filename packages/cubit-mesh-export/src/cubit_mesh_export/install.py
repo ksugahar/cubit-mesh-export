@@ -39,10 +39,10 @@ import sys
 import time
 from pathlib import Path
 
-from cubit_mesh_export._layout import plugin_directory, command_plugin_path
+from cubit_mesh_export._layout import (
+    SUPPORTED_CUBIT_RELEASE, command_plugin_path, is_supported_cubit_root, plugin_directory,
+)
 
-SUPPORTED_CUBIT_VERSION = (2026, 8)
-SUPPORTED_CUBIT_VERSION_TEXT = "2026.8"
 _REQUIRED_PACKAGE_BINARIES = (
     "cubit_mesh_export.ccm",
     "cubit_mesh_curver.pyd",
@@ -71,21 +71,8 @@ def _find_cubit_dir():
       1. CUBIT_PATH environment variable
       2. Common install locations (Cubit 2026.8)
     """
-    def _cubit_version_key(p):
-        name = os.path.basename(os.path.normpath(p))
-        if name.lower() == "bin":
-            name = os.path.basename(os.path.dirname(os.path.normpath(p)))
-        v = name.replace("Coreform Cubit ", "", 1).strip()
-        try:
-            return tuple(int(x) for x in v.split("."))
-        except (ValueError, AttributeError):
-            return (0,)
-
     def _supported(root: Path) -> bool:
-        return (
-            plugin_directory(root).is_dir()
-            and _cubit_version_key(str(root)) == SUPPORTED_CUBIT_VERSION
-        )
+        return plugin_directory(root).is_dir() and is_supported_cubit_root(root)
 
     cubit_path = os.environ.get("CUBIT_PATH") or os.environ.get("CUBIT_INSTALL_DIR")
     if cubit_path:
@@ -102,12 +89,7 @@ def _find_cubit_dir():
         for base in [os.environ.get("ProgramFiles", "")]:
             if not base:
                 continue
-            candidates = sorted(
-                glob.glob(os.path.join(base, "Coreform Cubit *")),
-                key=_cubit_version_key,
-                reverse=True,
-            )
-            for c in candidates:
+            for c in glob.glob(os.path.join(base, "Coreform Cubit *")):
                 root = Path(c)
                 if _supported(root):
                     return root
@@ -565,7 +547,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     print()
 
     if not cubit_dir:
-        print(f"  [FAIL] Coreform Cubit {SUPPORTED_CUBIT_VERSION_TEXT} not found.")
+        print(f"  [FAIL] Coreform Cubit {SUPPORTED_CUBIT_RELEASE} not found.")
         print("         Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 
