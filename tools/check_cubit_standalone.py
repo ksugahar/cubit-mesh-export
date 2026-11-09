@@ -48,7 +48,16 @@ def main():
             "ProgramData": str(root / "shared"), "ProgramFiles": str(root / "programs"),
             "ProgramFiles(x86)": "", "CUBIT_PATH": "", "SystemDrive": str(root / "drive"),
         }
+        build_info = cubit.parent / "BUILD_INFO"
         with patch.dict(os.environ, environment):
+            # BUILD_INFO is the only evidence of the release: a missing or
+            # different one must be refused even in a 2026.8-named folder.
+            for content in (None, "short=2026.7\n"):
+                if content is not None:
+                    build_info.write_text(content, encoding="utf-8")
+                assert not toolbar_install.install_panels(all_users=False), (
+                    f"install accepted a Cubit folder with BUILD_INFO={content!r}")
+            build_info.write_text("short=2026.8\n", encoding="utf-8")
             assert toolbar_install.install_panels(all_users=False)
             valid, issues = toolbar_install.verify_panel_installation(all_users=False)
             assert valid, issues
