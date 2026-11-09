@@ -6,6 +6,7 @@ import os
 import re
 import runpy
 import shutil
+import subprocess
 import sys
 import tarfile
 import tomllib
@@ -64,6 +65,20 @@ def _fake_native_sdk_cache(repo_root: Path):
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "CMakeCache.txt").write_text(
             f"Cubit_DIR:PATH={sdk / 'cmake'}\n", encoding="utf-8")
+
+
+def _track_native_tree(repo_root: Path):
+    """A git work tree holding what the corresponding-source archive packs."""
+    provenance = _load_native_provenance()
+    for name in ("tools/find_cubit.ps1", *provenance.ARCHIVE_NOTICES):
+        path = repo_root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"{name}\r\n".encode())
+    ignore = repo_root / "src" / "cubit_plugin" / ".gitignore"
+    ignore.parent.mkdir(parents=True, exist_ok=True)
+    ignore.write_text("build-*/\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(repo_root)], check=True)
+    subprocess.run(["git", "-C", str(repo_root), "add", "-A"], check=True)
 
 
 def _patch_windows_env(monkeypatch, tmp_path: Path):
@@ -673,6 +688,7 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
         config.write_text('set(CMAKE_CXX_COMPILER_ID "MSVC")\n'
                           'set(CMAKE_CXX_COMPILER_VERSION "19.51.36257.0")\n', encoding="utf-8")
     _fake_native_sdk_cache(tmp_path)
+    _track_native_tree(tmp_path)
     manifest = provenance.record_manifest(tmp_path, package_dir)
     assert all(item["toolchain"] == "MSVC 19.51.36257.0 / CMake / Ninja"
                for item in manifest["payloads"].values())
@@ -685,6 +701,78 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
         errors = provenance.verify_manifest(tmp_path, package_dir)
         assert any(name in error for error in errors)
         path.write_bytes(original)
+
+
+def _recorded_native_package(monkeypatch, tmp_path):
+    provenance = _load_native_provenance()
+    plugin = tmp_path / "src" / "cubit_plugin"
+    (plugin / "compact_netgen").mkdir(parents=True)
+    (plugin / "native.cpp").write_bytes(b"int answer = 42;\r\n")
+    (plugin / "compact_netgen" / "mesh.hpp").write_text("struct Mesh;\n", encoding="utf-8")
+    (plugin / "register.py").write_text("# not compiled, still shipped\n", encoding="utf-8")
+    package_dir = tmp_path / "package"
+    package_dir.mkdir()
+    for name in provenance.REQUIRED_PAYLOADS:
+        (package_dir / name).write_bytes((name + "\n").encode())
+    (package_dir / "native_payloads.json").write_text('{"payloads": {}}', encoding="utf-8")
+    monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
+    _fake_native_sdk_cache(tmp_path)
+    _track_native_tree(tmp_path)
+    return provenance, package_dir
+
+
+def test_record_writes_a_reproducible_corresponding_source_archive(monkeypatch, tmp_path):
+    """Guards: record packs exactly the recorded build source and binds its hash."""
+    provenance, package_dir = _recorded_native_package(monkeypatch, tmp_path)
+    first = provenance.record_manifest(tmp_path, package_dir)["source"]
+    archive = package_dir / provenance.ARCHIVE_NAME
+    data = archive.read_bytes()
+    assert first["archive_sha256"] == hashlib.sha256(data).hexdigest()
+    assert provenance.record_manifest(tmp_path, package_dir)["source"] == first
+    assert archive.read_bytes() == data
+    with zipfile.ZipFile(archive) as contents:
+        names = contents.namelist()
+        assert json.loads(contents.read("native-source.json")) == {
+            "source_commit": first["commit"],
+            "native_tree_sha256": first["tree_sha256"],
+            "native_input_count": first["file_count"],
+        }
+        assert contents.read("src/cubit_plugin/native.cpp") == b"int answer = 42;\n"
+        assert b"Coreform Cubit 2026.8" in contents.read("REBUILD.md")
+    assert names == sorted(names)
+    assert "src/cubit_plugin/register.py" in names
+    assert {"LICENSE", "tools/find_cubit.ps1", "REBUILD.md"} <= set(names)
+    assert not any("/build-" in name for name in names), names
+    assert provenance.verify_manifest(tmp_path, package_dir) == []
+
+
+@pytest.mark.parametrize("damage", ["identity", "native-input", "missing"])
+def test_verify_rejects_an_archive_of_a_different_build(monkeypatch, tmp_path, damage):
+    """Guards: a rebound archive hash cannot hide other source or another identity."""
+    provenance, package_dir = _recorded_native_package(monkeypatch, tmp_path)
+    provenance.record_manifest(tmp_path, package_dir)
+    archive = package_dir / provenance.ARCHIVE_NAME
+    manifest_path = package_dir / "native_payloads.json"
+    if damage == "missing":
+        archive.unlink()
+    else:
+        with zipfile.ZipFile(archive) as contents:
+            entries = {name: contents.read(name) for name in contents.namelist()}
+        if damage == "identity":
+            entries["native-source.json"] = b'{"source_commit": "b"}'
+        else:
+            entries["src/cubit_plugin/native.cpp"] = b"int answer = 43;\n"
+        with zipfile.ZipFile(archive, "w") as contents:
+            for name, content in entries.items():
+                contents.writestr(name, content)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["source"]["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    errors = provenance.verify_manifest(tmp_path, package_dir)
+    expected = {"identity": "identifies a different build",
+                "native-input": "native inputs differ",
+                "missing": "is missing"}[damage]
+    assert any(expected in error for error in errors), errors
 
 
 @pytest.mark.parametrize("damage", [
@@ -705,18 +793,12 @@ def test_sdist_setup_verifies_payloads_without_native_sources(
     manifest_path = package_dir / "native_payloads.json"
     manifest_path.write_text('{"payloads": {}}', encoding="utf-8")
     monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
+    (tmp_path / "src/cubit_plugin/native.cpp").parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "src/cubit_plugin/native.cpp").write_text("int answer = 42;\n", encoding="utf-8")
     _fake_native_sdk_cache(tmp_path)
-    manifest = provenance.record_manifest(tmp_path, package_dir)
-    source = manifest["source"]
-    archive = package_dir / "cubit_mesh_export_native_source.zip"
-    with zipfile.ZipFile(archive, "w") as contents:
-        contents.writestr("native-source.json", json.dumps({
-            "source_commit": source["commit"],
-            "native_tree_sha256": source["tree_sha256"],
-            "native_input_count": source["file_count"],
-        }))
-    source["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    _track_native_tree(tmp_path)
+    provenance.record_manifest(tmp_path, package_dir)
+    archive = package_dir / provenance.ARCHIVE_NAME
     shutil.rmtree(tmp_path / "src/cubit_plugin")
     assert provenance.verify_manifest(None, package_dir) == []
 
@@ -751,10 +833,6 @@ def test_sdist_setup_verifies_payloads_without_native_sources(
     if damage is None:
         runpy.run_path(str(package_root / "setup.py"))
         assert len(setup_calls) == 1
-    elif damage == "source-archive-content":
-        with pytest.raises(RuntimeError, match="corresponding native source archive"):
-            runpy.run_path(str(package_root / "setup.py"))
-        assert not setup_calls
     else:
         with pytest.raises(SystemExit) as error:
             runpy.run_path(str(package_root / "setup.py"))

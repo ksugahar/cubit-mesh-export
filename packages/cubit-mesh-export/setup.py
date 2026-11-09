@@ -22,13 +22,11 @@ last resort (e.g. emergency release when the build box is offline).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sys
 import importlib.util
 import shutil
-import zipfile
 from pathlib import Path
 
 from setuptools import Distribution, setup
@@ -60,23 +58,6 @@ def _load_provenance_module(package_dir: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def _check_corresponding_source(package_dir: Path):
-    manifest = json.loads((package_dir / "native_payloads.json").read_text(encoding="utf-8"))
-    source = manifest["source"]
-    archive = package_dir / "cubit_mesh_export_native_source.zip"
-    if hashlib.sha256(archive.read_bytes()).hexdigest() != source["archive_sha256"]:
-        raise RuntimeError("corresponding native source archive does not match native_payloads.json")
-
-    expected = {
-        "source_commit": source["commit"],
-        "native_tree_sha256": source["tree_sha256"],
-        "native_input_count": source["file_count"],
-    }
-    with zipfile.ZipFile(archive) as contents:
-        if json.loads(contents.read("native-source.json")) != expected:
-            raise RuntimeError("corresponding native source archive identifies a different build")
 
 
 def _check_binary_provenance():
@@ -113,8 +94,6 @@ def _check_binary_provenance():
             "\n  To override (not recommended):\n"
             "    set CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK=1\n\n")
         sys.exit(1)
-
-    _check_corresponding_source(pkg_dir)
 
 
 _check_binary_provenance()

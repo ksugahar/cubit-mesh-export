@@ -73,6 +73,12 @@ def candidate(tmp_path, monkeypatch):
     (sdk / "cmake").mkdir(parents=True)
     for build in ("build-pyd", "build-ccm"):
         (tmp_path / "src/cubit_plugin" / build).mkdir(parents=True)
+    (tmp_path / "src/cubit_plugin/.gitignore").write_text("build-*/\n", encoding="utf-8")
+    for name in ("tools/find_cubit.ps1", *provenance.ARCHIVE_NOTICES):
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(name + "\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
     monkeypatch.setattr(provenance, "_source_commit", lambda root: "test")
     monkeypatch.setattr(provenance.metadata, "version", lambda name: "6.2.2607")
     return tmp_path, package, sdk
