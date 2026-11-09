@@ -2733,8 +2733,7 @@ def test_netgen_workflow_records_mapped_hex_quality_replay_gate():
     assert "sidecar `n_elements`" in doc
     assert "12 volume elements, 13\npoints, and order 1" in doc
     assert "do not infer\norder from the filename" in doc
-    assert "omitting the\n`order` argument" in doc
-    assert "sidecar\nwith `order=2`" in doc
+    assert "Pass `order` explicitly and verify the stored order." in doc
     assert "Slot390 extends the same quality ledger" in doc
     assert "parameter_set_artifact_id" in doc
     assert "parameter_set_digest" in doc
