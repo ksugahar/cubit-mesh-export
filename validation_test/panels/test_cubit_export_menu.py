@@ -1,8 +1,7 @@
 """Unit test for the exporter-owned Cubit menu (private PySide6).
 
 Exercises the PySide6 Cubit Mesh Export toolbar that replaced the retired
-C++ Qt5 .ccl plugin in 2026-05.  Tests are headless (QT_QPA_PLATFORM=
-offscreen) and do NOT require Cubit or NGSolve -- only PySide6.
+C++ Qt5 .ccl plugin in 2026-05.  Tests use Cubit 2026.8 embedded Python and its offscreen Qt plugin.
 
 Coverage:
     A. Module imports + symbol surface
@@ -20,16 +19,8 @@ Coverage:
     K. Mesh Evaluation is not part of the Cubit menu; the
        p-convergence demonstration lives under docs/cubit_mesh_export.
 
-Run::
-
-    set QT_QPA_PLATFORM=offscreen
-    # Direct python (simplest -- bypasses pytest's import hooks):
-    python validation_test/panels/test_cubit_export_menu.py
-
-    # Or pytest with --confcutdir to isolate this Cubit-embedded PySide test
-    # from unrelated validation fixtures:
-    python -m pytest validation_test/panels/test_cubit_export_menu.py -xvs \
-        --confcutdir=validation_test/panels
+Run this file directly with the licensed Cubit 2026.8 embedded Python.
+The repository pytest suite uses the separate Qt-free menu contracts.
 """
 
 from __future__ import annotations
@@ -41,28 +32,16 @@ import types
 import unittest
 from unittest.mock import MagicMock, patch
 
-# Force offscreen Qt platform BEFORE PySide6 is imported.
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if __name__ != "__main__":
+    raise unittest.SkipTest("Run the Qt validation directly with Cubit 2026.8 embedded Python.")
 
-# Ensure the exporter GUI module is importable as a side-load.
-_REPO_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", ".."))
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, os.path.join(_REPO_ROOT, "tools"))
+from cubit_qt_test_env import configure_cubit_qt  # noqa: E402
+_DLL_DIRECTORY = configure_cubit_qt()
 sys.path.insert(0, os.path.join(_REPO_ROOT, "packages", "cubit-mesh-export",
                               "src", "cubit_mesh_export", "cubit_gui"))
-
-try:
-    from PySide6.QtWidgets import (  # noqa: E402
-        QApplication, QMainWindow,
-    )
-except ImportError as exc:
-    message = (
-        "PySide6 is required only in the Cubit panel runtime; "
-        "skip Cubit toolbar validation when PySide6 is unavailable."
-    )
-    if __name__ == "__main__":
-        print(f"SKIP: {message}")
-        raise SystemExit(0) from exc
-    raise unittest.SkipTest(message) from exc
+from PySide6.QtWidgets import QApplication, QMainWindow  # noqa: E402
 
 
 # Module under test.  Top-level `import cubit` is forbidden in the
@@ -78,7 +57,7 @@ def _ensure_qapp():
     """Create / reuse a single QApplication for all tests."""
     global _QAPP
     if _QAPP is None:
-        _QAPP = QApplication.instance() or QApplication(sys.argv)
+        _QAPP = QApplication.instance() or QApplication([])
     return _QAPP
 
 

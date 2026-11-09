@@ -46,6 +46,20 @@ def test_import_audit_distinguishes_no_matches_from_git_failure(monkeypatch, che
         assert issues == []
 
 
+def test_cubit_qt_missing_offscreen_plugin_fails_before_qt_import(monkeypatch, tmp_path):
+    from tools import cubit_qt_test_env as qt
+
+    embedded = tmp_path / "bin" / "python3"
+    embedded.mkdir(parents=True)
+    (tmp_path / "BUILD_INFO").write_text("short=2026.8\n", encoding="utf-8")
+    monkeypatch.setattr(qt.sys, "executable", str(embedded / "python.exe"))
+    monkeypatch.setattr(qt.importlib.util, "find_spec", lambda name:
+                        types.SimpleNamespace(origin=str(embedded / "Lib/PySide6/__init__.py")))
+    monkeypatch.setattr(qt, "offscreen_environment", lambda env: None)
+    with pytest.raises(RuntimeError, match="offscreen Qt platform plugin is missing"):
+        qt.configure_cubit_qt()
+
+
 @pytest.mark.parametrize("returncode", [2, -1073741819])
 def test_failed_export_process_cannot_pass_with_an_existing_artifact(monkeypatch, tmp_path, returncode):
     path = EXPORT_MENU.parents[1] / "smoke_test.py"
