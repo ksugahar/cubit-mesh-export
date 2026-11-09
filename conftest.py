@@ -1,18 +1,32 @@
-"""Keep repository pytest sessions non-interactive."""
-import importlib.abc
-import os
-import sys
+"""Keep ordinary repository pytest sessions free of Cubit and Qt."""
+import pytest
 
-from tools.cubit_qt_test_env import offscreen_environment, suppress_windows_error_dialogs
-
-
-class _NoQtWidgets(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname in {"PySide6.QtWidgets", "PySide6.QtGui"}:
-            raise RuntimeError("Real Qt GUI imports belong in the licensed Cubit offscreen subprocess.")
+from tools import cubit_pytest_guard as guard
 
 
 def pytest_configure(config):
-    suppress_windows_error_dialogs()
-    offscreen_environment(os.environ)
-    sys.meta_path.insert(0, _NoQtWidgets())
+    guard.configure()
+    libraries = guard.loaded_vendor_libraries()
+    if libraries:
+        raise pytest.UsageError("Cubit/Qt DLLs already loaded before collection: " + ", ".join(libraries))
+
+
+def pytest_collectreport(report):
+    libraries = guard.loaded_vendor_libraries()
+    if libraries:
+        report.outcome = "failed"
+        report.longrepr = f"{report.nodeid}: Cubit/Qt DLLs loaded during collection: " + ", ".join(libraries)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    result = yield
+    report = result.get_result()
+    if item.session.shouldfail:
+        return
+    libraries = guard.loaded_vendor_libraries()
+    if libraries:
+        detail = f"{item.nodeid} ({report.when}): loaded Cubit/Qt DLLs in pytest: " + ", ".join(libraries)
+        report.outcome = "failed"
+        report.longrepr = detail
+        item.session.shouldfail = detail
