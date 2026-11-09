@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 from importlib import metadata
@@ -28,7 +29,10 @@ SOURCE_SUFFIXES = {
     ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx",
     ".cmake", ".txt", ".ps1",
 }
-SKIP_DIRS = {"build", "build-ccm", "build-pyd", "__pycache__"}
+
+def _is_build_tree(directory: Path) -> bool:
+    """A CMake binary directory, whatever it is named, is generated output."""
+    return (directory / "CMakeCache.txt").is_file() or (directory / "CMakeFiles").is_dir()
 
 
 def native_source_files(repo_root: Path) -> list[Path]:
@@ -36,12 +40,14 @@ def native_source_files(repo_root: Path) -> list[Path]:
 
     repo_root = repo_root.resolve()
     plugin_root = repo_root / "src" / "cubit_plugin"
-    files = [
-        path for path in plugin_root.rglob("*")
-        if path.is_file()
-        and not any(part in SKIP_DIRS for part in path.relative_to(plugin_root).parts)
-        and path.suffix.lower() in SOURCE_SUFFIXES
-    ]
+    files = []
+    for directory, subdirectories, names in os.walk(plugin_root):
+        here = Path(directory)
+        subdirectories[:] = sorted(
+            name for name in subdirectories
+            if name != "__pycache__" and not _is_build_tree(here / name))
+        files.extend(here / name for name in names
+                     if Path(name).suffix.lower() in SOURCE_SUFFIXES)
     shared_discovery = repo_root / "tools" / "find_cubit.ps1"
     if shared_discovery.is_file():
         files.append(shared_discovery)

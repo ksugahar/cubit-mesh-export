@@ -632,6 +632,28 @@ def test_native_source_provenance_is_content_addressed_not_timestamped(tmp_path)
     assert provenance.native_source_digest(tmp_path) != before
 
 
+@pytest.mark.parametrize("marker", ["CMakeCache.txt", "CMakeFiles"])
+def test_native_source_provenance_ignores_any_cmake_build_tree(tmp_path, marker):
+    """Guards: a configured build directory of any name never enters the digest."""
+    provenance = _load_native_provenance()
+    plugin = tmp_path / "src" / "cubit_plugin"
+    plugin.mkdir(parents=True)
+    (plugin / "native.cpp").write_text("int answer = 42;\n", encoding="utf-8")
+    before = provenance.native_source_digest(tmp_path)
+    build = plugin / "build-contract-anything"
+    (build / "CMakeFiles" / "3.31").mkdir(parents=True)
+    if marker == "CMakeCache.txt":
+        (build / "CMakeCache.txt").write_text("CMAKE_BUILD_TYPE:STRING=Release\n")
+        (build / "CMakeFiles" / "3.31").rmdir(); (build / "CMakeFiles").rmdir()
+    else:
+        (build / "CMakeFiles" / "3.31" / "CMakeCXXCompiler.cmake").write_text("# generated\n")
+    (build / "generated.cpp").write_text("int generated;\n", encoding="utf-8")
+    assert provenance.native_source_digest(tmp_path) == before
+    (plugin / "build-like-source").mkdir()
+    (plugin / "build-like-source" / "real.cpp").write_text("int real;\n", encoding="utf-8")
+    assert provenance.native_source_digest(tmp_path) != before
+
+
 def test_native_manifest_rejects_drift_in_either_required_payload(
         monkeypatch, tmp_path):
     provenance = _load_native_provenance()
