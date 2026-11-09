@@ -115,6 +115,10 @@ The supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
 package metadata because `cubit_mesh_curver.pyd` links against the Netgen C++
 ABI.  The separately loaded `cubit_mesh_export.ccm` plugin embeds Compact
 Netgen and does not link against the Python solver wheels.
+Meshes with pyramids additionally need a Netgen 6.2.2608 runtime carrying the
+pyramid apex clamp (upstream 13b47c3a9) and the base-edge blend; the stock
+6.2.2608 wheels have neither, and `check-vol` refuses pyramid meshes on such a
+runtime, naming the missing fix. See [docs/native-abi.md](docs/native-abi.md).
 For LLM operation, the canonical manual is the included `cubit_mesh_export.mcp` server:
 start with `cubit_status` and `cubit_docs`; use APREPRO through its headless
 execution tools and `cubit_check_vol` before handing a mesh to a solver.

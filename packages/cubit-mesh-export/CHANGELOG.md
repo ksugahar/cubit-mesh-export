@@ -12,7 +12,23 @@
   `check-vol` integrates a unit pyramid (apex clamp) and compares the scalar
   and vectorised maps on every curved pyramid's base (base-edge blend), and
   raises with the missing patch named. The `advisories` report field is
-  removed.
+  removed. `check_consistency` applies the same pyramid gate, so
+  `--no-quality` no longer bypasses it.
+- `.vol` export writes LF line endings on every platform, through one
+  writer that refuses a CR in the serialized mesh. Behavior change:
+  `check-vol` now fails a `.vol` whose stored region or boundary names
+  carry a trailing CR (as written by earlier Windows exports) and warns
+  with the stored name; region measures are selected by stored names.
+- Native payload provenance is recorded only from a clean, pushed commit.
+  The record step also generates `cubit_mesh_export_native_source.zip`
+  (the corresponding Compact Netgen and plugin source, notices and rebuild
+  instructions) byte-reproducibly and binds its SHA-256; verification checks
+  the archive's identity and native inputs against the recorded tree.
+- Named periodic boundary labels resolve through face descriptors for
+  compact and full Netgen alike.
+- Qt stays inside Cubit's runtime: the test guard detects Cubit and Qt DLLs
+  loaded into ordinary pytest processes, and Qt platform failures no longer
+  open dialogs.
 
 ## 2.3.1
 
