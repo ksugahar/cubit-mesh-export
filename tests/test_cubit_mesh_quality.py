@@ -377,7 +377,9 @@ def test_crlf_vol_reports_normalized_labels_measures_stored_ones_and_fails(tmp_p
     assert result["quality"]["materials"] == ["body"]
     assert result["quality"]["boundaries"] == ["outer"]
     volumes = [m["ng_volume"] for m in result["materials"]]
-    assert volumes == [m["ng_volume"] for m in lf["materials"]], (volumes, lf["materials"])
+    # NGSolve's threaded Integrate may differ in the last bit between runs.
+    assert volumes == pytest.approx([m["ng_volume"] for m in lf["materials"]], rel=1e-12), (
+        volumes, lf["materials"])
     assert volumes[0] > 0.0
     assert not result["passed"]
     assert any("is stored as 'body\\r'" in w for w in result["warnings"]), result["warnings"]
