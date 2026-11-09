@@ -88,6 +88,33 @@ def _mesh_label(value):
     return str(value).strip()
 
 
+def _native_selector(mesh, getter, label):
+    """Region pattern that selects ``label`` by the names Netgen actually stores.
+
+    Reports use the normalised label; selection must use the stored names, or a
+    label stored as e.g. ``"body\r"`` (a CRLF copy of the .vol) selects nothing.
+    """
+    names = sorted({str(name) for name in getattr(mesh, getter)()
+                    if _mesh_label(name) == label})
+    if not names:
+        raise ValueError(f"no stored region name normalises to {label!r}")
+    return "|".join(re.escape(name) for name in names)
+
+
+def _untransported_labels(mesh):
+    """Stored region names that differ from their normalised label."""
+    found = []
+    for kind, getter in (("material", "GetMaterials"), ("boundary", "GetBoundaries"),
+                         ("edge", "GetBBoundaries")):
+        for name in sorted({str(n) for n in getattr(mesh, getter, lambda: [])()}):
+            if name and name != _mesh_label(name):
+                found.append(
+                    f"{kind} label {_mesh_label(name)!r} is stored as {name!r}; a solver "
+                    f"selecting {_mesh_label(name)!r} by name selects nothing (was the "
+                    f".vol copied with CRLF line endings?)")
+    return found
+
+
 def _read_vol_text(path):
     path = Path(path)
     if path.suffix.lower() == ".gz":
@@ -742,14 +769,8 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
     # this keeps the quality gate on the same geometry evaluation route as
     # solver forms and Integrate().
     jacobian_cf = ng.specialcf.JacobianMatrix(3)
-    # Pyramids: require the patched Netgen runtime (see PYRAMID_* above).  A
-    # curved pyramid whose two maps disagree on its base is evaluated wrongly
-    # by assembly and Integrate, so it fails the check loudly.
-    position_cf = ng.CoefficientFunction((ng.x, ng.y, ng.z))
-    pyramid_count = 0
-    inconsistent_pyramids = []
-    max_pyramid_deviation = 0.0
-    pyramid_base_rule = None
+    # Pyramids: the runtime gate is independent of quality sampling.
+    curved_pyramid_map = check_pyramid_runtime(mesh)
 
     for element in mesh.Elements(ng.VOL):
         volume_element_count += 1
@@ -758,18 +779,6 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
         trafo = mesh.GetTrafo(element)
         rule = ng.IntegrationRule(element.type, sample_order)
         mapped_points = trafo(rule)
-        if element.type == ng.ET.PYRAMID:
-            if pyramid_count == 0:
-                require_pyramid_netgen()
-            pyramid_count += 1
-            if curve_order > 1:
-                if pyramid_base_rule is None:
-                    pyramid_base_rule = _pyramid_base_rule(ng)
-                deviation = _pyramid_map_deviation(
-                    mesh, element, trafo, pyramid_base_rule, position_cf)
-                max_pyramid_deviation = max(max_pyramid_deviation, deviation)
-                if not deviation <= PYRAMID_MAP_TOLERANCE:
-                    inconsistent_pyramids.append(_element_number(element))
         jacobians = np.asarray(jacobian_cf(mapped_points), dtype=float).reshape(
             -1, 3, 3
         )
@@ -868,14 +877,6 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
     if missing_boundaries:
         warnings.append("missing boundaries: " + ", ".join(missing_boundaries))
 
-    if inconsistent_pyramids:
-        raise RuntimeError(
-            f"{len(inconsistent_pyramids)} of {pyramid_count} curved pyramids map "
-            f"inconsistently on their base (max {max_pyramid_deviation:.1e} of the "
-            f"element size) under NGSolve {getattr(ng, '__version__', '?')}: the "
-            f"runtime lacks the base-edge blend; {_PYRAMID_RUNTIME_HELP}"
-        )
-
     return {
         "passed": not warnings,
         "curve_order": curve_order,
@@ -910,13 +911,49 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
         "missing_materials": missing_materials,
         "missing_boundaries": missing_boundaries,
         "adjacency": adjacency,
-        "curved_pyramid_map": {
-            "pyramid_count": pyramid_count,
-            "max_relative_deviation": max_pyramid_deviation,
-            "tolerance": PYRAMID_MAP_TOLERANCE,
-        },
+        "curved_pyramid_map": curved_pyramid_map,
         "warnings": warnings,
     }
+
+
+def check_pyramid_runtime(mesh):
+    """Fail unless this runtime evaluates every pyramid of ``mesh`` correctly.
+
+    Mandatory for every check that measures the mesh, whether or not quality
+    sampling runs: a runtime without the apex clamp or the base-edge blend
+    integrates pyramids wrongly, so volumes and areas from it are not evidence.
+    Returns the ``curved_pyramid_map`` report entry.
+    """
+    import ngsolve as ng
+
+    pyramids = [e for e in mesh.Elements(ng.VOL) if e.type == ng.ET.PYRAMID]
+    report = {
+        "pyramid_count": len(pyramids),
+        "max_relative_deviation": 0.0,
+        "tolerance": PYRAMID_MAP_TOLERANCE,
+    }
+    if not pyramids:
+        return report
+    require_pyramid_netgen()
+    if int(mesh.GetCurveOrder()) <= 1:
+        return report
+    position_cf = ng.CoefficientFunction((ng.x, ng.y, ng.z))
+    rule = _pyramid_base_rule(ng)
+    inconsistent = 0
+    for element in pyramids:
+        deviation = _pyramid_map_deviation(
+            mesh, element, mesh.GetTrafo(element), rule, position_cf)
+        report["max_relative_deviation"] = max(report["max_relative_deviation"], deviation)
+        if not deviation <= PYRAMID_MAP_TOLERANCE:
+            inconsistent += 1
+    if inconsistent:
+        raise RuntimeError(
+            f"{inconsistent} of {len(pyramids)} curved pyramids map inconsistently "
+            f"on their base (max {report['max_relative_deviation']:.1e} of the "
+            f"element size) under NGSolve {getattr(ng, '__version__', '?')}: the "
+            f"runtime lacks the base-edge blend; {_PYRAMID_RUNTIME_HELP}"
+        )
+    return report
 
 
 def require_pyramid_netgen():
@@ -1079,6 +1116,7 @@ def check_consistency(
         quality_options.setdefault(str(key), value)
 
     mesh = Mesh(str(vol_file))
+    pyramid_runtime = check_pyramid_runtime(mesh)
     labels = check_label_contract(
         mesh,
         contract=label_contract or None,
@@ -1093,6 +1131,7 @@ def check_consistency(
     )
 
     warnings = list(labels["warnings"])
+    warnings.extend(_untransported_labels(mesh))
     warnings.extend(boundary_domain_ownership["issues"])
     if quality_result is not None:
         warnings.extend(quality_result["warnings"])
@@ -1114,7 +1153,8 @@ def check_consistency(
     with TaskManager():
         for material in labels["materials"]:
             ng_volume = _finite_measurement(
-                Integrate(CF(1), mesh, definedon=mesh.Materials(material)),
+                Integrate(CF(1), mesh, definedon=mesh.Materials(
+                    _native_selector(mesh, "GetMaterials", material))),
                 f'volume for material "{material}"',
             )
             entry = {"name": material, "ng_volume": ng_volume}
@@ -1137,7 +1177,8 @@ def check_consistency(
             ng_area = _finite_measurement(
                 Integrate(
                     CF(1), mesh, BND,
-                    definedon=mesh.Boundaries(boundary),
+                    definedon=mesh.Boundaries(
+                        _native_selector(mesh, "GetBoundaries", boundary)),
                     order=16,
                 ),
                 f'area for boundary "{boundary}"',
@@ -1166,7 +1207,8 @@ def check_consistency(
                 ng_length = _finite_measurement(
                     Integrate(
                         CF(1), mesh, BBND,
-                        definedon=mesh.BBoundaries(edge),
+                        definedon=mesh.BBoundaries(
+                            _native_selector(mesh, "GetBBoundaries", edge)),
                     ),
                     f'length for BBND "{edge}"',
                 )
@@ -1283,6 +1325,7 @@ def check_consistency(
         "n_points": mesh_summary["n_points"],
         "labels": labels,
         "quality": quality_result,
+        "curved_pyramid_map": pyramid_runtime,
         "boundary_domain_ownership": boundary_domain_ownership,
         "materials": materials,
         "boundaries": boundaries,
