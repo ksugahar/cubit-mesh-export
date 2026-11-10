@@ -93,12 +93,21 @@ def command(args, timeout=120):
         raise RuntimeError(str(args) + '\n' + p.stdout[-5000:] + p.stderr[-2000:])
     return p.stdout
 
-def running_cubit_processes():
+def running_cubit_processes(images=CUBIT_PROCESS_IMAGES):
     import csv
     listing = command(['tasklist', '/FO', 'CSV', '/NH', '/V'])
     return [dict(image=row[0], pid=int(row[1]), session=row[2], user=row[6])
             for row in csv.reader(listing.splitlines())
-            if row and row[0].lower() in CUBIT_PROCESS_IMAGES and len(row) > 6]
+            if len(row) > 6 and row[0].lower() in images]
+
+
+def require_idle_mcp_launcher():
+    running = running_cubit_processes(('mcp-server-cubit.exe',))
+    if running:
+        result['blocking_mcp_launchers'] = running
+        raise RuntimeError(
+            'mcp-server-cubit.exe is running and can lock the pip launcher; '
+            'ask its owners to stop their servers before deploying: ' + str(running))
 
 
 def preserved():
@@ -189,6 +198,8 @@ try:
     cubit_dir = installer._find_cubit_dir()
     if cubit_dir is None:
         raise RuntimeError('Supported Cubit installation missing')
+    if cfg['action'] in ('preflight', 'deploy'):
+        require_idle_mcp_launcher()
     # Forced deployment (explicit --force-close-cubit only): close every
     # running Cubit GUI, whoever owns it, and record whose it was.  Unsaved
     # work in those sessions is lost; without the flag an open Cubit stops
@@ -212,6 +223,7 @@ try:
     if not ok:
         raise RuntimeError(str(issues))
     if cfg['action'] == 'deploy':
+        require_idle_mcp_launcher()
         if tier == 'editable':
             command([sys.executable, '-m', 'pip', 'install', '--no-deps', '--no-build-isolation',
                      '-e', str(package)], 180)
