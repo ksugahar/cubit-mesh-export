@@ -261,7 +261,8 @@ subprocess.run = _process_mock
 """ + dual.WORKER
 
 
-def _process_guard(monkeypatch, images, force, fail_pid=None):
+def _process_guard(monkeypatch, images, force, fail_pid=None, action='preflight',
+                   start_mcp_during_preflight=False):
     """Execute the actual worker guard with synthetic tasklist/taskkill only."""
     import ast
     import csv
@@ -285,21 +286,26 @@ def _process_guard(monkeypatch, images, force, fail_pid=None):
         active[:] = [(name, value) for name, value in active if value != pid]
         return subprocess.CompletedProcess(args, 0, '', '')
     monkeypatch.setattr(subprocess, 'run', fake_run)
+    def preflight(*args, **kwargs):
+        if start_mcp_during_preflight:
+            active.append(('mcp-server-cubit.exe', 200))
+        return True, []
     tree = ast.parse(dual.WORKER)
     definitions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
-                   and node.name in ('command', 'running_cubit_processes')]
+                   and node.name in ('command', 'running_cubit_processes', 'require_idle_mcp_launcher')]
     ns = dict(CUBIT_PROCESS_IMAGES=dual.CUBIT_PROCESS_IMAGES, events=[], subprocess=subprocess,
-              cfg=dict(force_close_cubit=force, action='preflight'), result={}, cubit_dir=Path('.'),
-              installer=SimpleNamespace(preflight=lambda *a, **k: (True, [])))
+              cfg=dict(force_close_cubit=force, action=action), result={}, cubit_dir=Path('.'),
+              installer=SimpleNamespace(preflight=preflight), tier='editable',
+              sys=sys, package=Path('.'), profile_scope=[])
     exec(compile(ast.Module(body=definitions, type_ignores=[]), '<worker-functions>', 'exec'), ns)
     block = next(node for node in tree.body if isinstance(node, ast.Try))
-    start = next(i for i, node in enumerate(block.body) if isinstance(node, ast.If)
-                 and "cfg.get('force_close_cubit')" in ast.unparse(node.test))
-    # Guard ends immediately before the deployment/verification branches.
+    start = 1 + next(i for i, node in enumerate(block.body) if isinstance(node, ast.If)
+                     and ast.unparse(node.test) == 'cubit_dir is None')
+    # Include the actual installation branch. Any pip call is unexpected.
     end = next(i for i in range(start + 1, len(block.body))
                if isinstance(block.body[i], ast.If)
                and ast.unparse(block.body[i].test) == "cfg['action'] == 'deploy'")
-    guard = ast.Module(body=block.body[start:end], type_ignores=[])
+    guard = ast.Module(body=block.body[start:end + 1], type_ignores=[])
     error = None
     try:
         exec(compile(guard, '<worker-guard>', 'exec'), ns)
@@ -313,6 +319,30 @@ def test_worker_preflight_refuses_each_cubit_image(monkeypatch, image):
     _, calls, error = _process_guard(monkeypatch, [image], False)
     assert error and image in error
     assert not any(call[0] == 'taskkill' for call in calls)
+
+
+@pytest.mark.parametrize('action', ['preflight', 'deploy'])
+@pytest.mark.parametrize('force', [False, True])
+def test_running_mcp_launcher_blocks_deployment_without_terminating_processes(monkeypatch, action, force):
+    image = 'MCP-SERVER-CUBIT.EXE'
+    ns, calls, error = _process_guard(monkeypatch, [image, 'cubitx.exe'], force, action=action)
+    assert error and 'mcp-server-cubit.exe is running' in error
+    assert ns['result']['blocking_mcp_launchers'] == [
+        dict(image=image, pid=100, session='Console', user='owner')]
+    assert [call[0] for call in calls] == ['tasklist']
+
+
+def test_done_allows_running_mcp_launcher(monkeypatch):
+    _, calls, error = _process_guard(monkeypatch, ['mcp-server-cubit.exe'], False, action='done')
+    assert error is None
+    assert not any(call[0] == 'taskkill' for call in calls)
+
+
+def test_deploy_rechecks_mcp_launcher_immediately_before_pip(monkeypatch):
+    ns, calls, error = _process_guard(monkeypatch, [], False, action='deploy',
+                                      start_mcp_during_preflight=True)
+    assert error and ns['result']['blocking_mcp_launchers'][0]['pid'] == 200
+    assert all(call[0] == 'tasklist' for call in calls)
 
 
 def test_force_close_targets_exact_cubit_images_and_records_receipt(monkeypatch):
