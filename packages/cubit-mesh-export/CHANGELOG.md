@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.0
+
+- Export conforming TETRA10 meshes directly to COMSOL MPHTXT, with a JSON
+  map of Cubit blocks and sidesets.
+- Add PR coverage for quadratic nodes, shared faces, and named end faces,
+  and a manually dispatched native validation workflow.
+
 ## 2.4.0
 
 - Support only Coreform Cubit 2026.8. Installers, the toolbar registration,

@@ -319,6 +319,7 @@ def _toolbar_expected_files(install_dir):
         "scripts/export_gmsh.py",
         "scripts/export_nastran.py",
         "scripts/export_vtu.py",
+        "scripts/export_comsol.py",
         "scripts/export_jcf.py",
         "scripts/export_femtet.py",
         "scripts/export_meg.py",

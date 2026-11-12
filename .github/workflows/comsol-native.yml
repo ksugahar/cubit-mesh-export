@@ -1,0 +1,24 @@
+name: Cubit to COMSOL native validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comsol-native-validation
+  cancel-in-progress: false
+
+jobs:
+  webcut:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, cubit-comsol-validation]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate direct quadratic Webcut transfer
+        shell: pwsh
+        run: ./validation_test/comsol/run.ps1

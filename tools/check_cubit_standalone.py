@@ -67,6 +67,7 @@ def main():
             expected_launchers = {
                 "scripts/export_femtet.py",
                 "scripts/export_gmsh.py",
+                "scripts/export_comsol.py",
                 "scripts/export_jcf.py",
                 "scripts/export_meg.py",
                 "scripts/export_nastran.py",
