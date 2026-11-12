@@ -185,6 +185,7 @@ FMT_NETGEN = "netgen_vol"
 FMT_GMSH = "gmsh"
 FMT_NASTRAN = "nastran"
 FMT_VTU = "vtu"
+FMT_COMSOL = "comsol"
 FMT_JCF = "jcf"
 FMT_FEMTET = "femtet"
 FMT_MEG = "meg"
@@ -993,6 +994,29 @@ def _run_vtu_export(parent):
     return result
 
 
+def _run_comsol_export(parent):
+    from PySide6.QtWidgets import QInputDialog
+    from cubit_mesh_export.comsol import export_mphtxt
+
+    unit, accepted = QInputDialog.getItem(
+        parent, "COMSOL export", "Cubit model coordinate unit:", ["mm", "m", "cm", "um"], 0, False)
+    if not accepted:
+        return
+    path, _ = QFileDialog.getSaveFileName(
+        parent, "Export COMSOL mesh", "mesh.mphtxt", "COMSOL mesh (*.mphtxt)")
+    if not path:
+        return
+    if not path.lower().endswith(".mphtxt"):
+        path += ".mphtxt"
+    try:
+        result = export_mphtxt(path, meters_per_unit={"m": 1, "cm": 0.01, "mm": 0.001, "um": 1e-6}[unit])
+    except Exception as exc:
+        QMessageBox.warning(parent, "COMSOL export failed", str(exc))
+        return
+    print(f"Export complete: {path}")
+    return result
+
+
 def _run_model_transfer(target, label, parent):
     """Send the current Cubit model through the one installed handler."""
     import cubit as cubit_mod
@@ -1030,6 +1054,8 @@ def launch_export(fmt):
     parent = find_claro()
     if parent is None:
         raise RuntimeError("Cubit main window is not available")
+    if fmt == FMT_COMSOL:
+        return _run_comsol_export(parent)
     if fmt == FMT_JCF:
         return _run_jcf_export(parent)
     if fmt == FMT_VTU:
@@ -1071,6 +1097,8 @@ _MENU_SPECS = (
      "Export mesh to Nastran BDF format (.bdf, order 1-2)"),
     ("VTK (.vtu)", FMT_VTU,
      "Export block elements and sideset faces as ASCII VTK XML (.vtu)"),
+    ("COMSOL (.mphtxt)", FMT_COMSOL,
+     "Export a quadratic tetrahedral mesh for COMSOL"),
     ("JMAG (.jcf)", FMT_JCF,
      "Export a static solver input from named blocks and sidesets (.jcf)"),
     ("Femtet (COM)", FMT_FEMTET,

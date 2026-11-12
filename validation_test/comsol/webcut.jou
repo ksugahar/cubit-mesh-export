@@ -1,0 +1,40 @@
+#!python
+from pathlib import Path
+import os
+import sys
+import cubit
+
+root = Path.cwd()
+sys.path[:0] = [os.environ["COMSOL_CI_EXPORTER_SRC"], os.environ["COMSOL_CI_PYTHON_SITE"]]
+
+def run(command):
+    if not cubit.cmd(command):
+        raise RuntimeError(command)
+
+for command in ('brick x 2 y 1 z 1', 'webcut volume 1 with plane xplane offset 0',
+                'imprint all', 'merge all'):
+    run(command)
+
+volumes = tuple(cubit.get_entities('volume'))
+assert len(volumes) == 2
+groups = {}
+for name, x, adjacency in (('fixed_end', -1, 1), ('webcut_interface', 0, 2), ('loaded_end', 1, 1)):
+    matches = [s for s in cubit.get_entities('surface')
+               if abs(cubit.get_center_point('surface', s)[0] - x) < 1e-10
+               and len(cubit.get_relatives('surface', s, 'volume')) == adjacency]
+    assert len(matches) == 1
+    groups[name] = matches[0]
+    run(f'group "{name}" add surface {matches[0]}')
+
+for command in ('volume all scheme tetmesh', 'volume all size 0.4', 'mesh volume all'):
+    run(command)
+for block, volume in enumerate(volumes, 1):
+    run(f'block {block} add volume {volume}')
+    run(f'block {block} element type tetra10')
+    run(f'block {block} name "volume_{volume}"')
+for sideset, (name, surface) in enumerate(groups.items(), 11):
+    run(f'sideset {sideset} add surface {surface}')
+    run(f'sideset {sideset} name "{name}"')
+
+from cubit_mesh_export.comsol import export_mphtxt
+export_mphtxt(root/"webcut-direct.mphtxt", meters_per_unit=1)

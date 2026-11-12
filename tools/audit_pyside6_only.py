@@ -170,6 +170,16 @@ def check_deployed_panel_source(
     return ("checked", [])
 
 
+def _expected_toolbar_actions() -> list[str]:
+    """Read EXPECTED_ACTIONS from toolbar_probe.py without importing PySide6."""
+    tree = ast.parse((GUI_ROOT / "toolbar_probe.py").read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "EXPECTED_ACTIONS" for t in node.targets):
+            return list(ast.literal_eval(node.value))
+    raise RuntimeError("toolbar_probe.py defines no EXPECTED_ACTIONS")
+
+
 def check_official_toolbar_contract() -> list[str]:
     """Validate the WorkflowToolbar and Claro-owned menu contracts."""
     toolbar_root = GUI_ROOT / "cubit_toolbar"
@@ -186,8 +196,10 @@ def check_official_toolbar_contract() -> list[str]:
     if root.tag != "WorkflowToolbar" or root.attrib.get("name") != "Cubit Mesh Export":
         issues.append("toolbar root must be WorkflowToolbar name='Cubit Mesh Export'")
     buttons = root.findall("WTButton")
-    if len(buttons) != 7:
-        issues.append(f"expected 7 official toolbar buttons, found {len(buttons)}")
+    actions = [action.attrib.get("name") for action in root.findall("WTButton/WPythonScriptAction/WAction")]
+    expected = _expected_toolbar_actions()
+    if len(actions) != len(buttons) or actions != expected:
+        issues.append(f"toolbar actions {actions} differ from toolbar_probe.EXPECTED_ACTIONS {expected}")
 
     for filename in root.findall(".//filename"):
         relative = (filename.text or "").split("@TOOLBAR_INSTALL_DIR@/", 1)[-1]

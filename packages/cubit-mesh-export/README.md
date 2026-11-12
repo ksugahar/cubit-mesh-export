@@ -195,11 +195,15 @@ The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
 bundled PySide6.
 
 The menu lists, in order: Netgen (.vol), Gmsh (.msh), Nastran (.bdf),
-VTK (.vtu), JMAG (.jcf), Femtet (COM) and ELF/MAGIC (.meg). VTK (.vtu) writes
+VTK (.vtu), COMSOL (.mphtxt), JMAG (.jcf), Femtet (COM) and ELF/MAGIC (.meg). VTK (.vtu) writes
 block cells and sideset faces with full-precision coordinates; every volume
 element must belong to a block. Femtet (COM) needs a separately installed
 handler registered in the entry-point group `cubit_mesh_export.model_transfer`;
 without one the menu reports that it is unavailable and does nothing.
+
+COMSOL (.mphtxt) exports a quadratic tetrahedral mesh and a JSON map of blocks
+and sidesets. See the [COMSOL transfer guide](https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/comsol-transfer.md)
+for the direct mesh workflow.
 
 JMAG (.jcf) asks for an analysis settings JSON file, then for the output path,
 and writes a static analysis input from the active mesh. The settings name Cubit
