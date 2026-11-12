@@ -50,3 +50,25 @@ def test_quadratic_webcut_interface():
     cells[1] = ("tet", (*bottom[:6], 15, *bottom[7:]), 9, 0)
     with pytest.raises(ValueError, match="nonconforming quadratic node"):
         encode_mesh(points, cells, *args, meters_per_unit=1)
+
+
+def test_volumes_sharing_a_block_are_refused():
+    points = {
+        1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0), 4: (0, 0, 1), 5: (0, 0, -1),
+        6: (0.5, 0, 0), 7: (0.5, 0.5, 0), 8: (0, 0.5, 0),
+        9: (0, 0, 0.5), 10: (0.5, 0, 0.5), 11: (0, 0.5, 0.5),
+        12: (0, 0, -0.5), 13: (0.5, 0, -0.5), 14: (0, 0.5, -0.5),
+    }
+    cells = [
+        ("tet", (1, 2, 3, 4, 6, 7, 8, 9, 10, 11), 4, 0),
+        ("tet", (1, 3, 2, 5, 8, 7, 6, 12, 14, 13), 4, 0),
+    ]
+    # The webcut surface (1, 2, 3) is a CAD surface inside one block.
+    surface_faces = {
+        face: i for i, face in enumerate(sorted({
+            face for corners in ((1, 2, 3, 4), (1, 2, 3, 5))
+            for face in combinations(corners, 3)
+        }), start=30)
+    }
+    with pytest.raises(ValueError, match="put each volume in its own block"):
+        encode_mesh(points, cells, surface_faces, {4: "both"}, {}, meters_per_unit=1)

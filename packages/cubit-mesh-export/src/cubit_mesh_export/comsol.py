@@ -78,7 +78,10 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
         face for face, owners in facets.items() if len(owners) == 1 or len(set(owners)) == 2
     }
     if set(surface_faces) != exterior_or_interface:
-        raise ValueError("CAD surface mesh does not cover exactly the exterior and inter-block faces")
+        raise ValueError(
+            "CAD surface mesh does not cover exactly the exterior and inter-block faces; "
+            "put each volume in its own block"
+        )
     if set(sides) - exterior_or_interface:
         raise ValueError("sideset contains a face outside the exported boundaries")
     for (a, b, c), nodes_on_face in side_nodes:

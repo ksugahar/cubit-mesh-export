@@ -3,7 +3,7 @@ import com.comsol.model.util.*
 
 before=sort(cell(ModelUtil.tags()));
 assert(isempty(before), 'The dedicated COMSOL server must be empty');
-tag='codex_cubit_direct_webcut_20261112';
+tag='cubit_direct_webcut';
 assert(~ismember(tag,before));
 out=struct('status','FAILED','pid',feature('getpid'),'before',{before});
 try
