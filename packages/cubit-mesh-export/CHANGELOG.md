@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.1
+
+- Export first- or second-order tetrahedral meshes to COMSOL MPHTXT.
+- Select the Femtet mesh order in the Export menu with a registered COM transfer handler that accepts the order.
+
 ## 2.5.0
 
 - Export conforming TETRA10 meshes directly to COMSOL MPHTXT, with a JSON
