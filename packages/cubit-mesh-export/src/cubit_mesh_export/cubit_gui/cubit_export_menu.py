@@ -1036,7 +1036,7 @@ def _run_model_transfer(target, label, parent):
         QMessageBox.warning(parent, f"{label} unavailable", str(exc))
         return
     order, accepted = QInputDialog.getItem(
-        parent, label, "Femtet mesh element order:", ["1", "2"], 0, False)
+        parent, label, "Mesh element order:", ["1", "2"], 0, False)
     if not accepted:
         return
     answer = QMessageBox.question(

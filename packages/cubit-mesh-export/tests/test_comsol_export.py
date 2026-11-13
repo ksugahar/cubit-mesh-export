@@ -90,3 +90,12 @@ def test_linear_webcut_preserves_interface_and_sideset():
     assert interface["adjacent_blocks"] == [4, 9]
     with pytest.raises(ValueError, match="order 2 requires TETRA10"):
         encode_mesh(*args, meters_per_unit=1, order=2)
+
+    quadratic_side = [*cells[:2], ("tri", (1, 2, 3, 4, 5, 1), 21, 1)]
+    with pytest.raises(ValueError, match="Order 1 requires linear sidesets"):
+        encode_mesh(points, quadratic_side, *args[2:], meters_per_unit=1, order=1)
+
+    quadratic_block = [("tet", tuple(range(1, 11)), 4, 0), *cells[1:]]
+    quadratic_points = points | {i: (0, 0, 0) for i in range(6, 11)}
+    with pytest.raises(ValueError, match="order 1 requires TETRA4"):
+        encode_mesh(quadratic_points, quadratic_block, *args[2:], meters_per_unit=1, order=1)
