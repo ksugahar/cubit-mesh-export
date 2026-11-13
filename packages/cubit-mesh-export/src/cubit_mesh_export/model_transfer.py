@@ -3,7 +3,8 @@
 This package ships no transfer implementation. A handler package registers one entry point
 in the group ``cubit_mesh_export.model_transfer``; the entry point name is the target (for
 example ``femtet``) and its object is a callable ``transfer(cubit) -> dict`` that does the
-whole transfer and returns a JSON-serializable summary. Installing that package is the opt-in.
+whole transfer and returns a JSON-serializable summary. Handlers supporting
+explicit meshing accept a keyword-only element_order (1 or 2). Installing that package is the opt-in.
 
 Without exactly one handler for a target, :func:`transfer` raises
 :class:`TransferUnavailable` and nothing else is tried.
@@ -43,9 +44,13 @@ def describe(target: str) -> str:
     return _the_handler(target).value
 
 
-def transfer(target: str, cubit) -> dict:
+def transfer(target: str, cubit, *, element_order=None) -> dict:
     """Run the one installed handler for ``target`` on ``cubit`` and return its summary."""
-    result = _the_handler(target).load()(cubit)
+    if element_order is not None and (type(element_order) is not int or element_order not in (1, 2)):
+        raise ValueError("Element order must be 1 or 2")
+    handler = _the_handler(target).load()
+    options = {} if element_order is None else {"element_order": element_order}
+    result = handler(cubit, **options)
     if not isinstance(result, dict):
         raise TypeError(f"the {target!r} handler returned {type(result).__name__}, expected dict")
     json.dumps(result)   # the summary must be JSON; a TypeError here names the bad value

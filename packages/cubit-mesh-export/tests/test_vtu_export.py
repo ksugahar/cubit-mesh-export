@@ -253,6 +253,8 @@ def test_transfer_runs_the_one_handler(mods, monkeypatch):
     monkeypatch.setattr(mt, "entry_points", lambda group: eps if group == mt.GROUP else [])
     assert mt.describe("femtet") == "lab:run"
     assert mt.transfer("femtet", cubit) == {"saved": True, "same": True}
+    eps[0]._obj = lambda c, *, element_order: {"order": element_order}
+    assert mt.transfer("femtet", cubit, element_order=2) == {"order": 2}
     eps[0]._obj = lambda c: "done"
     with pytest.raises(TypeError, match="expected dict"):
         mt.transfer("femtet", cubit)

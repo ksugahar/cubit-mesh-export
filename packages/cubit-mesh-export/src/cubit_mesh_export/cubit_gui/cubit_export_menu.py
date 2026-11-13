@@ -1002,6 +1002,11 @@ def _run_comsol_export(parent):
         parent, "COMSOL export", "Cubit model coordinate unit:", ["mm", "m", "cm", "um"], 0, False)
     if not accepted:
         return
+    order, accepted = QInputDialog.getItem(
+        parent, "COMSOL export", "Element order of the Cubit mesh:",
+        ["1 (TETRA4)", "2 (TETRA10)"], 1, False)
+    if not accepted:
+        return
     path, _ = QFileDialog.getSaveFileName(
         parent, "Export COMSOL mesh", "mesh.mphtxt", "COMSOL mesh (*.mphtxt)")
     if not path:
@@ -1009,7 +1014,9 @@ def _run_comsol_export(parent):
     if not path.lower().endswith(".mphtxt"):
         path += ".mphtxt"
     try:
-        result = export_mphtxt(path, meters_per_unit={"m": 1, "cm": 0.01, "mm": 0.001, "um": 1e-6}[unit])
+        result = export_mphtxt(
+            path, meters_per_unit={"m": 1, "cm": 0.01, "mm": 0.001, "um": 1e-6}[unit],
+            order=int(order[0]))
     except Exception as exc:
         QMessageBox.warning(parent, "COMSOL export failed", str(exc))
         return
@@ -1021,18 +1028,23 @@ def _run_model_transfer(target, label, parent):
     """Send the current Cubit model through the one installed handler."""
     import cubit as cubit_mod
     from cubit_mesh_export import model_transfer
+    from PySide6.QtWidgets import QInputDialog
 
     try:
         handler = model_transfer.describe(target)
     except model_transfer.TransferUnavailable as exc:
         QMessageBox.warning(parent, f"{label} unavailable", str(exc))
         return
+    order, accepted = QInputDialog.getItem(
+        parent, label, "Mesh element order:", ["1", "2"], 0, False)
+    if not accepted:
+        return
     answer = QMessageBox.question(
-        parent, label, f"Send the current model with {handler}?")
+        parent, label, f"Send the current model with {handler} and generate an order {order} mesh?")
     if answer != QMessageBox.Yes:
         return
     try:
-        result = model_transfer.transfer(target, cubit_mod)
+        result = model_transfer.transfer(target, cubit_mod, element_order=int(order))
     except Exception as exc:
         QMessageBox.warning(parent, f"{label} failed", str(exc))
         return

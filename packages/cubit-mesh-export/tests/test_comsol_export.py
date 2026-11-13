@@ -72,3 +72,30 @@ def test_volumes_sharing_a_block_are_refused():
     }
     with pytest.raises(ValueError, match="put each volume in its own block"):
         encode_mesh(points, cells, surface_faces, {4: "both"}, {}, meters_per_unit=1)
+
+
+def test_linear_webcut_preserves_interface_and_sideset():
+    points = {1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0),
+              4: (0, 0, 1), 5: (0, 0, -1)}
+    cells = [("tet", (1, 2, 3, 4), 4, 0), ("tet", (1, 3, 2, 5), 9, 0),
+             ("tri", (1, 2, 3), 21, 1)]
+    faces = {face: i for i, face in enumerate(sorted(
+        set(combinations((1, 2, 3, 4), 3)) | set(combinations((1, 2, 3, 5), 3))))}
+    args = (points, cells, faces, {4: "top", 9: "bottom"}, {21: "interface"})
+    text, manifest = encode_mesh(*args, meters_per_unit=1, order=1)
+    assert "\n3 tet # type name\n4\n2\n# Elements\n0 1 2 3\n0 2 1 4\n" in text
+    assert "\n3 tri # type name\n3\n7\n" in text
+    index = manifest["sidesets"][0]["file_indices"][0]
+    interface = next(row for row in manifest["surfaces"] if row["file_index"] == index)
+    assert interface["adjacent_blocks"] == [4, 9]
+    with pytest.raises(ValueError, match="order 2 requires TETRA10"):
+        encode_mesh(*args, meters_per_unit=1, order=2)
+
+    quadratic_side = [*cells[:2], ("tri", (1, 2, 3, 4, 5, 1), 21, 1)]
+    with pytest.raises(ValueError, match="Order 1 requires linear sidesets"):
+        encode_mesh(points, quadratic_side, *args[2:], meters_per_unit=1, order=1)
+
+    quadratic_block = [("tet", tuple(range(1, 11)), 4, 0), *cells[1:]]
+    quadratic_points = points | {i: (0, 0, 0) for i in range(6, 11)}
+    with pytest.raises(ValueError, match="order 1 requires TETRA4"):
+        encode_mesh(quadratic_points, quadratic_block, *args[2:], meters_per_unit=1, order=1)
