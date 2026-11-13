@@ -1,24 +1,23 @@
 # Transfer a Webcut model from Cubit to COMSOL
 
-Use MPHTXT to analyze a conforming TETRA10 mesh from Cubit in COMSOL.
+Use MPHTXT to analyze a conforming TETRA4 or TETRA10 mesh from Cubit in COMSOL.
 The workflow begins with COMSOL’s mesh import.
 
-## Quadratic mesh
+## Mesh order
 
 In Cubit, put the tetrahedra in volume blocks and set each block's element
-type to TETRA10. Use a separate block for each region to preserve its interface.
+type to TETRA4 for order 1 or TETRA10 for order 2. Use a separate block for each region to preserve its interface.
 Create triangular sidesets for the boundaries you want to select in COMSOL.
-Choose **Export → COMSOL (.mphtxt)** and specify the Cubit model length unit,
+Choose **Export → COMSOL (.mphtxt)** and select the Cubit coordinate unit and mesh order,
 or call this from Cubit's Python:
 
 ```python
 from cubit_mesh_export.comsol import export_mphtxt
 
-export_mphtxt("model.mphtxt", meters_per_unit=0.001)  # Cubit coordinates in mm
+export_mphtxt("model.mphtxt", meters_per_unit=0.001, order=2)  # Cubit coordinates in mm
 ```
 
-The exporter writes coordinates in metres, preserves the existing quadratic
-nodes and writes a JSON file that maps Cubit blocks and sidesets to geometric
+The exporter writes coordinates in metres, preserves the nodes of the selected order and writes a JSON file that maps Cubit blocks and sidesets to geometric
 entity indices in the MPHTXT. In an empty 3D component, import the file in a
 Mesh sequence using an Import feature. The mesh route uses COMSOL's native mesh
 format. See [COMSOL's supported formats](https://www.comsol.com/support/learning-center/article/supported-file-formats-76161).

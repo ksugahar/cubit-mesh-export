@@ -1,4 +1,4 @@
-"""Export a conforming Cubit TETRA10 mesh as COMSOL ASCII MPHTXT."""
+"""Export a conforming Cubit tetrahedral mesh as COMSOL ASCII MPHTXT."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -20,14 +20,17 @@ def _edge(a, b):
     return tuple(sorted((a, b)))
 
 
-def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, meters_per_unit):
-    """Return MPHTXT and an index manifest, preserving original quadratic nodes.
+def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, meters_per_unit, order=2):
+    """Return MPHTXT and an index manifest, preserving the selected element order.
 
     Each geometric surface is keyed by its Cubit ID. The manifest describes
     indices in the file. A consumer must verify the imported COMSOL selections.
     """
     if not math.isfinite(meters_per_unit) or meters_per_unit <= 0:
         raise ValueError("meters_per_unit must be positive and finite")
+    if type(order) is not int or order not in (1, 2):
+        raise ValueError("MPHTXT element order must be 1 or 2")
+    width = 4 if order == 1 else 10
     node_ids = sorted(nodes)
     indices = {node: i for i, node in enumerate(node_ids)}
     points = [tuple(float(x) * meters_per_unit for x in nodes[node]) for node in node_ids]
@@ -50,10 +53,12 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
             face = tuple(sorted(conn[:3]))
             sides[face].add(group)
             if len(conn) == 6:
+                if order == 1:
+                    raise ValueError("Order 1 requires linear sidesets")
                 side_nodes.append((face, set(conn[3:])))
             continue
-        if category != vtu.vw.GROUP_BLOCK or kind != "tet" or len(set(conn)) != 10 or len(conn) != 10:
-            raise ValueError("MPHTXT supports TETRA10 blocks and triangular sidesets only")
+        if category != vtu.vw.GROUP_BLOCK or kind != "tet" or len(set(conn)) != width or len(conn) != width:
+            raise ValueError(f"MPHTXT order {order} requires TETRA{width} blocks and triangular sidesets")
         corners = conn[:4]
         volume_key = tuple(sorted(corners))
         if volume_key in volume_keys:
@@ -65,7 +70,9 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
             if (midpoints.setdefault(edge, midpoint) != midpoint
                     or edge_of_midpoint.setdefault(midpoint, edge) != edge):
                 raise ValueError(f"nonconforming quadratic node on edge {edge}")
-        ordered = [*corners, *(midpoints[_edge(corners[a], corners[b])] for a, b in _COMSOL_EDGES)]
+        ordered = corners
+        if order == 2:
+            ordered = [*corners, *(midpoints[_edge(corners[a], corners[b])] for a, b in _COMSOL_EDGES)]
         tetrahedra.append([indices[node] for node in ordered])
         domains.append(group)
         for face in _FACES:
@@ -97,7 +104,10 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
         key = (surface, tuple(sorted(facets[face])), tuple(sorted(sides.get(face, ()))))
         label = surface_ids.setdefault(key, len(surface_ids))
         a, b, c = face
-        triangles.append([indices[node] for node in (a, b, c, midpoints[a, b], midpoints[a, c], midpoints[b, c])])
+        triangle = (a, b, c)
+        if order == 2:
+            triangle += (midpoints[a, b], midpoints[a, c], midpoints[b, c])
+        triangles.append([indices[node] for node in triangle])
         labels.append(label)
         for sideset in key[2]:
             selections[sideset].add(label)
@@ -109,10 +119,10 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
     lines.extend(" ".join(format(value, ".17g") for value in point) for point in points)
     lines.append("2 # number of element types")
     for kind, width, elements, entities in (
-        ("tet2", 10, tetrahedra, [domain_ids[block] for block in domains]),
-        ("tri2", 6, triangles, labels),
+        ("tet" if order == 1 else "tet2", width, tetrahedra, [domain_ids[block] for block in domains]),
+        ("tri" if order == 1 else "tri2", 3 if order == 1 else 6, triangles, labels),
     ):
-        lines.extend((f"4 {kind} # type name", str(width), str(len(elements)), "# Elements"))
+        lines.extend((f"{len(kind)} {kind} # type name", str(width), str(len(elements)), "# Elements"))
         lines.extend(" ".join(map(str, row)) for row in elements)
         lines.extend((str(len(elements)), "# Geometric entity indices"))
         lines.extend(map(str, entities))
@@ -131,7 +141,7 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
     return text, manifest
 
 
-def export_mphtxt(path, *, meters_per_unit):
+def export_mphtxt(path, *, meters_per_unit, order=2):
     """Write the active Cubit mesh and a JSON index manifest to new files."""
     import cubit
 
@@ -152,7 +162,7 @@ def export_mphtxt(path, *, meters_per_unit):
         nodes, cells, surface_faces,
         {block: cubit.get_exodus_entity_name("block", block) for block in cubit.get_block_id_list()},
         {side: cubit.get_exodus_entity_name("sideset", side) for side in cubit.get_sideset_id_list()},
-        meters_per_unit=meters_per_unit,
+        meters_per_unit=meters_per_unit, order=order,
     )
     with sidecar.open("x", encoding="utf-8", newline="\n") as stream:
         stream.write(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
