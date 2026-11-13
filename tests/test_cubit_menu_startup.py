@@ -228,3 +228,35 @@ def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
         sys.path[:] = original_path
 
     assert calls == ["netgen_vol", "gmsh", "nastran", "vtu", "comsol", "jcf", "femtet", "meg"]
+
+
+@pytest.mark.parametrize("installed_copy", [False, True])
+def test_femtet_dispatch_without_importing_exporter_package(tmp_path, monkeypatch, installed_copy):
+    """Guards: embedded Cubit reaches the handler check from either menu layout."""
+    from unittest.mock import Mock
+
+    gui = tmp_path / "scripts"
+    gui.mkdir()
+    menu = gui / "cubit_export_menu.py"
+    dispatcher = EXPORT_MENU.parent.parent / "model_transfer.py"
+    location = gui if installed_copy else tmp_path
+    (location / dispatcher.name).write_bytes(dispatcher.read_bytes())
+
+    source = EXPORT_MENU.read_text(encoding="utf-8")
+    names = {"_load_model_transfer", "_run_model_transfer"}
+    tree = ast.parse(source)
+    functions = [node for node in tree.body
+                 if isinstance(node, ast.FunctionDef) and node.name in names]
+    box = Mock()
+    namespace = {"__file__": str(menu), "os": os, "QMessageBox": box}
+    exec(compile(ast.Module(functions, type_ignores=[]), str(menu), "exec"), namespace)
+
+    widgets = types.SimpleNamespace(QInputDialog=Mock())
+    monkeypatch.setitem(sys.modules, "PySide6.QtWidgets", widgets)
+    monkeypatch.setitem(sys.modules, "cubit", types.ModuleType("cubit"))
+    monkeypatch.setitem(sys.modules, "cubit_mesh_export", None)
+    monkeypatch.setattr("importlib.metadata.entry_points", lambda **kwargs: [])
+    assert namespace["_run_model_transfer"]("femtet", "Femtet (COM)", None) is None
+    assert box.warning.call_args.args[1] == "Femtet (COM) unavailable"
+    assert "No handler is installed" in box.warning.call_args.args[2]
+    widgets.QInputDialog.getItem.assert_not_called()

@@ -1024,10 +1024,26 @@ def _run_comsol_export(parent):
     return result
 
 
+def _load_model_transfer():
+    """Load the stdlib-only dispatcher inside Cubit's embedded Python."""
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    menu_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(menu_dir, "model_transfer.py")
+    if not os.path.isfile(path):
+        path = os.path.join(os.path.dirname(menu_dir), "model_transfer.py")
+    spec = spec_from_file_location("_cubit_export_model_transfer", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load the model transfer dispatcher: {path}")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _run_model_transfer(target, label, parent):
     """Send the current Cubit model through the one installed handler."""
     import cubit as cubit_mod
-    from cubit_mesh_export import model_transfer
+    model_transfer = _load_model_transfer()
     from PySide6.QtWidgets import QInputDialog
 
     try:
