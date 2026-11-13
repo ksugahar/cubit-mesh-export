@@ -476,15 +476,17 @@ class TestModelTransferRunner(unittest.TestCase):
         calls, shown = [], []
         mt = types.SimpleNamespace(
             TransferUnavailable=self.Unavailable, describe=describe,
-            transfer=lambda target, cubit: calls.append((target, cubit)) or {"saved": True})
+            transfer=lambda target, cubit, *, element_order: calls.append(
+                (target, cubit, element_order)) or {"saved": True})
         box = MagicMock()
         box.Yes, box.No = "yes", "no"
         box.question.return_value = answer
         box.warning.side_effect = lambda *a: shown.append(("warning",) + a[1:])
         box.information.side_effect = lambda *a: shown.append(("information",) + a[1:])
         fake_cubit = types.ModuleType("cubit")
-        with patch.dict(sys.modules, {"cubit": fake_cubit, "cubit_mesh_export":
-                                      types.SimpleNamespace(model_transfer=mt)}), \
+        with patch.dict(sys.modules, {"cubit": fake_cubit}), \
+                patch.object(rem, "_load_model_transfer", return_value=mt), \
+                patch("PySide6.QtWidgets.QInputDialog.getItem", return_value=("2", True)), \
                 patch.object(rem, "QMessageBox", box), \
                 patch.object(rem, "find_claro", lambda: "claro"), \
                 patch.object(rem, "_run_generic_export", side_effect=AssertionError("generic")):
@@ -506,7 +508,7 @@ class TestModelTransferRunner(unittest.TestCase):
         self.assertEqual((result, calls, shown), (None, [], []))
         result, calls, shown, box, fake_cubit = self._run(lambda target: "lab:run", answer="yes")
         self.assertEqual(result, {"saved": True})
-        self.assertEqual(calls, [("femtet", fake_cubit)])
+        self.assertEqual(calls, [("femtet", fake_cubit, 2)])
         self.assertIn("lab:run", box.question.call_args[0][2])
         self.assertEqual(shown[0][:2], ("information", "Femtet (COM)"))
 
