@@ -129,6 +129,15 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
         for sideset in key[2]:
             selections[sideset].add(label)
 
+    # One pass over the entities; triangle counts come from the face loop above.
+    triangles_per_entity = defaultdict(int)
+    for label in labels:
+        triangles_per_entity[label] += 1
+    overlap_entities = defaultdict(list)
+    for (_surface, _owners, groups), index in surface_ids.items():
+        if len(groups) > 1:
+            overlap_entities[groups].append(index)
+
     domain_ids = {block: i for i, block in enumerate(sorted(blocks), start=1)}
     lines = ["0 1", "1", "# Tags", "5 mesh1", "1", "# Types", "3 obj",
              "0 0 1", "4 Mesh", "8", "3", "0", str(len(points)),
@@ -157,11 +166,9 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
         # Nothing is dropped or merged silently: a face in several sidesets gets its own
         # geometric entity per combination (listed here); a sideset with no exported
         # triangle is reported instead of vanishing.
-        "overlaps": [{"sideset_ids": list(groups),
-                      "file_indices": sorted(index for (_s, _o, g), index in surface_ids.items() if g == groups),
-                      "triangles": sum(1 for label in labels if label in {
-                          index for (_s, _o, g), index in surface_ids.items() if g == groups})}
-                     for groups in sorted({key[2] for key in surface_ids if len(key[2]) > 1})],
+        "overlaps": [{"sideset_ids": list(groups), "file_indices": sorted(indices),
+                      "triangles": sum(triangles_per_entity[index] for index in indices)}
+                     for groups, indices in sorted(overlap_entities.items())],
         "unexported_sidesets": [{"cubit_id": group, "name": sideset_names[group]}
                                 for group in sorted(set(sideset_names) - set(selections))],
     }
