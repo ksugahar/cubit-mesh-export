@@ -20,6 +20,19 @@ def _edge(a, b):
     return tuple(sorted((a, b)))
 
 
+def _check_names(kind, names):
+    """COMSOL selections are found by name, so each name must be present and unique."""
+    blank = sorted(i for i, name in names.items() if not str(name or "").strip())
+    if blank:
+        raise ValueError(f"Cubit {kind}s {blank} have no name")
+    seen = defaultdict(list)
+    for i, name in names.items():
+        seen[name].append(i)
+    repeated = {name: sorted(ids) for name, ids in seen.items() if len(ids) > 1}
+    if repeated:
+        raise ValueError(f"Cubit {kind} names are not unique: {repeated}")
+
+
 def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, meters_per_unit, order=2):
     """Return MPHTXT and an index manifest, preserving the selected element order.
 
@@ -28,6 +41,8 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
     """
     if not math.isfinite(meters_per_unit) or meters_per_unit <= 0:
         raise ValueError("meters_per_unit must be positive and finite")
+    _check_names("block", block_names)
+    _check_names("sideset", sideset_names)
     if type(order) is not int or order not in (1, 2):
         raise ValueError("MPHTXT element order must be 1 or 2")
     width = 4 if order == 1 else 10
@@ -51,6 +66,8 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
             raise ValueError("connectivity references an absent node")
         if category == vtu.vw.GROUP_SIDESET and kind == "tri" and len(conn) in (3, 6):
             face = tuple(sorted(conn[:3]))
+            if group in sides[face]:
+                raise ValueError(f"sideset {group} lists face {face} twice")
             sides[face].add(group)
             if len(conn) == 6:
                 if order == 1:
@@ -112,6 +129,15 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
         for sideset in key[2]:
             selections[sideset].add(label)
 
+    # One pass over the entities; triangle counts come from the face loop above.
+    triangles_per_entity = defaultdict(int)
+    for label in labels:
+        triangles_per_entity[label] += 1
+    overlap_entities = defaultdict(list)
+    for (_surface, _owners, groups), index in surface_ids.items():
+        if len(groups) > 1:
+            overlap_entities[groups].append(index)
+
     domain_ids = {block: i for i, block in enumerate(sorted(blocks), start=1)}
     lines = ["0 1", "1", "# Tags", "5 mesh1", "1", "# Types", "3 obj",
              "0 0 1", "4 Mesh", "8", "3", "0", str(len(points)),
@@ -137,6 +163,14 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
                      for (surface, owners, groups), index in surface_ids.items()],
         "sidesets": [{"cubit_id": group, "name": sideset_names[group], "file_indices": sorted(ids)}
                      for group, ids in sorted(selections.items())],
+        # Nothing is dropped or merged silently: a face in several sidesets gets its own
+        # geometric entity per combination (listed here); a sideset with no exported
+        # triangle is reported instead of vanishing.
+        "overlaps": [{"sideset_ids": list(groups), "file_indices": sorted(indices),
+                      "triangles": sum(triangles_per_entity[index] for index in indices)}
+                     for groups, indices in sorted(overlap_entities.items())],
+        "unexported_sidesets": [{"cubit_id": group, "name": sideset_names[group]}
+                                for group in sorted(set(sideset_names) - set(selections))],
     }
     return text, manifest
 
@@ -151,7 +185,7 @@ def export_mphtxt(path, *, meters_per_unit, order=2):
     sidecar = target.with_suffix(".mphtxt.json")
     if target.exists() or sidecar.exists():
         raise FileExistsError(f"choose an unused MPHTXT output path: {target}")
-    nodes, cells = vtu.read_active_cells(cubit)
+    nodes, cells = vtu.read_active_cells(cubit, allow_empty_sidesets=True)
     surface_faces = {}
     for surface in cubit.get_entities("surface"):
         for triangle in cubit.get_surface_tris(surface):

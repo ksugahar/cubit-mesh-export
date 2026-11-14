@@ -134,13 +134,33 @@ def settings_to_spec(cubit, settings: dict) -> dict:
     return spec
 
 
+def sideset_report(cubit, settings: dict) -> dict:
+    """Name every sideset the settings leave unused and every face shared by two used sidesets.
+
+    Nothing is dropped or merged silently: an unused sideset is reported, and a face in two
+    roles (for example a coil flow-in face on a symmetry plane) is listed so the user can
+    confirm it is intended. Two symmetry groups on one face are refused by the writer.
+    """
+    used = [c["flowin"]["sideset"] for c in settings.get("coils") or [] if c.get("flowin")]
+    used += list((settings.get("boundaries") or {}).keys())
+    faces = {name: set(_sideset_faces(cubit, name)) for name in sorted(set(used))}
+    unused = [{"cubit_id": int(i), "name": cubit.get_exodus_entity_name("sideset", i)}
+              for i in sorted(cubit.get_sideset_id_list())
+              if cubit.get_exodus_entity_name("sideset", i) not in faces]
+    overlaps = [{"sidesets": [a, b], "faces": len(faces[a] & faces[b])}
+                for i, a in enumerate(sorted(faces)) for b in sorted(faces)[i + 1:]
+                if faces[a] & faces[b]]
+    return {"unused_sidesets": unused, "overlaps": overlaps}
+
+
 def export_jcf(path, settings: dict) -> dict:
     """Write the active Cubit mesh and the named analysis settings to ``path`` (.jcf)."""
     import cubit
 
     spec = settings_to_spec(cubit, settings)
+    report = sideset_report(cubit, settings)
     mesh = read_active_mesh(cubit, spec["unit"])
-    return jw.write_jcf(mesh, path, spec)
+    return {**jw.write_jcf(mesh, path, spec), **report}
 
 
 def read_active_mesh(cubit, unit):

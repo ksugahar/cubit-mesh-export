@@ -190,3 +190,35 @@ def test_settings_fail_loudly(mods, settings, match):
     base = {"material_library": LIB, "block_materials": {"magnet": "pm", "air": "air"}}
     with pytest.raises(ValueError, match=match):
         jm.settings_to_spec(cb, {**base, **settings})
+
+
+class OverlapCubit(FakeCubit):
+    """Sideset tris carry global ids so two sidesets can share a face."""
+
+    def __init__(self, sidesets):
+        super().__init__({}, sidesets)
+        self.tris = {}
+        for sid, (_name, faces) in sidesets.items():
+            for face in faces:
+                self.tris.setdefault(face, len(self.tris))
+
+    def get_sideset_tris(self, sid):
+        return [self.tris[face] for face in self.sidesets[sid][1]]
+
+    def get_expanded_connectivity(self, kind, i):
+        return next(face for face, tri in self.tris.items() if tri == i)
+
+
+def test_sideset_report_names_unused_sidesets_and_shared_faces(mods):
+    _, jm = mods
+    cb = OverlapCubit({7: ("sym", [(1, 2, 3), (2, 3, 4)]), 8: ("cut", [(2, 3, 4)]),
+                       9: ("spare", [(5, 6, 7)])})
+    settings = {"boundaries": {"sym": "symmetry"},
+                "coils": [{"blocks": ["c"], "current": 1, "flowin": {"sideset": "cut", "normal": [0, 0, 1]}}]}
+    assert jm.sideset_report(cb, settings) == {
+        "unused_sidesets": [{"cubit_id": 9, "name": "spare"}],
+        "overlaps": [{"sidesets": ["cut", "sym"], "faces": 1}]}
+    unused = jm.sideset_report(OverlapCubit({7: ("sym", [(1, 2, 3)]), 8: ("", [(2, 3, 4)]),
+                                             9: ("", [(5, 6, 7)])}), {})["unused_sidesets"]
+    assert unused == [{"cubit_id": 7, "name": "sym"}, {"cubit_id": 8, "name": ""},
+                      {"cubit_id": 9, "name": ""}]   # blank or repeated names stay distinct
