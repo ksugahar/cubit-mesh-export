@@ -260,3 +260,39 @@ def test_femtet_dispatch_without_importing_exporter_package(tmp_path, monkeypatc
     assert box.warning.call_args.args[1] == "Femtet (COM) unavailable"
     assert "No handler is installed" in box.warning.call_args.args[2]
     widgets.QInputDialog.getItem.assert_not_called()
+
+
+def test_femtet_dispatch_sends_model_without_element_order(tmp_path, monkeypatch):
+    """Guards: the Femtet menu asks no element order and passes none to the handler."""
+    from unittest.mock import Mock
+
+    menu = tmp_path / "cubit_export_menu.py"
+    dispatcher = EXPORT_MENU.parent.parent / "model_transfer.py"
+    (tmp_path / dispatcher.name).write_bytes(dispatcher.read_bytes())
+    source = EXPORT_MENU.read_text(encoding="utf-8")
+    names = {"_load_model_transfer", "_run_model_transfer"}
+    functions = [node for node in ast.parse(source).body
+                 if isinstance(node, ast.FunctionDef) and node.name in names]
+    box = Mock()
+    namespace = {"__file__": str(menu), "os": os, "json": __import__("json"), "QMessageBox": box}
+    exec(compile(ast.Module(functions, type_ignores=[]), str(menu), "exec"), namespace)
+
+    widgets = types.SimpleNamespace(QInputDialog=Mock())
+    monkeypatch.setitem(sys.modules, "PySide6.QtWidgets", widgets)
+    cubit = types.ModuleType("cubit")
+    monkeypatch.setitem(sys.modules, "cubit", cubit)
+    calls = []
+
+    def handler(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"state": "running"}
+
+    entry = types.SimpleNamespace(name="femtet", value="lab:transfer", load=lambda: handler)
+    monkeypatch.setattr("importlib.metadata.entry_points", lambda **kwargs: [entry])
+    assert namespace["_run_model_transfer"]("femtet", "Femtet (COM)", None) == {"state": "running"}
+    assert calls == [((cubit,), {})]
+    widgets.QInputDialog.getItem.assert_not_called()
+    box.question.assert_not_called()
+    box.warning.assert_not_called()
+    assert "order" not in "".join(ast.get_source_segment(source, f) for f in functions
+                                  if f.name == "_run_model_transfer")

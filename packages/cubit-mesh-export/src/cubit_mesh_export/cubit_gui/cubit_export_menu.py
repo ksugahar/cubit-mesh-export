@@ -1072,29 +1072,19 @@ def _run_model_transfer(target, label, parent):
     """Send the current Cubit model through the one installed handler."""
     import cubit as cubit_mod
     model_transfer = _load_model_transfer()
-    from PySide6.QtWidgets import QInputDialog
 
     try:
         handler = model_transfer.describe(target)
     except model_transfer.TransferUnavailable as exc:
         QMessageBox.warning(parent, f"{label} unavailable", str(exc))
         return
-    order, accepted = QInputDialog.getItem(
-        parent, label, "Mesh element order:", ["1", "2"], 0, False)
-    if not accepted:
-        return
-    answer = QMessageBox.question(
-        parent, label, f"Send the current model with {handler} and generate an order {order} mesh?")
-    if answer != QMessageBox.Yes:
-        return
+    del handler  # Checked above; the handler reports its own progress and result.
     try:
-        result = model_transfer.transfer(target, cubit_mod, element_order=int(order))
+        result = model_transfer.transfer(target, cubit_mod)
     except Exception as exc:
         QMessageBox.warning(parent, f"{label} failed", str(exc))
         return
-    text = json.dumps(result, indent=2, ensure_ascii=False)
-    print(f"{label} complete: {text}")
-    QMessageBox.information(parent, label, text)
+    print(f"{label}: {json.dumps(result, ensure_ascii=False)}")
     return result
 
 
