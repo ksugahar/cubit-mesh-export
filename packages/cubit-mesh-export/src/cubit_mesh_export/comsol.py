@@ -20,6 +20,19 @@ def _edge(a, b):
     return tuple(sorted((a, b)))
 
 
+def _check_names(kind, names):
+    """COMSOL selections are found by name, so each name must be present and unique."""
+    blank = sorted(i for i, name in names.items() if not str(name or "").strip())
+    if blank:
+        raise ValueError(f"Cubit {kind}s {blank} have no name")
+    seen = defaultdict(list)
+    for i, name in names.items():
+        seen[name].append(i)
+    repeated = {name: sorted(ids) for name, ids in seen.items() if len(ids) > 1}
+    if repeated:
+        raise ValueError(f"Cubit {kind} names are not unique: {repeated}")
+
+
 def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, meters_per_unit, order=2):
     """Return MPHTXT and an index manifest, preserving the selected element order.
 
@@ -28,6 +41,8 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
     """
     if not math.isfinite(meters_per_unit) or meters_per_unit <= 0:
         raise ValueError("meters_per_unit must be positive and finite")
+    _check_names("block", block_names)
+    _check_names("sideset", sideset_names)
     if type(order) is not int or order not in (1, 2):
         raise ValueError("MPHTXT element order must be 1 or 2")
     width = 4 if order == 1 else 10
@@ -137,6 +152,14 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
                      for (surface, owners, groups), index in surface_ids.items()],
         "sidesets": [{"cubit_id": group, "name": sideset_names[group], "file_indices": sorted(ids)}
                      for group, ids in sorted(selections.items())],
+        # Nothing is dropped or merged silently: a face in several sidesets gets its own
+        # geometric entity per combination (listed here); a sideset with no exported
+        # triangle is reported instead of vanishing.
+        "overlaps": [{"sideset_ids": list(groups), "file_indices": sorted(
+                          index for (_s, _o, g), index in surface_ids.items() if g == groups)}
+                     for groups in sorted({key[2] for key in surface_ids if len(key[2]) > 1})],
+        "unexported_sidesets": [{"cubit_id": group, "name": sideset_names[group]}
+                                for group in sorted(set(sideset_names) - set(selections))],
     }
     return text, manifest
 

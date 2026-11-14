@@ -99,3 +99,35 @@ def test_linear_webcut_preserves_interface_and_sideset():
     quadratic_points = points | {i: (0, 0, 0) for i in range(6, 11)}
     with pytest.raises(ValueError, match="order 1 requires TETRA4"):
         encode_mesh(quadratic_points, quadratic_block, *args[2:], meters_per_unit=1, order=1)
+
+
+def _two_tets():
+    points = {1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0), 4: (0, 0, 1), 5: (0, 0, -1)}
+    cells = [("tet", (1, 2, 3, 4), 4, 0), ("tet", (1, 3, 2, 5), 9, 0),
+             ("tri", (1, 2, 4), 21, 1), ("tri", (1, 2, 4), 22, 1), ("tri", (1, 2, 5), 22, 1)]
+    surface_faces = {face: i for i, face in enumerate(sorted({
+        face for corners in ((1, 2, 3, 4), (1, 2, 3, 5)) for face in combinations(corners, 3)}), start=30)}
+    return points, cells, surface_faces
+
+
+def test_overlaps_and_empty_sidesets_are_reported_not_dropped():
+    points, cells, surface_faces = _two_tets()
+    names = {21: "load", 22: "wall", 23: "unused"}
+    _text, manifest = encode_mesh(points, cells, surface_faces, {4: "top", 9: "bottom"}, names,
+                                  meters_per_unit=1, order=1)
+    overlap, = manifest["overlaps"]
+    assert overlap["sideset_ids"] == [21, 22]
+    index, = overlap["file_indices"]
+    by_name = {row["name"]: row["file_indices"] for row in manifest["sidesets"]}
+    assert index in by_name["load"] and index in by_name["wall"] and len(by_name["wall"]) == 2
+    assert manifest["unexported_sidesets"] == [{"cubit_id": 23, "name": "unused"}]
+
+
+@pytest.mark.parametrize("names, match", [
+    ({21: "load", 22: "load"}, "not unique"),
+    ({21: "load", 22: " "}, "no name"),
+])
+def test_ambiguous_sideset_names_are_refused(names, match):
+    points, cells, surface_faces = _two_tets()
+    with pytest.raises(ValueError, match=match):
+        encode_mesh(points, cells, surface_faces, {4: "top", 9: "bottom"}, names, meters_per_unit=1, order=1)
