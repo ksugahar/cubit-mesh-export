@@ -42,9 +42,20 @@ def test_jcf_menu_shows_unused_and_shared_sidesets(monkeypatch, tmp_path, capsys
 
 def test_comsol_menu_shows_unexported_sidesets_and_nothing_when_clean(monkeypatch):
     menu = _load_menu(monkeypatch)
-    lines = menu.sideset_notes({"unexported_sidesets": [{"cubit_id": 22, "name": "empty"}],
-                                "overlaps": [{"sideset_ids": [21, 22], "file_indices": [4, 5]}]})
-    assert lines == ["Sidesets with no exported face: 'empty' (id 22)",
-                     "Faces shared by sidesets [21, 22]: 2"]
+    report = {"unexported_sidesets": [{"cubit_id": 22, "name": "empty"}],
+              "overlaps": [{"sideset_ids": [21, 23], "file_indices": [4], "triangles": 10}]}
+    fake = types.ModuleType("cubit_mesh_export.comsol")
+    fake.export_mphtxt = lambda path, **kw: report
+    monkeypatch.setitem(sys.modules, "cubit_mesh_export.comsol", fake)
+    answers = iter([("mm", True), ("1 (TETRA4)", True)])
+    dialog = type("QInputDialog", (), {"getItem": staticmethod(lambda *a: next(answers))})
+    monkeypatch.setattr(sys.modules["PySide6.QtWidgets"], "QInputDialog", dialog, raising=False)
+    shown = []
+    _patch_dialogs(monkeypatch, menu, None, "m.mphtxt", shown)
+    assert menu._run_comsol_export(None) == report
+    (title, text), = shown
+    assert title == "COMSOL export: sidesets"
+    assert text.splitlines() == ["Sidesets with no exported face: 'empty' (id 22)",
+                                 "Triangles shared by sidesets [21, 23]: 10 in 1 geometric entities"]
     assert menu.sideset_notes({"overlaps": [], "unexported_sidesets": []}) == []
     assert menu.sideset_notes(None) == []

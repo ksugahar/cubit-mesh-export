@@ -208,6 +208,16 @@ def test_vtu_still_refuses_an_empty_sideset():
         vtu.read_active_cells(_MeshCubit({22: ("empty", [])}))
 
 
+def test_shared_triangles_on_one_surface_count_as_triangles_not_entities():
+    points, cells, surface_faces = _two_tets()
+    cells = cells + [("tri", (1, 3, 4), 21, 1), ("tri", (1, 3, 4), 22, 1)]
+    surface_faces[(1, 3, 4)] = surface_faces[(1, 2, 4)]     # one CAD surface, two triangles
+    _text, manifest = encode_mesh(points, cells, surface_faces, {4: "top", 9: "bottom"},
+                                  {21: "load", 22: "wall"}, meters_per_unit=1, order=1)
+    overlap, = manifest["overlaps"]
+    assert len(overlap["file_indices"]) == 1 and overlap["triangles"] == 2
+
+
 def test_a_face_repeated_in_one_sideset_is_refused_but_two_sidesets_may_share_it():
     points, cells, surface_faces = _two_tets()
     names = {21: "load", 22: "wall"}

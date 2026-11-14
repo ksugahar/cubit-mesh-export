@@ -214,6 +214,7 @@ jobs:
             packages\cubit-mesh-export\tests\test_jcf_export.py `
             packages\cubit-mesh-export\tests\test_vtu_export.py `
             packages\cubit-mesh-export\tests\test_comsol_export.py `
+            packages\cubit-mesh-export\tests\test_export_menu_sideset_report.py `
             packages\cubit-mesh-export\tests\test_smoke_command.py `
             packages\cubit-mesh-export\tests\test_runtime_contract.py `
             packages\cubit-mesh-export\tests\test_native_curver_connectivity.py `

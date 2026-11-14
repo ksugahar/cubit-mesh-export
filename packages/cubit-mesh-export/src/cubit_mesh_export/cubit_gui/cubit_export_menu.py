@@ -953,9 +953,11 @@ def sideset_notes(result):
         if rows:
             lines.append(f"{title}: " + ", ".join(f"{row['name']!r} (id {row['cubit_id']})" for row in rows))
     for row in result.get("overlaps") or []:
-        names = row.get("sidesets") or row.get("sideset_ids")
-        count = row["faces"] if "faces" in row else len(row.get("file_indices", []))
-        lines.append(f"Faces shared by sidesets {names}: {count}")
+        if "faces" in row:            # JCF: mesh faces
+            lines.append(f"Faces shared by sidesets {row['sidesets']}: {row['faces']}")
+        else:                         # MPHTXT: triangles, grouped into geometric entities
+            lines.append(f"Triangles shared by sidesets {row['sideset_ids']}: {row['triangles']} "
+                         f"in {len(row['file_indices'])} geometric entities")
     return lines
 
 

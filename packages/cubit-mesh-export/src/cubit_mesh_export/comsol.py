@@ -157,8 +157,10 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
         # Nothing is dropped or merged silently: a face in several sidesets gets its own
         # geometric entity per combination (listed here); a sideset with no exported
         # triangle is reported instead of vanishing.
-        "overlaps": [{"sideset_ids": list(groups), "file_indices": sorted(
-                          index for (_s, _o, g), index in surface_ids.items() if g == groups)}
+        "overlaps": [{"sideset_ids": list(groups),
+                      "file_indices": sorted(index for (_s, _o, g), index in surface_ids.items() if g == groups),
+                      "triangles": sum(1 for label in labels if label in {
+                          index for (_s, _o, g), index in surface_ids.items() if g == groups})}
                      for groups in sorted({key[2] for key in surface_ids if len(key[2]) > 1})],
         "unexported_sidesets": [{"cubit_id": group, "name": sideset_names[group]}
                                 for group in sorted(set(sideset_names) - set(selections))],
