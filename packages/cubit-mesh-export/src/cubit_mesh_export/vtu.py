@@ -39,8 +39,12 @@ def _members(cubit, owner, owner_id, kind):
     return ids
 
 
-def read_active_cells(cubit):
-    """Return ``(nodes, cells)`` for :func:`vtu_writer.write_vtu` from the active Cubit mesh."""
+def read_active_cells(cubit, *, allow_empty_sidesets=False):
+    """Return ``(nodes, cells)`` for :func:`vtu_writer.write_vtu` from the active Cubit mesh.
+
+    ``allow_empty_sidesets`` lets a caller that reports empty sidesets receive them as
+    groups without faces; non-face members are rejected either way.
+    """
     blocks = list(cubit.get_block_id_list())
     if not blocks:
         raise vw.VtuError(f"the Cubit model has no blocks; {_FREE_MESH}")
@@ -72,7 +76,7 @@ def read_active_cells(cubit):
         raise vw.VtuError(f"the Cubit blocks hold no elements; {_FREE_MESH}")
     for sideset in cubit.get_sideset_id_list():
         faces = [(kind, f) for kind in _FACE_KINDS for f in sorted(_members(cubit, "sideset", sideset, kind))]
-        if not faces:
+        if not faces and not allow_empty_sidesets:
             raise vw.VtuError(f"sideset {sideset} has no tri or quad faces; {_FREE_MESH}")
         cells += [(kind, cubit.get_expanded_connectivity(kind, f), sideset, vw.GROUP_SIDESET)
                   for kind, f in faces]

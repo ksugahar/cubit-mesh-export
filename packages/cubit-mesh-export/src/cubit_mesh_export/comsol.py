@@ -66,6 +66,8 @@ def encode_mesh(nodes, cells, surface_faces, block_names, sideset_names, *, mete
             raise ValueError("connectivity references an absent node")
         if category == vtu.vw.GROUP_SIDESET and kind == "tri" and len(conn) in (3, 6):
             face = tuple(sorted(conn[:3]))
+            if group in sides[face]:
+                raise ValueError(f"sideset {group} lists face {face} twice")
             sides[face].add(group)
             if len(conn) == 6:
                 if order == 1:
@@ -174,7 +176,7 @@ def export_mphtxt(path, *, meters_per_unit, order=2):
     sidecar = target.with_suffix(".mphtxt.json")
     if target.exists() or sidecar.exists():
         raise FileExistsError(f"choose an unused MPHTXT output path: {target}")
-    nodes, cells = vtu.read_active_cells(cubit)
+    nodes, cells = vtu.read_active_cells(cubit, allow_empty_sidesets=True)
     surface_faces = {}
     for surface in cubit.get_entities("surface"):
         for triangle in cubit.get_surface_tris(surface):

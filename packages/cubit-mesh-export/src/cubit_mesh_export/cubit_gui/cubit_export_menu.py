@@ -943,6 +943,30 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
+def sideset_notes(result):
+    """Lines describing reported sidesets; empty when there is nothing to report."""
+    result = result or {}
+    lines = []
+    for key, title in (("unused_sidesets", "Sidesets not used by the settings"),
+                       ("unexported_sidesets", "Sidesets with no exported face")):
+        rows = result.get(key) or []
+        if rows:
+            lines.append(f"{title}: " + ", ".join(f"{row['name']!r} (id {row['cubit_id']})" for row in rows))
+    for row in result.get("overlaps") or []:
+        names = row.get("sidesets") or row.get("sideset_ids")
+        count = row["faces"] if "faces" in row else len(row.get("file_indices", []))
+        lines.append(f"Faces shared by sidesets {names}: {count}")
+    return lines
+
+
+def _report_sidesets(parent, title, result):
+    lines = sideset_notes(result)
+    for line in lines:
+        print(line)
+    if lines:
+        QMessageBox.information(parent, title, chr(10).join(lines))
+
+
 def _run_jcf_export(parent):
     """Read the analysis settings and export the current Cubit mesh."""
     from cubit_mesh_export.jmag import export_jcf
@@ -972,6 +996,7 @@ def _run_jcf_export(parent):
         QMessageBox.warning(parent, "JCF export failed", str(exc))
         return
     print(f"Export complete: {out}")
+    _report_sidesets(parent, "JCF export: sidesets", result)
     return result
 
 
@@ -1021,6 +1046,7 @@ def _run_comsol_export(parent):
         QMessageBox.warning(parent, "COMSOL export failed", str(exc))
         return
     print(f"Export complete: {path}")
+    _report_sidesets(parent, "COMSOL export: sidesets", result)
     return result
 
 

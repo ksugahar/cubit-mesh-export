@@ -143,12 +143,14 @@ def sideset_report(cubit, settings: dict) -> dict:
     """
     used = [c["flowin"]["sideset"] for c in settings.get("coils") or [] if c.get("flowin")]
     used += list((settings.get("boundaries") or {}).keys())
-    names = sorted({cubit.get_exodus_entity_name("sideset", i) for i in cubit.get_sideset_id_list()})
     faces = {name: set(_sideset_faces(cubit, name)) for name in sorted(set(used))}
+    unused = [{"cubit_id": int(i), "name": cubit.get_exodus_entity_name("sideset", i)}
+              for i in sorted(cubit.get_sideset_id_list())
+              if cubit.get_exodus_entity_name("sideset", i) not in faces]
     overlaps = [{"sidesets": [a, b], "faces": len(faces[a] & faces[b])}
                 for i, a in enumerate(sorted(faces)) for b in sorted(faces)[i + 1:]
                 if faces[a] & faces[b]]
-    return {"unused_sidesets": [name for name in names if name not in faces], "overlaps": overlaps}
+    return {"unused_sidesets": unused, "overlaps": overlaps}
 
 
 def export_jcf(path, settings: dict) -> dict:

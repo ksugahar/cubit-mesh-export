@@ -216,5 +216,9 @@ def test_sideset_report_names_unused_sidesets_and_shared_faces(mods):
     settings = {"boundaries": {"sym": "symmetry"},
                 "coils": [{"blocks": ["c"], "current": 1, "flowin": {"sideset": "cut", "normal": [0, 0, 1]}}]}
     assert jm.sideset_report(cb, settings) == {
-        "unused_sidesets": ["spare"], "overlaps": [{"sidesets": ["cut", "sym"], "faces": 1}]}
-    assert jm.sideset_report(cb, {}) == {"unused_sidesets": ["cut", "spare", "sym"], "overlaps": []}
+        "unused_sidesets": [{"cubit_id": 9, "name": "spare"}],
+        "overlaps": [{"sidesets": ["cut", "sym"], "faces": 1}]}
+    unused = jm.sideset_report(OverlapCubit({7: ("sym", [(1, 2, 3)]), 8: ("", [(2, 3, 4)]),
+                                             9: ("", [(5, 6, 7)])}), {})["unused_sidesets"]
+    assert unused == [{"cubit_id": 7, "name": "sym"}, {"cubit_id": 8, "name": ""},
+                      {"cubit_id": 9, "name": ""}]   # blank or repeated names stay distinct

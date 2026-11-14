@@ -131,3 +131,90 @@ def test_ambiguous_sideset_names_are_refused(names, match):
     points, cells, surface_faces = _two_tets()
     with pytest.raises(ValueError, match=match):
         encode_mesh(points, cells, surface_faces, {4: "top", 9: "bottom"}, names, meters_per_unit=1, order=1)
+
+
+class _MeshCubit:
+    """Two linear tets in blocks 4 and 9 for export_mphtxt; anything not modelled is empty."""
+
+    def __init__(self, sidesets, sideset_curves=()):
+        self.coords = {1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0), 4: (0, 0, 1), 5: (0, 0, -1)}
+        self.tets = {1: (1, 2, 3, 4), 2: (1, 3, 2, 5)}
+        faces = sorted({f for t in self.tets.values() for f in combinations(sorted(t), 3)})
+        self.tris = {i: face for i, face in enumerate(faces, start=1)}
+        self.surface_of = {i: 30 + i for i in self.tris}
+        self.sidesets, self.sideset_curves = sidesets, set(sideset_curves)
+
+    def __getattr__(self, name):
+        return lambda *args: []
+
+    def get_block_id_list(self):
+        return [4, 9]
+
+    def get_sideset_id_list(self):
+        return list(self.sidesets)
+
+    def get_block_tets(self, block):
+        return [1] if block == 4 else [2]
+
+    def get_sideset_tris(self, sid):
+        return list(self.sidesets[sid][1])
+
+    def get_sideset_curves(self, sid):
+        return [7] if sid in self.sideset_curves else []
+
+    def get_entities(self, kind):
+        return {"tet": list(self.tets), "surface": list(self.surface_of.values())}.get(kind, [])
+
+    def get_surface_tris(self, surface):
+        return [t for t, s in self.surface_of.items() if s == surface]
+
+    def get_expanded_connectivity(self, kind, i):
+        return self.tets[i] if kind == "tet" else self.tris[i]
+
+    def get_nodal_coordinates(self, node):
+        return self.coords[node]
+
+    def get_exodus_entity_name(self, kind, i):
+        return {4: "top", 9: "bottom"}[i] if kind == "block" else self.sidesets[i][0]
+
+
+def _export(monkeypatch, tmp_path, cubit):
+    import sys
+    from cubit_mesh_export import comsol
+    monkeypatch.setitem(sys.modules, "cubit", cubit)
+    return comsol.export_mphtxt(tmp_path / "m.mphtxt", meters_per_unit=1, order=1)
+
+
+def test_normal_export_reports_an_empty_sideset(monkeypatch, tmp_path):
+    cubit = _MeshCubit({21: ("load", [])})
+    load = next(t for t, face in cubit.tris.items() if face == (1, 2, 4))
+    cubit.sidesets = {21: ("load", [load]), 22: ("empty", [])}
+    manifest = _export(monkeypatch, tmp_path, cubit)
+    assert [row["name"] for row in manifest["sidesets"]] == ["load"]
+    assert manifest["unexported_sidesets"] == [{"cubit_id": 22, "name": "empty"}]
+    assert (tmp_path / "m.mphtxt").is_file()
+
+
+def test_normal_export_still_refuses_non_face_members(monkeypatch, tmp_path):
+    cubit = _MeshCubit({22: ("edge_set", [])}, sideset_curves={22})
+    with pytest.raises(Exception, match="holds curves"):
+        _export(monkeypatch, tmp_path, cubit)
+    assert not (tmp_path / "m.mphtxt").exists()
+
+
+def test_vtu_still_refuses_an_empty_sideset():
+    from cubit_mesh_export import vtu
+    with pytest.raises(Exception, match="no tri or quad faces"):
+        vtu.read_active_cells(_MeshCubit({22: ("empty", [])}))
+
+
+def test_a_face_repeated_in_one_sideset_is_refused_but_two_sidesets_may_share_it():
+    points, cells, surface_faces = _two_tets()
+    names = {21: "load", 22: "wall"}
+    repeated = cells + [("tri", (2, 4, 1), 21, 1)]   # same corners, other order
+    with pytest.raises(ValueError, match="sideset 21 lists face"):
+        encode_mesh(points, repeated, surface_faces, {4: "top", 9: "bottom"}, names,
+                    meters_per_unit=1, order=1)
+    _text, manifest = encode_mesh(points, cells, surface_faces, {4: "top", 9: "bottom"}, names,
+                                  meters_per_unit=1, order=1)
+    assert manifest["overlaps"][0]["sideset_ids"] == [21, 22]
