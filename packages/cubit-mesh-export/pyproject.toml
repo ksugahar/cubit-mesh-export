@@ -41,7 +41,7 @@ sculpt = ["netCDF4"]
 youtube = ["youtube-transcript-api"]
 
 [project.scripts]
-mcp-server-cubit = "cubit_mesh_export.mcp.server:main"
+cubit-mcp = "cubit_mesh_export.mcp.server:main"
 cubit-plugin-install = "cubit_mesh_export.install:main"
 cubit-smoke-test = "cubit_mesh_export.smoke_test:main"
 cubit-toolbar-smoke-test = "cubit_mesh_export.toolbar_smoke:main"

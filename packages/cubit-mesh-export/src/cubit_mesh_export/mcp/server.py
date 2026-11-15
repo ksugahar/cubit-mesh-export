@@ -7199,11 +7199,11 @@ _validation.install()
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-cubit',
+    server_name='cubit-mcp',
     description='Cubit mesh scripting, hex/tet workflow, export formats',
     subpackage='cubit_mesh_export.mcp',
     related_servers=["build123d"],
-    audit_command="mcp-server-cubit --selftest --audit-repo",
+    audit_command="cubit-mcp --selftest --audit-repo",
 )
 
 
@@ -7365,7 +7365,7 @@ def _setup_mode() -> int:
 	print the non-destructive doctor report without changing license state.
 	Exit 0 when the doctor finds no problems, 1 otherwise."""
 	print("=" * 70)
-	print("mcp-server-cubit --setup")
+	print("cubit-mcp --setup")
 	print("=" * 70)
 	bin_dir = _cs.find_cubit_install()
 	if bin_dir is None:
@@ -7386,7 +7386,7 @@ def _setup_mode() -> int:
 
 
 def main():
-	"""Entry point for mcp-server-cubit command."""
+	"""Entry point for cubit-mcp command."""
 	if '--selftest' in sys.argv[1:]:
 		from cubit_mesh_export.mcp._support.utf8_stdout import use_utf8_stdout
 		use_utf8_stdout()

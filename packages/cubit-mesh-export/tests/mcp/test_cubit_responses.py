@@ -1,4 +1,4 @@
-"""Response regression tests for mcp-server-cubit knowledge tools.
+"""Response regression tests for cubit-mcp knowledge tools.
 
 Covers every advertised ``get_*`` knowledge function in the cubit MCP
 server package and asserts:
