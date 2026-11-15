@@ -288,7 +288,8 @@ def _process_guard(monkeypatch, images, force, fail_pid=None, action='preflight'
     monkeypatch.setattr(subprocess, 'run', fake_run)
     def preflight(*args, **kwargs):
         if start_mcp_during_preflight:
-            active.append(('cubit-mcp.exe', 200))
+            image = start_mcp_during_preflight
+            active.append((image if isinstance(image, str) else 'cubit-mcp.exe', 200))
         return True, []
     tree = ast.parse(dual.WORKER)
     definitions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
@@ -326,9 +327,19 @@ def test_worker_preflight_refuses_each_cubit_image(monkeypatch, image):
 def test_running_mcp_launcher_blocks_deployment_without_terminating_processes(monkeypatch, action, force):
     image = 'CUBIT-MCP.EXE'
     ns, calls, error = _process_guard(monkeypatch, [image, 'cubitx.exe'], force, action=action)
-    assert error and 'cubit-mcp.exe is running' in error
+    assert error and 'cubit-mcp.exe' in error and 'is running' in error
     assert ns['result']['blocking_mcp_launchers'] == [
         dict(image=image, pid=100, session='Console', user='owner')]
+    assert [call[0] for call in calls] == ['tasklist']
+
+
+@pytest.mark.parametrize('action', ['preflight', 'deploy'])
+def test_running_previous_launcher_name_blocks_deployment(monkeypatch, action):
+    """Guards: upgrading from a release whose launcher was mcp-server-cubit.exe while it still runs."""
+    ns, calls, error = _process_guard(monkeypatch, ['mcp-server-cubit.exe'], False, action=action)
+    assert error and 'mcp-server-cubit.exe' in error, error
+    assert ns['result']['blocking_mcp_launchers'] == [
+        dict(image='mcp-server-cubit.exe', pid=100, session='Console', user='owner')]
     assert [call[0] for call in calls] == ['tasklist']
 
 
@@ -338,9 +349,10 @@ def test_done_allows_running_mcp_launcher(monkeypatch):
     assert not any(call[0] == 'taskkill' for call in calls)
 
 
-def test_deploy_rechecks_mcp_launcher_immediately_before_pip(monkeypatch):
+@pytest.mark.parametrize('image', ['cubit-mcp.exe', 'mcp-server-cubit.exe'])
+def test_deploy_rechecks_mcp_launcher_immediately_before_pip(monkeypatch, image):
     ns, calls, error = _process_guard(monkeypatch, [], False, action='deploy',
-                                      start_mcp_during_preflight=True)
+                                      start_mcp_during_preflight=image)
     assert error and ns['result']['blocking_mcp_launchers'][0]['pid'] == 200
     assert all(call[0] == 'tasklist' for call in calls)
 
