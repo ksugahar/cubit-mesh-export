@@ -102,14 +102,11 @@ def running_cubit_processes(images=CUBIT_PROCESS_IMAGES):
 
 
 def require_idle_mcp_launcher():
-    # The installed release may still run its launcher under the previous name; either one can lock
-    # the file pip must replace. The old name is checked only here, never offered as a command.
-    images = ('cubit-mcp.exe', 'mcp-server-cubit.exe')
-    running = running_cubit_processes(images)
+    running = running_cubit_processes(('cubit-mcp.exe',))
     if running:
         result['blocking_mcp_launchers'] = running
         raise RuntimeError(
-            ' or '.join(images) + ' is running and can lock the pip launcher; '
+            'cubit-mcp.exe is running and can lock the pip launcher; '
             'ask its owners to stop their servers before deploying: ' + str(running))
 
 
