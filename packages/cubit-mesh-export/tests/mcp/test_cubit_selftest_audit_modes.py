@@ -40,8 +40,8 @@ def test_mesh_status_tools_expose_selftest_and_audit_commands():
         cubit_server.mcp._tool_manager._tools["cubit_status"].fn()
     )
 
-    assert cubit["selftest_command"] == "mcp-server-cubit --selftest"
-    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-repo"
+    assert cubit["selftest_command"] == "cubit-mcp --selftest"
+    assert cubit["audit_command"] == "cubit-mcp --selftest --audit-repo"
     assert "cubit_status" in cubit["tools"]
 
 

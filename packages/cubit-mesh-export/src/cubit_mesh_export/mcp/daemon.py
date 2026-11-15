@@ -6,7 +6,7 @@ The compiled `cubit` binding must use that installation's Python ABI.
 
 Role in the lab stack:
     LLM client
-        → mcp-server-cubit (Python 3.12)
+        → cubit-mcp (Python 3.12)
             → THIS DAEMON (Cubit Python, subprocess)
                 → cubit.cmd(...) in batch/nographics mode
 

@@ -288,7 +288,7 @@ def _process_guard(monkeypatch, images, force, fail_pid=None, action='preflight'
     monkeypatch.setattr(subprocess, 'run', fake_run)
     def preflight(*args, **kwargs):
         if start_mcp_during_preflight:
-            active.append(('mcp-server-cubit.exe', 200))
+            active.append(('cubit-mcp.exe', 200))
         return True, []
     tree = ast.parse(dual.WORKER)
     definitions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
@@ -324,16 +324,16 @@ def test_worker_preflight_refuses_each_cubit_image(monkeypatch, image):
 @pytest.mark.parametrize('action', ['preflight', 'deploy'])
 @pytest.mark.parametrize('force', [False, True])
 def test_running_mcp_launcher_blocks_deployment_without_terminating_processes(monkeypatch, action, force):
-    image = 'MCP-SERVER-CUBIT.EXE'
+    image = 'CUBIT-MCP.EXE'
     ns, calls, error = _process_guard(monkeypatch, [image, 'cubitx.exe'], force, action=action)
-    assert error and 'mcp-server-cubit.exe is running' in error
+    assert error and 'cubit-mcp.exe is running' in error
     assert ns['result']['blocking_mcp_launchers'] == [
         dict(image=image, pid=100, session='Console', user='owner')]
     assert [call[0] for call in calls] == ['tasklist']
 
 
 def test_done_allows_running_mcp_launcher(monkeypatch):
-    _, calls, error = _process_guard(monkeypatch, ['mcp-server-cubit.exe'], False, action='done')
+    _, calls, error = _process_guard(monkeypatch, ['cubit-mcp.exe'], False, action='done')
     assert error is None
     assert not any(call[0] == 'taskkill' for call in calls)
 

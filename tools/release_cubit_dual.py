@@ -102,11 +102,11 @@ def running_cubit_processes(images=CUBIT_PROCESS_IMAGES):
 
 
 def require_idle_mcp_launcher():
-    running = running_cubit_processes(('mcp-server-cubit.exe',))
+    running = running_cubit_processes(('cubit-mcp.exe',))
     if running:
         result['blocking_mcp_launchers'] = running
         raise RuntimeError(
-            'mcp-server-cubit.exe is running and can lock the pip launcher; '
+            'cubit-mcp.exe is running and can lock the pip launcher; '
             'ask its owners to stop their servers before deploying: ' + str(running))
 
 
@@ -244,7 +244,7 @@ try:
         result['installed'] = identity
         command([sys.executable, '-m', 'cubit_mesh_export.mcp.server', '--selftest'], 120)
         result['mcp_selftest'] = True
-        cli = Path(sysconfig.get_path('scripts')) / 'mcp-server-cubit.exe'
+        cli = Path(sysconfig.get_path('scripts')) / 'cubit-mcp.exe'
         command([str(cli), '--selftest'], 120)
         result['mcp_cli_selftest'] = True
         command([sys.executable, '-m', 'cubit_mesh_export.install', '--verify-only', *profile_scope], 120)

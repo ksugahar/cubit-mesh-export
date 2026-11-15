@@ -183,6 +183,13 @@ def _introspect_fastmcp_tools(mcp) -> list[str]:
         return []
 
 
+def _short_name(server_name: str) -> str:
+    """`cubit-mcp` -> `cubit`; fail loudly on any other naming form."""
+    if not server_name.endswith("-mcp"):
+        raise ValueError(f"MCP server name {server_name!r} must end with '-mcp'")
+    return server_name.removesuffix("-mcp").replace("-", "_")
+
+
 def register_status_tool(
     mcp,
     server_name: str,
@@ -197,7 +204,7 @@ def register_status_tool(
 
     Args:
         mcp: FastMCP instance (already created in the server module)
-        server_name: e.g. "mcp-server-bayesian-opt"
+        server_name: e.g. "cubit-mcp"
         description: one-line "what am I for"
         subpackage: e.g. "cubit_mesh_export.mcp"
         related_servers: list of MCP server short names that pair well
@@ -206,11 +213,11 @@ def register_status_tool(
         audit_command: optional heavier repo-wide validation/audit command,
                        separate from the lightweight `--selftest` health check.
         tool_name: override the auto-generated tool name (default:
-                    derives from server_name by stripping "mcp-server-"
-                    and appending "_status")
+                    derives from server_name by stripping the "-mcp"
+                    suffix and appending "_status")
     """
     if tool_name is None:
-        short = server_name.removeprefix("mcp-server-").replace("-", "_")
+        short = _short_name(server_name)
         tool_name = f"{short}_status"
 
     @mcp.tool(name=tool_name)
@@ -264,7 +271,7 @@ def register_status_tool(
         server_name=server_name,
         version=str(distribution.get("version", "unknown")),
     )
-    short = server_name.removeprefix("mcp-server-").replace("-", "_")
+    short = _short_name(server_name)
     install_call_log(
         mcp,
         f"{short}_tool_calls.jsonl",

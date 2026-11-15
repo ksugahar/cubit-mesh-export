@@ -21,8 +21,8 @@ version-controlled.
 
 ```bash
 pip install cubit-mesh-export
-mcp-server-cubit                    # stdio server
-mcp-server-cubit --selftest         # lightweight self-test
+cubit-mcp                    # stdio server
+cubit-mcp --selftest         # lightweight self-test
 ```
 
 This server and the Cubit Python API/reference belong to `cubit_mesh_export.mcp`.
@@ -48,13 +48,13 @@ Client setup (stdio transport; the server needs no network port):
 
 ```bash
 # Claude Code
-claude mcp add cubit -- mcp-server-cubit
+claude mcp add cubit -- cubit-mcp
 # remove again with: claude mcp remove cubit
 ```
 
 ```json
 // Claude Desktop / VS Code (mcp.json style)
-{ "mcpServers": { "cubit": { "command": "mcp-server-cubit" } } }
+{ "mcpServers": { "cubit": { "command": "cubit-mcp" } } }
 ```
 
 Environment knobs:
@@ -71,7 +71,7 @@ One-shot environment preparation (license warmup + full doctor report,
 exit 1 when problems are found):
 
 ```bash
-mcp-server-cubit --setup
+cubit-mcp --setup
 ```
 
 First stop when anything misbehaves: `cubit_doctor()` — a read-only
@@ -117,7 +117,7 @@ Missing process-inspection support fails rather than reporting a clean session.
 
 ```
 Claude Code (MCP client)
-    → mcp-server-cubit (system Python 3.12)
+    → cubit-mcp (system Python 3.12)
         → batch: daemon.py (Cubit bundled Python, stdio JSON-RPC)
             → probe_ops.py (SHARED probe queries — no transport drift)
                 → cubit.cmd(...) / cubit API
@@ -213,7 +213,7 @@ are separate workflows outside this server.
 
 ## Cross-server API compatibility (cubit ↔ build123d ↔ external CAD)
 
-`mcp-server-cubit` owns its private hardening implementation
+`cubit-mcp` owns its private hardening implementation
 (`cubit_mesh_export.mcp._support.server_hardening`: annotation presets, error-kind
 contract, gate hiding, all-calls JSONL log). Cross-server interoperability uses
 an explicit **probe contract**, not a shared runtime dependency:

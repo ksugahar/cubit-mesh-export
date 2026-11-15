@@ -122,7 +122,7 @@ def _is_cubit_process_name(name: str) -> bool:
       - coreform_cubit.exe / coreform_cubit            (Cubit 2024+)
     Reject (these contain 'cubit' but do not hold the plugin):
       - cubit-plugin-install.exe (this installer itself)
-      - mcp-server-cubit.exe (bundled MCP server)
+      - cubit-mcp.exe (bundled MCP server)
       - any python.exe running a cubit helper
     """
     if not name:

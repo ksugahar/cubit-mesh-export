@@ -665,7 +665,7 @@ class CubitSession:
         if not daemon_path.exists():
             raise CubitSessionError(
                 f"Daemon script missing: {daemon_path}. Expected sibling "
-                "of session.py in the mcp-server-cubit package.")
+                "of session.py in the cubit-mcp package.")
 
         env = runtime_environment(self._bin_dir)
         env["CUBIT_DAEMON_MODE"] = self._mode

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Rename the MCP server command from `mcp-server-cubit` to `cubit-mcp`; the old command is removed.
+
 ## 2.5.1
 
 - Export first- or second-order tetrahedral meshes to COMSOL MPHTXT.

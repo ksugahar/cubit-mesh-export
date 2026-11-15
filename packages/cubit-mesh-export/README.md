@@ -151,7 +151,7 @@ compatibility check; standalone operation does not import Radia.
 ```bash
 pip install cubit-mesh-export
 cubit-plugin-install
-mcp-server-cubit
+cubit-mcp
 ```
 
 Optional features have independent installation extras:
@@ -164,7 +164,7 @@ Cubit MCP uses `CUBIT_MCP_*` settings, not `RADIA_MCP_*`. Historical Radia
 logs and caches are neither automatically migrated nor deleted. Runtime support
 is intentionally maintained independently; see its [ownership and license](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md).
 
-For an MCP client, use the installed `mcp-server-cubit` command, or the selected
+For an MCP client, use the installed `cubit-mcp` command, or the selected
 Python interpreter with `-m cubit_mesh_export.mcp.server`. See the
 [Cubit MCP manual](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md) for capabilities and
 headless operation. Old `radia_mcp.cubit` module commands must be updated;
