@@ -330,7 +330,7 @@ class TestInstallMenu(unittest.TestCase):
             [action.text for action in actions],
             [
                 "Netgen (.vol)", "Gmsh (.msh)", "Nastran (.bdf)", "VTK (.vtu)",
-                "COMSOL (.mphtxt)", "Femtet (.pdt)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
+                "COMSOL (.mphtxt)", "Femtet (.femprj)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
             ],
         )
         self.assertTrue(all("launch_export" in action.activate_method

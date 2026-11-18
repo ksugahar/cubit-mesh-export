@@ -1052,16 +1052,16 @@ def _run_comsol_export(parent):
 
 
 def _run_femtet_export(parent):
-    from cubit_mesh_export.femtet_pdt import export_pdt
+    from cubit_mesh_export.femtet_pdt import export_femtet
 
     path, _ = QFileDialog.getSaveFileName(
-        parent, "Export Femtet mesh", "mesh.pdt", "Femtet mesh (*.pdt)")
+        parent, "Export Femtet project", "mesh.femprj", "Femtet project (*.femprj)")
     if not path:
         return
-    if not path.lower().endswith(".pdt"):
-        path += ".pdt"
+    if not path.lower().endswith(".femprj"):
+        path += ".femprj"
     try:
-        result = export_pdt(path)
+        result = export_femtet(path)
     except Exception as exc:
         QMessageBox.warning(parent, "Femtet export failed", str(exc))
         return
@@ -1126,8 +1126,8 @@ _MENU_SPECS = (
      "Export block elements and sideset faces as ASCII VTK XML (.vtu)"),
     ("COMSOL (.mphtxt)", FMT_COMSOL,
      "Export a quadratic tetrahedral mesh for COMSOL"),
-    ("Femtet (.pdt)", FMT_FEMTET,
-     "Export a HEX8 mesh with named blocks and sidesets for Femtet"),
+    ("Femtet (.femprj)", FMT_FEMTET,
+     "Export a HEX8 mesh with named blocks and sidesets as a Femtet project and mesh"),
     ("JMAG (.jcf)", FMT_JCF,
      "Export a static solver input from named blocks and sidesets (.jcf)"),
     ("ELF/MAGIC (.meg)", FMT_MEG,

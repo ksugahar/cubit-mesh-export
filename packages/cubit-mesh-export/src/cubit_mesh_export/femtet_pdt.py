@@ -217,20 +217,41 @@ def read_active_mesh(cubit):
     return points, blocks, sidesets, node_ids
 
 
-def export_pdt(path):
-    """Write the active Cubit mesh to a new .pdt file and return a summary."""
+# Femtet stores the mesh of project ``X.femprj`` as ``X.Results/<analysis model>.pdt``.
+# The bundled project was saved by Femtet with no bodies, a magnetostatic analysis
+# and its default analysis model name.
+ANALYSIS_MODEL = "\u89e3\u6790\u30e2\u30c7\u30eb"  # Femtet's default analysis model name
+PROJECT_TEMPLATE = Path(__file__).with_name("femtet_project.femprj")
+
+
+def export_femtet(path):
+    """Write the active Cubit mesh as a new Femtet project and its paired mesh.
+
+    Creates ``X.femprj`` and ``X.Results/<analysis model>.pdt``; both must not exist.
+    Femtet resolves the paired mesh from the project (``ResultFilePath``).
+    """
     import cubit
 
-    target = Path(path)
-    if target.suffix.lower() != ".pdt":
-        raise ValueError("output path must end in .pdt")
+    project = Path(path)
+    if project.suffix.lower() != ".femprj":
+        raise ValueError("output path must end in .femprj")
+    results = project.with_name(project.stem + ".Results")
+    if project.exists() or results.exists():
+        raise FileExistsError(f"choose an unused Femtet project name: {project}")
     points, blocks, sidesets, _ = read_active_mesh(cubit)
     data = encode_pdt(points, blocks, sidesets)
-    with target.open("xb") as stream:
+    template = PROJECT_TEMPLATE.read_bytes()
+    results.mkdir()
+    mesh = results / (ANALYSIS_MODEL + ".pdt")
+    with mesh.open("xb") as stream:
         stream.write(data)
+    with project.open("xb") as stream:
+        stream.write(template)
     return {
-        "path": str(target),
-        "sha256": hashlib.sha256(data).hexdigest(),
+        "project": str(project),
+        "project_sha256": hashlib.sha256(template).hexdigest(),
+        "pdt": str(mesh),
+        "pdt_sha256": hashlib.sha256(data).hexdigest(),
         "nodes": len(points),
         "blocks": {name: len(cells) for name, cells in blocks},
         "sidesets": {name: len(faces) for name, faces in sidesets},

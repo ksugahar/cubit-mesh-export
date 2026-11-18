@@ -427,7 +427,7 @@ def test_official_toolbar_package_is_self_contained(tmp_path):
     ]
     assert action_names == [
         "Netgen (.vol)", "Gmsh (.msh)", "Nastran (.bdf)", "VTK (.vtu)",
-        "COMSOL (.mphtxt)", "Femtet (.pdt)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
+        "COMSOL (.mphtxt)", "Femtet (.femprj)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
     ]
 
     referenced = [

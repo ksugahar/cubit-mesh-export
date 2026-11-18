@@ -98,3 +98,26 @@ def test_rejects_duplicate_block_names_and_bad_cells():
         encode_pdt(POINTS, [("b", [LEFT]), ("b", [RIGHT])], [])
     with pytest.raises(ValueError, match="degenerate"):
         encode_pdt(POINTS, [("b", [LEFT[:7] + LEFT[:1]])], [])
+
+
+def test_project_export_writes_the_paired_mesh_and_refuses_reuse(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    from cubit_mesh_export import femtet_pdt
+
+    monkeypatch.setitem(sys.modules, "cubit", types.ModuleType("cubit"))
+    mesh = (POINTS, [("left", [LEFT]), ("right", [RIGHT])], [("cut", [INTERFACE])], [])
+    monkeypatch.setattr(femtet_pdt, "read_active_mesh", lambda cubit: mesh)
+    project = tmp_path / "case.femprj"
+    result = femtet_pdt.export_femtet(project)
+    paired = tmp_path / "case.Results" / (femtet_pdt.ANALYSIS_MODEL + ".pdt")
+    assert paired.read_bytes() == encode_pdt(*mesh[:3])
+    template = femtet_pdt.PROJECT_TEMPLATE.read_bytes()
+    assert project.read_bytes() == template
+    assert struct.unpack_from("<2i", template) == (200, 1), "not a Femtet-saved project"
+    assert result["pdt"] == str(paired) and result["blocks"] == {"left": 1, "right": 1}
+    with pytest.raises(FileExistsError):
+        femtet_pdt.export_femtet(project)
+    with pytest.raises(ValueError, match=".femprj"):
+        femtet_pdt.export_femtet(tmp_path / "other.pdt")
