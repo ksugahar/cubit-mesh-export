@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 2.6.0
+
+- Remove the external COM model-transfer action from the Cubit Export menu and toolbar.
 
 - Rename the MCP server command from `mcp-server-cubit` to `cubit-mcp`; the old command is removed.
 

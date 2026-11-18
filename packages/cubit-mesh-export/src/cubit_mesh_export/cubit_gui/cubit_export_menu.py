@@ -7,8 +7,7 @@ survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
 run inside Cubit's embedded Python interpreter.  Netgen, Gmsh, Nastran
 and MEG run the .ccm APREPRO `export ...` commands after collecting user
 input through Qt dialogs parented to the Cubit main window.  VTU and JCF
-are written by this package's Python writers, and the COM item calls a
-separately installed handler (:mod:`cubit_mesh_export.model_transfer`).
+are written by this package's Python writers.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
 and `cubit_mesh_export.mcp.knowledge.custom_toolbar` (TOOLBAR_PYTHON_SCRIPT_
@@ -187,7 +186,6 @@ FMT_NASTRAN = "nastran"
 FMT_VTU = "vtu"
 FMT_COMSOL = "comsol"
 FMT_JCF = "jcf"
-FMT_FEMTET = "femtet"
 FMT_MEG = "meg"
 
 _FORMAT_TITLES = {
@@ -1052,52 +1050,6 @@ def _run_comsol_export(parent):
     return result
 
 
-def _load_model_transfer():
-    """Load the stdlib-only dispatcher inside Cubit's embedded Python."""
-    from importlib.util import module_from_spec, spec_from_file_location
-
-    menu_dir = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(menu_dir, "model_transfer.py")
-    if not os.path.isfile(path):
-        path = os.path.join(os.path.dirname(menu_dir), "model_transfer.py")
-    spec = spec_from_file_location("_cubit_export_model_transfer", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load the model transfer dispatcher: {path}")
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def _run_model_transfer(target, label, parent):
-    """Send the current Cubit model through the one installed handler."""
-    import cubit as cubit_mod
-    model_transfer = _load_model_transfer()
-    from PySide6.QtWidgets import QInputDialog
-
-    try:
-        handler = model_transfer.describe(target)
-    except model_transfer.TransferUnavailable as exc:
-        QMessageBox.warning(parent, f"{label} unavailable", str(exc))
-        return
-    order, accepted = QInputDialog.getItem(
-        parent, label, "Mesh element order:", ["1", "2"], 0, False)
-    if not accepted:
-        return
-    answer = QMessageBox.question(
-        parent, label, f"Send the current model with {handler} and generate an order {order} mesh?")
-    if answer != QMessageBox.Yes:
-        return
-    try:
-        result = model_transfer.transfer(target, cubit_mod, element_order=int(order))
-    except Exception as exc:
-        QMessageBox.warning(parent, f"{label} failed", str(exc))
-        return
-    text = json.dumps(result, indent=2, ensure_ascii=False)
-    print(f"{label} complete: {text}")
-    QMessageBox.information(parent, label, text)
-    return result
-
-
 def launch_export(fmt):
     """Launch one export dialog from Cubit's official custom toolbar.
 
@@ -1116,8 +1068,6 @@ def launch_export(fmt):
         return _run_jcf_export(parent)
     if fmt == FMT_VTU:
         return _run_vtu_export(parent)
-    if fmt == FMT_FEMTET:
-        return _run_model_transfer(fmt, labels[fmt], parent)
     import cubit as cubit_mod
     if fmt == FMT_NETGEN:
         return _run_netgen_export(cubit_mod, parent)
@@ -1157,8 +1107,6 @@ _MENU_SPECS = (
      "Export a quadratic tetrahedral mesh for COMSOL"),
     ("JMAG (.jcf)", FMT_JCF,
      "Export a static solver input from named blocks and sidesets (.jcf)"),
-    ("Femtet (COM)", FMT_FEMTET,
-     "Send the model through a separately installed transfer handler"),
     ("ELF/MAGIC (.meg)", FMT_MEG,
      "Export mesh to ELF/MAGIC MEG format (1st-order)"),
 )
