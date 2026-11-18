@@ -251,7 +251,6 @@ def build_official_toolbar_package(output_dir=None):
         shutil.copytree(source / "icons", staging / "icons")
         (staging / "toolbars").mkdir()
         shutil.copy2(menu_source, staging / "scripts" / "cubit_export_menu.py")
-        shutil.copy2(panels_dir.parent / "model_transfer.py", staging / "scripts" / "model_transfer.py")
 
         # WorkflowToolbar's .mappings file relocates these package-relative
         # source names during import. Never bake this short-lived staging
@@ -322,7 +321,6 @@ def _toolbar_expected_files(install_dir):
         "scripts/export_vtu.py",
         "scripts/export_comsol.py",
         "scripts/export_jcf.py",
-        "scripts/export_femtet.py",
         "scripts/export_meg.py",
         "icons/cubit_mesh_export.svg",
     ):
@@ -331,7 +329,6 @@ def _toolbar_expected_files(install_dir):
         panels_dir / "cubit_export_menu.py",
         install_dir / "scripts" / "cubit_export_menu.py",
     ))
-    pairs.append((panels_dir.parent / "model_transfer.py", install_dir / "scripts" / "model_transfer.py"))
     return pairs
 
 

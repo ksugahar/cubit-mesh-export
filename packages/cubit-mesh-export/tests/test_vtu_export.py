@@ -62,7 +62,7 @@ def mods():
     pkg.__path__ = [str(SRC)]
     sys.modules["_cme_vtu"] = pkg
     try:
-        yield tuple(importlib.import_module(f"_cme_vtu.{n}") for n in ("vtu_writer", "vtu", "model_transfer"))
+        yield tuple(importlib.import_module(f"_cme_vtu.{n}") for n in ("vtu_writer", "vtu"))
     finally:
         for name in [n for n in sys.modules if n == "_cme_vtu" or n.startswith("_cme_vtu.")]:
             del sys.modules[name]
@@ -92,7 +92,7 @@ def _read(path):
 
 
 def test_writer_is_standalone():
-    for name in ("vtu_writer.py", "vtu.py", "model_transfer.py"):
+    for name in ("vtu_writer.py", "vtu.py"):
         tree = ast.parse((SRC / name).read_text(encoding="utf-8"))
         imported = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
         imported |= {n.module.split(".")[0] for n in ast.walk(tree)
@@ -103,7 +103,7 @@ def test_writer_is_standalone():
 @pytest.mark.parametrize("family", sorted(EXO_CORNERS))
 @pytest.mark.parametrize("quadratic", [False, True])
 def test_cells_are_written_in_vtk_order_and_orientation(mods, tmp_path, family, quadratic):
-    vw, _, _ = mods
+    vw, _ = mods
     nodes = _reference(family, quadratic)
     vw.write_vtu(tmp_path / "c.vtu", nodes, [(family, list(nodes), 1, vw.GROUP_BLOCK)])
     xyz, cells, types_, _ = _read(tmp_path / "c.vtu")
@@ -118,7 +118,7 @@ def test_cells_are_written_in_vtk_order_and_orientation(mods, tmp_path, family, 
 
 
 def test_arrays_agree_and_coordinates_round_trip(mods, tmp_path):
-    vw, _, _ = mods
+    vw, _ = mods
     nodes = {10: (0.1, 1 / 3, -2e-17), 20: (1e300, 0, 5), 30: (0, 1, 0), 40: (7, 7, 7), 99: (9, 9, 9)}
     r = vw.write_vtu(tmp_path / "a.vtu", nodes, [("tri", (10, 20, 30), 4, vw.GROUP_BLOCK),
                                                  ("quad", (10, 20, 40, 30), 8, vw.GROUP_SIDESET)])
@@ -139,7 +139,7 @@ def test_arrays_agree_and_coordinates_round_trip(mods, tmp_path):
     ([("tri", (1, 2, 4), 1, 0)], "finite"),
 ])
 def test_writer_fails_loudly(mods, tmp_path, cells, match):
-    vw, _, _ = mods
+    vw, _ = mods
     nodes = {1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0), 4: (np.nan, 0, 0), **{i: (i, 0, 0) for i in range(6, 28)}}
     with pytest.raises(vw.VtuError, match=match):
         vw.write_vtu(tmp_path / "x.vtu", nodes, cells)
@@ -182,7 +182,7 @@ class FakeCubit:
 
 
 def test_reader_takes_blocks_through_geometry_and_sidesets(mods):
-    vw, vtu, _ = mods
+    vw, vtu = mods
     nodes, cells = vtu.read_active_cells(FakeCubit())
     assert [(k, tuple(c), g, t) for k, c, g, t in cells] == [
         ("hex", tuple(range(1, 9)), 1, vw.GROUP_BLOCK), ("hex", tuple(range(5, 13)), 1, vw.GROUP_BLOCK),
@@ -191,14 +191,14 @@ def test_reader_takes_blocks_through_geometry_and_sidesets(mods):
 
 
 def test_reader_counts_each_element_once_and_takes_block_surfaces(mods):
-    vw, vtu, _ = mods
+    vw, vtu = mods
     cubit = FakeCubit(blocks={1: {"volumes": [1], "hexes": [2]}, 3: {"surfaces": [6]}}, sidesets={})
     _, cells = vtu.read_active_cells(cubit)
     assert [(k, g) for k, _, g, _ in cells] == [("hex", 1), ("hex", 1), ("tri", 3)]
 
 
 def test_reader_writes_a_surface_mesh_and_rejects_its_loose_faces(mods):
-    vw, vtu, _ = mods
+    vw, vtu = mods
     surface = dict(blocks={2: {"faces": [3, 4]}}, sidesets={}, meshed=False, quads=(3, 4))
     _, cells = vtu.read_active_cells(FakeCubit(**surface))
     assert [(k, tuple(c), g) for k, c, g, _ in cells] == [("quad", (1, 2, 3, 4), 2), ("quad", (5, 6, 7, 8), 2)]
@@ -218,46 +218,6 @@ def test_reader_writes_a_surface_mesh_and_rejects_its_loose_faces(mods):
     (FakeCubit(sidesets={7: {"surfaces": [5], "curves": [1]}}), "sideset 7 holds curves"),
 ])
 def test_reader_fails_loudly(mods, cubit, match):
-    vw, vtu, _ = mods
+    vw, vtu = mods
     with pytest.raises(vw.VtuError, match=match):
         vtu.read_active_cells(cubit)
-
-
-class _EntryPoint:
-    def __init__(self, name, value, obj):
-        self.name, self.value, self._obj = name, value, obj
-
-    def load(self):
-        return self._obj
-
-
-@pytest.mark.parametrize("installed, match", [
-    ([], "No handler is installed for 'femtet'"),
-    ([("femtet", "a:run"), ("femtet", "b:run")], "2 handlers are installed"),
-    ([("other", "a:run")], "No handler is installed"),
-])
-def test_transfer_refuses_without_exactly_one_handler(mods, monkeypatch, installed, match):
-    _, _, mt = mods
-    calls = []
-    eps = [_EntryPoint(n, v, lambda cubit: calls.append(cubit) or {}) for n, v in installed]
-    monkeypatch.setattr(mt, "entry_points", lambda group: eps if group == mt.GROUP else [])
-    with pytest.raises(mt.TransferUnavailable, match=match):
-        mt.transfer("femtet", object())
-    assert calls == []
-
-
-def test_transfer_runs_the_one_handler(mods, monkeypatch):
-    _, _, mt = mods
-    cubit = object()
-    eps = [_EntryPoint("femtet", "lab:run", lambda c: {"saved": True, "same": c is cubit})]
-    monkeypatch.setattr(mt, "entry_points", lambda group: eps if group == mt.GROUP else [])
-    assert mt.describe("femtet") == "lab:run"
-    assert mt.transfer("femtet", cubit) == {"saved": True, "same": True}
-    eps[0]._obj = lambda c, *, element_order: {"order": element_order}
-    assert mt.transfer("femtet", cubit, element_order=2) == {"order": 2}
-    eps[0]._obj = lambda c: "done"
-    with pytest.raises(TypeError, match="expected dict"):
-        mt.transfer("femtet", cubit)
-    eps[0]._obj = lambda c: {"handle": object()}
-    with pytest.raises(TypeError, match="not JSON serializable"):
-        mt.transfer("femtet", cubit)

@@ -11,7 +11,7 @@ Coverage:
         commands so the .ccm side is unchanged)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
     E. Nastran nopyramid flag
-    F. Exactly eight Export actions, in order, each dispatched by launch_export
+    F. Exactly seven Export actions, in order, each dispatched by launch_export
     G. MEG labels (block table mocking)
     H. install_menu() idempotency on a stub QMainWindow
     I. Current journal is an optional output-name hint, never a prerequisite
@@ -72,7 +72,6 @@ class TestModuleSurface(unittest.TestCase):
         self.assertEqual(rem.FMT_NASTRAN, "nastran")
         self.assertEqual(rem.FMT_VTU, "vtu")
         self.assertEqual(rem.FMT_JCF, "jcf")
-        self.assertEqual(rem.FMT_FEMTET, "femtet")
         self.assertEqual(rem.FMT_MEG, "meg")
 
     def test_format_extensions(self):
@@ -331,7 +330,7 @@ class TestInstallMenu(unittest.TestCase):
             [action.text for action in actions],
             [
                 "Netgen (.vol)", "Gmsh (.msh)", "Nastran (.bdf)", "VTK (.vtu)",
-                "COMSOL (.mphtxt)", "JMAG (.jcf)", "Femtet (COM)", "ELF/MAGIC (.meg)",
+                "COMSOL (.mphtxt)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
             ],
         )
         self.assertTrue(all("launch_export" in action.activate_method
@@ -462,55 +461,6 @@ class TestMeshEvaluationDocsRouting(unittest.TestCase):
         self.assertIn("p-convergence", text)
         self.assertIn("validation_test", text)
         self.assertIn("p_convergence_demo_results.json", text)
-
-
-# ----------------------------------------------------------------------
-# L. Femtet (COM) runs only the installed handler, only on Yes
-# ----------------------------------------------------------------------
-class TestModelTransferRunner(unittest.TestCase):
-
-    class Unavailable(RuntimeError):
-        pass
-
-    def _run(self, describe, answer=None):
-        calls, shown = [], []
-        mt = types.SimpleNamespace(
-            TransferUnavailable=self.Unavailable, describe=describe,
-            transfer=lambda target, cubit, *, element_order: calls.append(
-                (target, cubit, element_order)) or {"saved": True})
-        box = MagicMock()
-        box.Yes, box.No = "yes", "no"
-        box.question.return_value = answer
-        box.warning.side_effect = lambda *a: shown.append(("warning",) + a[1:])
-        box.information.side_effect = lambda *a: shown.append(("information",) + a[1:])
-        fake_cubit = types.ModuleType("cubit")
-        with patch.dict(sys.modules, {"cubit": fake_cubit}), \
-                patch.object(rem, "_load_model_transfer", return_value=mt), \
-                patch("PySide6.QtWidgets.QInputDialog.getItem", return_value=("2", True)), \
-                patch.object(rem, "QMessageBox", box), \
-                patch.object(rem, "find_claro", lambda: "claro"), \
-                patch.object(rem, "_run_generic_export", side_effect=AssertionError("generic")):
-            result = rem.launch_export(rem.FMT_FEMTET)
-        return result, calls, shown, box, fake_cubit
-
-    def test_no_handler_warns_and_runs_nothing(self):
-        def describe(target):
-            raise self.Unavailable("No handler is installed for 'femtet'")
-        result, calls, shown, box, _ = self._run(describe)
-        self.assertIsNone(result)
-        self.assertEqual(calls, [])
-        box.question.assert_not_called()
-        self.assertEqual(shown, [("warning", "Femtet (COM) unavailable",
-                                  "No handler is installed for 'femtet'")])
-
-    def test_handler_runs_only_after_yes(self):
-        result, calls, shown, box, _ = self._run(lambda target: "lab:run", answer="no")
-        self.assertEqual((result, calls, shown), (None, [], []))
-        result, calls, shown, box, fake_cubit = self._run(lambda target: "lab:run", answer="yes")
-        self.assertEqual(result, {"saved": True})
-        self.assertEqual(calls, [("femtet", fake_cubit, 2)])
-        self.assertIn("lab:run", box.question.call_args[0][2])
-        self.assertEqual(shown[0][:2], ("information", "Femtet (COM)"))
 
 
 if __name__ == "__main__":

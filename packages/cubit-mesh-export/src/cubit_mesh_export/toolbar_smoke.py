@@ -31,7 +31,6 @@ EXPECTED_ACTIONS = [
     "VTK (.vtu)",
     "COMSOL (.mphtxt)",
     "JMAG (.jcf)",
-    "Femtet (COM)",
     "ELF/MAGIC (.meg)",
 ]
 

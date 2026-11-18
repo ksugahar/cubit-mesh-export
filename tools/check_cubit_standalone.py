@@ -65,7 +65,6 @@ def main():
         with tarfile.open(archive_path) as archive:
             assert archive.extractfile("scripts/cubit_export_menu.py").read() == (gui / "cubit_export_menu.py").read_bytes()
             expected_launchers = {
-                "scripts/export_femtet.py",
                 "scripts/export_gmsh.py",
                 "scripts/export_comsol.py",
                 "scripts/export_jcf.py",
