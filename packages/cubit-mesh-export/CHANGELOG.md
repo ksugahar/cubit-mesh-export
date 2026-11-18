@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Rename the MCP server command from `mcp-server-cubit` to `cubit-mcp`; the old command is removed.
+- Remove the Femtet (COM) menu and toolbar action and the `cubit_mesh_export.model_transfer`
+  handler hook; the package no longer integrates with Femtet.
 
 ## 2.5.1
 

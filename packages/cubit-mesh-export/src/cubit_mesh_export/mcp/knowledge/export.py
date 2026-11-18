@@ -569,17 +569,13 @@ Export:
   VTK (.vtu)
   COMSOL (.mphtxt)
   JMAG (.jcf)
-  Femtet (COM)
   ELF/MAGIC (.meg)
 ```
 
 - **Export**: Netgen, Gmsh, Nastran and ELF/MAGIC run the C++ APREPRO export
   commands. VTK writes ASCII VTK XML (.vtu) from Python (`cubit_mesh_export.vtu`).
   JMAG writes a static solver input from an analysis-settings JSON
-  (`cubit_mesh_export.jmag`). Femtet (COM) calls the one handler a separately
-  installed package registers in entry-point group
-  `cubit_mesh_export.model_transfer` under name `femtet`; without it the item
-  reports that no handler is installed.
+  (`cubit_mesh_export.jmag`).
 - Solver orchestration is outside the Cubit plugin. Downstream applications
   consume exported meshes through their own process boundary.
 - **Mesh p-convergence demo**: `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`
