@@ -157,7 +157,7 @@ def test_export_menu_does_not_force_a_journal_save():
     savers = sorted(f.name for f in tree.body if isinstance(f, ast.FunctionDef)
                     and any(getattr(c.func, "attr", "") == "getSaveFileName"
                             for c in ast.walk(f) if isinstance(c, ast.Call)))
-    assert savers == ["_run_comsol_export", "_run_femtet_export", "_run_jcf_export", "_run_vtu_export"], savers
+    assert savers == ["_run_comsol_export", "_run_jcf_export", "_run_vtu_export"], savers
     assert source.count("getSaveFileName(") == len(savers)
     assert "save journal" not in source
     assert "_current_journal_hint" in source
@@ -222,10 +222,10 @@ def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
     monkeypatch.setitem(sys.modules, "cubit_export_menu", fake_menu)
     original_path = list(sys.path)
     try:
-        for fmt in ("netgen_vol", "gmsh", "nastran", "vtu", "comsol", "femtet_pdt", "jcf", "meg"):
+        for fmt in ("netgen_vol", "gmsh", "nastran", "vtu", "comsol", "jcf", "meg"):
             exec(namespace["_activate_code"](fmt), {})
     finally:
         sys.path[:] = original_path
 
-    assert calls == ["netgen_vol", "gmsh", "nastran", "vtu", "comsol", "femtet_pdt", "jcf", "meg"]
+    assert calls == ["netgen_vol", "gmsh", "nastran", "vtu", "comsol", "jcf", "meg"]
 

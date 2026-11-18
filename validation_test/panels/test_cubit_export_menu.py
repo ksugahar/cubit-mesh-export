@@ -11,7 +11,7 @@ Coverage:
         commands so the .ccm side is unchanged)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
     E. Nastran nopyramid flag
-    F. Exactly eight Export actions, in order, each dispatched by launch_export
+    F. Exactly seven Export actions, in order, each dispatched by launch_export
     G. MEG labels (block table mocking)
     H. install_menu() idempotency on a stub QMainWindow
     I. Current journal is an optional output-name hint, never a prerequisite
@@ -325,12 +325,12 @@ class TestInstallMenu(unittest.TestCase):
         menu_title, actions, component = self.added[0]
         self.assertEqual(menu_title, rem._CLARO_MENU_TITLE)
         self.assertEqual(component, rem._CLARO_COMPONENT)
-        self.assertEqual(len(actions), 8)
+        self.assertEqual(len(actions), 7)
         self.assertEqual(
             [action.text for action in actions],
             [
                 "Netgen (.vol)", "Gmsh (.msh)", "Nastran (.bdf)", "VTK (.vtu)",
-                "COMSOL (.mphtxt)", "Femtet (.femprj)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
+                "COMSOL (.mphtxt)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
             ],
         )
         self.assertTrue(all("launch_export" in action.activate_method

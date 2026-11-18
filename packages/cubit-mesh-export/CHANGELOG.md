@@ -1,13 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- Export linear hexahedral meshes as a Femtet project (.femprj) and its paired mesh
-  (`X.Results/<analysis model>.pdt`) from the Export menu and toolbar. The project has
-  no bodies and a magnetostatic default analysis. Block names become body attributes; sidesets become named boundaries
-  with their faces and nodes. Analysis conditions stay in the Femtet project, so they
-  can be set or changed after the mesh is loaded. Coordinates keep the Cubit model unit.
-
 ## 2.6.0
 
 - Rename the MCP server command from `mcp-server-cubit` to `cubit-mcp`; the old command is removed.

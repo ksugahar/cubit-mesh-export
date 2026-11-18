@@ -6,7 +6,7 @@ The menu itself is registered through Cubit's own Claro API
 survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
 run inside Cubit's embedded Python interpreter.  Netgen, Gmsh, Nastran
 and MEG run the .ccm APREPRO `export ...` commands after collecting user
-input through Qt dialogs parented to the Cubit main window.  VTU, COMSOL, Femtet
+input through Qt dialogs parented to the Cubit main window.  VTU, COMSOL
 and JCF are written by this package's Python writers.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
@@ -185,7 +185,6 @@ FMT_GMSH = "gmsh"
 FMT_NASTRAN = "nastran"
 FMT_VTU = "vtu"
 FMT_COMSOL = "comsol"
-FMT_FEMTET = "femtet_pdt"
 FMT_JCF = "jcf"
 FMT_MEG = "meg"
 
@@ -1051,24 +1050,6 @@ def _run_comsol_export(parent):
     return result
 
 
-def _run_femtet_export(parent):
-    from cubit_mesh_export.femtet_pdt import export_femtet
-
-    path, _ = QFileDialog.getSaveFileName(
-        parent, "Export Femtet project", "mesh.femprj", "Femtet project (*.femprj)")
-    if not path:
-        return
-    if not path.lower().endswith(".femprj"):
-        path += ".femprj"
-    try:
-        result = export_femtet(path)
-    except Exception as exc:
-        QMessageBox.warning(parent, "Femtet export failed", str(exc))
-        return
-    print(f"Export complete: {path}")
-    return result
-
-
 def launch_export(fmt):
     """Launch one export dialog from Cubit's official custom toolbar.
 
@@ -1083,8 +1064,6 @@ def launch_export(fmt):
         raise RuntimeError("Cubit main window is not available")
     if fmt == FMT_COMSOL:
         return _run_comsol_export(parent)
-    if fmt == FMT_FEMTET:
-        return _run_femtet_export(parent)
     if fmt == FMT_JCF:
         return _run_jcf_export(parent)
     if fmt == FMT_VTU:
@@ -1126,8 +1105,6 @@ _MENU_SPECS = (
      "Export block elements and sideset faces as ASCII VTK XML (.vtu)"),
     ("COMSOL (.mphtxt)", FMT_COMSOL,
      "Export a quadratic tetrahedral mesh for COMSOL"),
-    ("Femtet (.femprj)", FMT_FEMTET,
-     "Export a HEX8 mesh with named blocks and sidesets as a Femtet project and mesh"),
     ("JMAG (.jcf)", FMT_JCF,
      "Export a static solver input from named blocks and sidesets (.jcf)"),
     ("ELF/MAGIC (.meg)", FMT_MEG,

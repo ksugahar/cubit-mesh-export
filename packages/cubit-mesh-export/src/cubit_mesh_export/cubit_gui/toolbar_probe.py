@@ -23,7 +23,6 @@ EXPECTED_ACTIONS = [
     "Nastran (.bdf)",
     "VTK (.vtu)",
     "COMSOL (.mphtxt)",
-    "Femtet (.femprj)",
     "JMAG (.jcf)",
     "ELF/MAGIC (.meg)",
 ]

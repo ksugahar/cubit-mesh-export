@@ -156,10 +156,6 @@ set(CCM_SOURCES
     ExportFemeemCommand.hpp
     ExportMegCommand.cpp
     ExportMegCommand.hpp
-    ExportFemtetCommand.cpp
-    ExportFemtetCommand.hpp
-    FemtetPdt.hpp
-    femtet_project_template.inc
     ExportModelCaptureCommand.cpp
     ExportModelCaptureCommand.hpp
     ModelCaptureRecord.hpp
