@@ -7,6 +7,7 @@
 #include "ExportVtkCommand.hpp"
 #include "ExportFemeemCommand.hpp"
 #include "ExportMegCommand.hpp"
+#include "ExportFemtetCommand.hpp"
 #include "ExportModelCaptureCommand.hpp"
 
 #include <cstdio>
@@ -53,6 +54,7 @@ std::vector<std::string> CubitMeshExportPlugin::get_keys()
   keys.push_back("ExportVtkCommand");
   keys.push_back("ExportFemeemCommand");
   keys.push_back("ExportMegCommand");
+  keys.push_back("ExportFemtetCommand");
   keys.push_back("ExportModelCaptureCommand");
   return keys;
 }
@@ -74,6 +76,8 @@ CubitCommand* CubitMeshExportPlugin::create_command(const std::string &key)
     return new ExportFemeemCommand();
   else if (key == "ExportMegCommand")
     return new ExportMegCommand();
+  else if (key == "ExportFemtetCommand")
+    return new ExportFemtetCommand();
   else if (key == "ExportModelCaptureCommand")
     return new ExportModelCaptureCommand();
   return nullptr;

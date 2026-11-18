@@ -21,6 +21,8 @@ _EDGES = ((0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4),
 _FACES = ((0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0))
 _NAME = re.compile(r"[A-Za-z_][A-Za-z_0-9]{0,30}")
 _HEX8 = 896
+# Every body gets this material; the exported project defines it as air.
+MATERIAL = "Air"
 
 
 def _ints(*values):
@@ -164,7 +166,7 @@ def encode_pdt(points, blocks, sidesets):
            + _records(regions) + _ints(*tail))
 
     table = [str(len(blocks))]
-    table += [f"{name}   Mat_{i}   5601   {i - 1}" for i, (name, _) in enumerate(blocks, 1)]
+    table += [f"{name}   {MATERIAL}   5601   {i}" for i, (name, _) in enumerate(blocks)]
     table += [str(len(sidesets)), *(f"{name}   0" for name, _ in sidesets)]
     for count, kind in ((6 * len(cells), 5001), (6 * len(cells), 5002),
                         (sum(map(len, owners.values())), 5004),
