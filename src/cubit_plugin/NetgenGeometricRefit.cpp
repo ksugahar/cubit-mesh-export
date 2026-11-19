@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <unordered_map>
 #include <vector>
 
@@ -670,10 +671,15 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
     const int n = R.curved.NumEdgeCoefficients(ei);
     if (n > 0) netgen_coef[ei].assign(R.curved.EdgeCoefficients(ei), R.curved.EdgeCoefficients(ei) + n);
   }
-  // Limit grid: strict-interior points (a, b) / m_lim of a triangle and
-  // j / m_lim along an edge, the spacing of the independent readback.
-  const int m_lim = 24;
+  // Limit grid used during the sweeps: strict-interior points (a, b) / m_lim
+  // of a triangle and j / m_lim along an edge.  The final audit uses the
+  // denser m_aud grid to estimate each entity's sup.
+  const int m_lim = 12;
   std::vector<double> face_base(mesh.GetNSE(), inf);
+  std::vector<Entity> face_audit(mesh.GetNSE());
+  std::vector<double> face_audit_base(mesh.GetNSE(), inf);
+  const int m_aud = 96;
+  std::vector<char> has_face_audit(mesh.GetNSE(), 0);
   for (int s = 0; s < mesh.GetNSE(); s++) {
     const auto sei = ng::SurfaceElementIndex::FromNr0(s);
     const auto el = mesh[sei];
@@ -687,10 +693,18 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
       for (int b = 1; a + b < m_lim; b++) F.check_ref.push_back({double(a) / m_lim, double(b) / m_lim});
     const double d = R.max_distance(F);
     if (d >= 0) face_base[s] = d;
+    F.check_ref.clear();
+    for (int a = 1; a < m_aud; a++)
+      for (int b = 1; a + b < m_aud; b++) F.check_ref.push_back({double(a) / m_aud, double(b) / m_aud});
+    face_audit[s] = F;   // its Netgen sup is evaluated only if an edge changes
+    has_face_audit[s] = 1;
   }
   std::vector<char> tried(top.GetNEdges(), 0), ever_failed(top.GetNEdges(), 0),
       ever_distorted(top.GetNEdges(), 0), ever_limited(top.GetNEdges(), 0);
   std::vector<double> edge_base(top.GetNEdges(), inf), edge_after(top.GetNEdges(), 0);
+  std::vector<Entity> edge_audit(top.GetNEdges());
+  std::vector<double> edge_audit_base(top.GetNEdges(), inf);
+  auto t0 = std::chrono::steady_clock::now();
   for (int pass = 0; pass < npass; pass++) {
     std::fill(done.begin(), done.end(), 0);
     for (int s = 0; s < mesh.GetNSE(); s++) {
@@ -757,6 +771,10 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
         if (pass == 0) {   // the edge's own samples depend on its coefficients only
           const double d = R.max_distance(E);
           edge_base[ei] = d >= 0 ? d : inf;
+          Entity A = E;   // the edge's own samples on the audit grid
+          A.check_ref.clear();
+          for (int j = 1; j < m_aud; j++) A.check_ref.push_back(at(double(j) / m_aud));
+          edge_audit[ei] = A;
         }
         bool face_fit = false;
         for (auto fs : tris) {
@@ -823,9 +841,95 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
       }
     }
   }
+  // Final audit on the final mesh (user decision 2026-11-19): every edge
+  // and every order-2 triangle must stay within its Netgen distance on the
+  // guard grid and the audit grids.  Where it does not, Netgen's coefficients of the edge (or of
+  // all changed edges of the triangle) are restored, and the triangles next
+  // to restored edges are audited again until nothing changes.  Restoring
+  // only moves towards Netgen's state, so the loop terminates.  The guard is
+  // a sampled check, not a continuous bound.
+  auto differs = [&](int ei) {
+    const int n = (int)netgen_coef[ei].size();
+    const ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
+    for (int k = 0; k < n; k++)
+      for (int d = 0; d < 3; d++)
+        if (c[k](d) != netgen_coef[ei][k](d)) return true;
+    return false;
+  };
+  auto t1 = std::chrono::steady_clock::now();
+  st.seconds_sweeps = std::chrono::duration<double>(t1 - t0).count();
+  std::vector<char> restored(top.GetNEdges(), 0);
+  auto restore = [&](int ei) {
+    ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
+    for (size_t k = 0; k < netgen_coef[ei].size(); k++) c[k] = netgen_coef[ei][k];
+    restored[ei] = 1;
+  };
+  // Netgen's sup of an entity, evaluated lazily by swapping Netgen's
+  // coefficients of the given edges in and the current ones back.
+  auto netgen_sup = [&](const Entity & A, const std::vector<int> & eis) {
+    std::vector<std::vector<ng::Vec<3>>> cur;
+    for (int ei : eis) {
+      ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
+      cur.emplace_back(c, c + netgen_coef[ei].size());
+      for (size_t k = 0; k < netgen_coef[ei].size(); k++) c[k] = netgen_coef[ei][k];
+    }
+    const double d = R.max_distance(A);
+    for (size_t i = 0; i < eis.size(); i++) {
+      ng::Vec<3> * c = R.curved.EdgeCoefficients(eis[i]);
+      for (size_t k = 0; k < cur[i].size(); k++) c[k] = cur[i][k];
+    }
+    return d >= 0 ? d : inf;
+  };
+  // The candidate's sup is estimated on the 1/m_aud grid plus the change
+  // from the 1/(m_aud/2) subgrid (a Richardson-type allowance for the peak
+  // falling between samples); it must stay within Netgen's 1/m_aud sup.
+  auto half = [&](const Entity & A) {
+    Entity H = A;
+    H.check_ref.clear();
+    for (const auto & r : A.check_ref) {
+      const double a = r[0] * m_aud, b = r[1] * m_aud;
+      if (std::lround(a) % 2 == 0 && std::lround(b) % 2 == 0) H.check_ref.push_back(r);
+    }
+    return H;
+  };
+  auto exceeds = [&](const Entity & A, double & base, const std::vector<int> & eis) {
+    if (base < 0) base = netgen_sup(A, eis);   // -1: not yet evaluated
+    if (!(base < inf)) return false;
+    const double d = R.max_distance(A);
+    if (d < 0 || d > base) return true;
+    const double dh = R.max_distance(half(A));
+    return dh < 0 || d + std::max(0.0, d - dh) > base;
+  };
+  std::fill(edge_audit_base.begin(), edge_audit_base.end(), -1.0);
+  std::fill(face_audit_base.begin(), face_audit_base.end(), -1.0);
+  for (bool again = true; again;) {
+    again = false;
+    for (int ei = 0; ei < top.GetNEdges(); ei++)
+      if (tried[ei] && differs(ei) && exceeds(edge_audit[ei], edge_audit_base[ei], {ei})) {
+        restore(ei);
+        again = true;
+      }
+    for (int s = 0; s < mesh.GetNSE(); s++) {
+      if (!has_face_audit[s]) continue;
+      const auto sei = ng::SurfaceElementIndex::FromNr0(s);
+      std::vector<int> eis;
+      bool any = false;
+      for (auto e : top.GetEdges(sei)) {
+        eis.push_back(e.Nr0());
+        any = any || (netgen_coef[e.Nr0()].size() && differs(e.Nr0()));
+      }
+      if (!any || !exceeds(face_audit[s], face_audit_base[s], eis)) continue;
+      for (auto e : top.GetEdges(sei))
+        if (netgen_coef[e.Nr0()].size() && differs(e.Nr0())) restore(e.Nr0());
+      again = true;
+    }
+  }
+  st.seconds_audit = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
   for (int ei = 0; ei < top.GetNEdges(); ei++) {
     if (!tried[ei]) continue;
     st.edges_tried++;
+    st.edges_restored_netgen += restored[ei];
+    if (restored[ei]) edge_after[ei] = edge_base[ei];
     const int n = (int)netgen_coef[ei].size();
     const ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
     bool changed = false;

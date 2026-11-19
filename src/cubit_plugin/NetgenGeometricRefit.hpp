@@ -33,6 +33,8 @@ struct GeometricRefitStats
   // triangle interior would end farther than with Netgen's coefficients.
   int edges_tried = 0, edges_accepted = 0, edges_failed = 0, edges_rejected_distortion = 0;
   int edges_kept_netgen_limit = 0;
+  int edges_restored_netgen = 0;   // restored to Netgen by the final audit
+  double seconds_sweeps = 0, seconds_audit = 0;   // edge sweeps; final audit and restore
   int faces_tried = 0, faces_accepted = 0, faces_failed = 0, faces_rejected_distortion = 0;
   double edge_dist_before = 0, edge_dist_after = 0;   // max sampled distance
   double face_dist_before = 0, face_dist_after = 0;
