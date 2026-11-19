@@ -989,10 +989,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
   if (!has_periodic) {
-    const auto t_save = std::chrono::steady_clock::now();
     cubit_mesh_export::save_native_mesh(*ng_mesh, u8_string_to_path(filename));
-    PRINT_INFO("Netgen export: .vol write %.2f s\n",
-               std::chrono::duration<double>(std::chrono::steady_clock::now() - t_save).count());
   }
 
   int ne = ng_mesh->GetNE();

@@ -4,13 +4,11 @@
 
 #include "netgen_meshing.hpp"
 
-#include <limits>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <chrono>
 #include <unordered_map>
 #include <vector>
 
@@ -125,20 +123,6 @@ struct Entity
   int edgenr = -1;                  // curve: geometric edge number
   std::vector<std::array<double, 2>> fit_ref, check_ref;  // reference points
   std::vector<double> fit_w;
-  // Optional per-sample surface element and surface (-1: the entity's own
-  // geometry).  An order-2 edge also samples the interiors of adjacent
-  // triangles, whose shape it alone determines.
-  std::vector<ng::SurfaceElementIndex> fit_sei, check_sei;
-  std::vector<int> fit_surf, check_surf;
-  ng::SurfaceElementIndex fit_el(size_t j) const { return fit_sei.empty() ? sei : fit_sei[j]; }
-  ng::SurfaceElementIndex check_el(size_t j) const { return check_sei.empty() ? sei : check_sei[j]; }
-  int fit_sn(size_t j) const { return fit_surf.empty() ? -1 : fit_surf[j]; }
-  int check_sn(size_t j) const { return check_surf.empty() ? -1 : check_surf[j]; }
-  // Optional acceptance limits: check sample j belongs to group
-  // check_group[j], whose max distance may not exceed group_limit[group]
-  // (the distance with Netgen's coefficients).  Group 0 is the edge itself.
-  std::vector<int> check_group;
-  std::vector<double> group_limit;
   double scale = 1;              // characteristic length (edge length)
   // Directions in which each coefficient may change.  An edge inside a
   // surface can slide laterally without changing its distance to the
@@ -215,20 +199,10 @@ struct Refitter
                const ng::Point<3> & x, ng::Point<3> & q,
                std::vector<ng::Vec<3>> & dirs)
   {
-    return project(e, e.sei, -1, r, x, q, dirs);
-  }
-
-  // sei: the surface element r refers to; surf >= 0 projects onto that
-  // surface instead of the entity's own curve or surface.
-  bool project(const Entity & e, ng::SurfaceElementIndex sei, int surf,
-               const std::array<double, 2> & r, const ng::Point<3> & x,
-               ng::Point<3> & q, std::vector<ng::Vec<3>> & dirs)
-  {
-    const auto el = mesh[sei];
-    const int surfnr = surf >= 0 ? surf : e.surfnr;
+    const auto el = mesh[e.sei];
     q = x;
     dirs.clear();
-    if (e.on_curve && surf < 0) {
+    if (e.on_curve) {
       ng::EdgePointGeomInfo egi;
       geo.ProjectPointEdge(e.surfnr1, e.surfnr2, q, &egi, e.edgenr);
       ng::Vec<3> t = geo.GetTangent(q, e.surfnr1, e.surfnr2, egi, e.edgenr);
@@ -251,8 +225,8 @@ struct Refitter
         gi.u += lam[k] * el.GeomInfoPi(k + 1).u;
         gi.v += lam[k] * el.GeomInfoPi(k + 1).v;
       }
-      if (!geo.ProjectPointGI(surfnr, q, gi)) return false;
-      ng::Vec<3> n = geo.GetNormal(surfnr, q, &gi);
+      if (!geo.ProjectPointGI(e.surfnr, q, gi)) return false;
+      ng::Vec<3> n = geo.GetNormal(e.surfnr, q, &gi);
       double nl = n.Length();
       if (!(nl > 0)) return false;
       dirs.push_back((1.0 / nl) * n);
@@ -268,41 +242,23 @@ struct Refitter
     double d = 0;
     ng::Point<3> q;
     std::vector<ng::Vec<3>> dirs;
-    for (size_t j = 0; j < e.check_ref.size(); j++) {
-      const auto & r = e.check_ref[j];
-      ng::Point<3> x = eval(e.check_el(j), r);
-      if (!project(e, e.check_el(j), e.check_sn(j), r, x, q, dirs)) return -1;
+    for (const auto & r : e.check_ref) {
+      ng::Point<3> x = eval(e.sei, r);
+      if (!project(e, r, x, q, dirs)) return -1;
       d = std::max(d, ng::Dist(x, q));
     }
     return d;
-  }
-
-  // Max sampled distance per check group, or empty if a projection failed.
-  std::vector<double> group_max(const Entity & e)
-  {
-    std::vector<double> g(e.group_limit.size(), 0.0);
-    ng::Point<3> q;
-    std::vector<ng::Vec<3>> dirs;
-    for (size_t j = 0; j < e.check_ref.size(); j++) {
-      ng::Point<3> x = eval(e.check_el(j), e.check_ref[j]);
-      if (!project(e, e.check_el(j), e.check_sn(j), e.check_ref[j], x, q, dirs)) return {};
-      double &m = g[e.check_group[j]];
-      m = std::max(m, ng::Dist(x, q));
-    }
-    return g;
   }
 
   // Surface area element |dx/dxi x dx/deta| at the entity's sample points.
   std::vector<double> area_samples(const Entity & e)
   {
     std::vector<double> a;
-    for (int which = 0; which < 2; which++)
-      for (size_t j = 0; j < (which ? e.fit_ref : e.check_ref).size(); j++) {
-        const auto & r = (which ? e.fit_ref : e.check_ref)[j];
-        const auto sei = which ? e.fit_el(j) : e.check_el(j);
+    for (const auto * pts : {&e.check_ref, &e.fit_ref})
+      for (const auto & r : *pts) {
         ng::Point<3> x;
         ng::Mat<3, 2> jac;
-        curved.CalcSurfaceTransformation(ng::Point<2>(r[0], r[1]), sei, x, jac);
+        curved.CalcSurfaceTransformation(ng::Point<2>(r[0], r[1]), e.sei, x, jac);
         ng::Vec<3> c0(jac(0, 0), jac(1, 0), jac(2, 0)), c1(jac(0, 1), jac(1, 1), jac(2, 1));
         a.push_back(ng::Cross(c0, c1).Length());
       }
@@ -363,12 +319,12 @@ struct Refitter
 
     // Basis values: the mapping is affine in the coefficients.
     std::vector<ng::Point<3>> x0(np);
-    for (int j = 0; j < np; j++) x0[j] = eval(e.fit_el(j), e.fit_ref[j]);
+    for (int j = 0; j < np; j++) x0[j] = eval(e.sei, e.fit_ref[j]);
     std::vector<double> phi(n * np);
     for (int k = 0; k < n; k++) {
       coef[k](0) += 1.0;
       for (int j = 0; j < np; j++)
-        phi[k * np + j] = eval(e.fit_el(j), e.fit_ref[j])(0) - x0[j](0);
+        phi[k * np + j] = eval(e.sei, e.fit_ref[j])(0) - x0[j](0);
       coef[k](0) -= 1.0;
     }
 
@@ -387,7 +343,7 @@ struct Refitter
         ng::Point<3> x = x0[j];
         for (int k = 0; k < n; k++)
           for (int c = 0; c < 3; c++) x(c) += phi[k * np + j] * d[3 * k + c];
-        if (!project(e, e.fit_el(j), e.fit_sn(j), e.fit_ref[j], x, q, dirs)) return false;
+        if (!project(e, e.fit_ref[j], x, q, dirs)) return false;
         const double sw = std::sqrt(e.fit_w[j]);
         for (const auto & nv : dirs) {
           double r = nv * (x - q);
@@ -576,18 +532,11 @@ struct Refitter
     const bool failed = after < 0;
     const bool degenerate = !areas_ok || !volumes_ok;
     const bool closer = !failed && after < before;
-    bool within = true;
-    if (closer && !e.group_limit.empty()) {
-      const std::vector<double> g = group_max(e);
-      within = !g.empty();
-      for (size_t k = 0; within && k < g.size(); k++) within = g[k] <= e.group_limit[k];
-    }
-    if (!closer || degenerate || !within) {
+    if (!closer || degenerate) {
       for (int k = 0; k < n; k++) coef[k] = saved[k];
       after = before;
       if (failed) return -1;
-      if (!closer) return 0;
-      return degenerate ? -2 : -3;   // -2: would distort; -3: beyond Netgen's distance
+      return closer ? -2 : 0;   // -2: closer, but it would distort elements
     }
     return 1;
   }
@@ -631,6 +580,12 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   Refitter R(mesh);
   const ng::MeshTopology & top = mesh.GetTopology();
   const int order = R.curved.GetOrder();
+  // Order 2 keeps Netgen's coefficients (user decision 2026-11-19).  An
+  // order-2 triangle has no face coefficients, so its interior follows its
+  // edges: an edge-only refit bent saddle-shaped triangles (torus interiors
+  // up to 9x worse than Netgen), and keeping every triangle within Netgen's
+  // distance made the export about 35x slower than Netgen.
+  if (order <= 2) return st;
 
   // Edges that lie on a geometric curve (mesh segments).
   std::unordered_map<int, int> curve_edge;   // edge -> segment
@@ -644,338 +599,79 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   // ---- Edges -------------------------------------------------------------
   std::vector<char> done(top.GetNEdges(), 0);
   std::vector<int> edge_surf(top.GetNEdges(), -2);
-  std::vector<std::vector<ng::SurfaceElementIndex>> edge_sels(top.GetNEdges());
   for (int s = 0; s < mesh.GetNSE(); s++) {
     const auto sei = ng::SurfaceElementIndex::FromNr0(s);
     int sn = mesh.GetFaceDescriptor(mesh[sei].GetIndex()).SurfNr();
     for (auto e : top.GetEdges(sei)) {
       int ei = e.Nr0();
-      edge_sels[ei].push_back(sei);
       if (edge_surf[ei] == -2) edge_surf[ei] = sn;
       else if (edge_surf[ei] != sn) edge_surf[ei] = -1;   // two surfaces
     }
   }
 
-  // Edges that also fit adjacent order-2 triangles depend on their
-  // neighbours, so they are swept three times (one sweep left the cone 3x
-  // worse than the edge-only fit, three came within 10 %); the others once.
-  // Statistics count each edge once: its first distance and last result.
-  const int npass = 3;
-  const double inf = std::numeric_limits<double>::infinity();
-  // Netgen's coefficients are the baseline (user decision 2026-11-19): with
-  // adjacent order-2 triangles, an edge refit is kept only when the edge and
-  // each such triangle interior stay within their distance under Netgen's
-  // coefficients, measured before any refit.
-  std::vector<std::vector<ng::Vec<3>>> netgen_coef(top.GetNEdges());
-  for (int ei = 0; ei < top.GetNEdges(); ei++) {
-    const int n = R.curved.NumEdgeCoefficients(ei);
-    if (n > 0) netgen_coef[ei].assign(R.curved.EdgeCoefficients(ei), R.curved.EdgeCoefficients(ei) + n);
-  }
-  // Limit grid used during the sweeps: strict-interior points (a, b) / m_lim
-  // of a triangle and j / m_lim along an edge.  The final audit uses the
-  // denser m_aud grid to estimate each entity's sup.
-  const int m_lim = 12;
-  std::vector<double> face_base(mesh.GetNSE(), inf);
-  std::vector<Entity> face_audit(mesh.GetNSE());
-  std::vector<double> face_audit_base(mesh.GetNSE(), inf);
-  const int m_aud = 96;
-  std::vector<char> has_face_audit(mesh.GetNSE(), 0);
   for (int s = 0; s < mesh.GetNSE(); s++) {
     const auto sei = ng::SurfaceElementIndex::FromNr0(s);
     const auto el = mesh[sei];
-    if (el.GetType() != ng::TRIG || R.curved.NumFaceCoefficients(top.GetFace(sei).Nr0()) > 0) continue;
-    Entity F;
-    F.sei = sei;
-    F.surfnr = mesh.GetFaceDescriptor(el.GetIndex()).SurfNr();
-    F.scale = 0;
-    for (int k = 0; k < 3; k++) F.scale = std::max(F.scale, ng::Dist(mesh[el[k]], mesh[el[(k + 1) % 3]]));
-    for (int a = 1; a < m_lim; a++)
-      for (int b = 1; a + b < m_lim; b++) F.check_ref.push_back({double(a) / m_lim, double(b) / m_lim});
-    const double d = R.max_distance(F);
-    if (d >= 0) face_base[s] = d;
-    F.check_ref.clear();
-    for (int a = 1; a < m_aud; a++)
-      for (int b = 1; a + b < m_aud; b++) F.check_ref.push_back({double(a) / m_aud, double(b) / m_aud});
-    face_audit[s] = F;   // its Netgen sup is evaluated only if an edge changes
-    has_face_audit[s] = 1;
-  }
-  std::vector<char> tried(top.GetNEdges(), 0), ever_failed(top.GetNEdges(), 0),
-      ever_distorted(top.GetNEdges(), 0), ever_limited(top.GetNEdges(), 0);
-  std::vector<double> edge_base(top.GetNEdges(), inf), edge_after(top.GetNEdges(), 0);
-  std::vector<Entity> edge_audit(top.GetNEdges());
-  std::vector<double> edge_audit_base(top.GetNEdges(), inf);
-  long step = 0;
-  std::vector<long> fit_step(top.GetNEdges(), 0), mod_step(top.GetNEdges(), 0);
-  auto t0 = std::chrono::steady_clock::now();
-  for (int pass = 0; pass < npass; pass++) {
-    std::fill(done.begin(), done.end(), 0);
-    for (int s = 0; s < mesh.GetNSE(); s++) {
-      const auto sei = ng::SurfaceElementIndex::FromNr0(s);
-      const auto el = mesh[sei];
-      auto edges = top.GetEdges(sei);
-      auto local = ng::MeshTopology::GetEdges(el.GetType());
-      for (int i = 0; i < edges.Size(); i++) {
-        int ei = edges[i].Nr0();
-        if (done[ei]) continue;
-        done[ei] = 1;
-        int n = R.curved.NumEdgeCoefficients(ei);
-        if (n <= 0) continue;
+    auto edges = top.GetEdges(sei);
+    auto local = ng::MeshTopology::GetEdges(el.GetType());
+    for (int i = 0; i < edges.Size(); i++) {
+      int ei = edges[i].Nr0();
+      if (done[ei]) continue;
+      done[ei] = 1;
+      int n = R.curved.NumEdgeCoefficients(ei);
+      if (n <= 0) continue;
 
-        Entity E;
-        E.sei = sei;
-        auto it = curve_edge.find(ei);
-        if (it != curve_edge.end()) {
-          const ng::EdgeDescriptor & ed =
-              mesh.GetEdgeDescriptor(mesh[ng::SegmentIndex::FromNr0(it->second)]);
-          E.on_curve = true;
-          E.surfnr1 = ed.SurfNr(0);
-          E.surfnr2 = ed.SurfNr(1);
-          E.edgenr = ed.EdgeNr();
-        } else if (edge_surf[ei] >= 0) {
-          E.surfnr = edge_surf[ei];
-        } else {
-          continue;   // an edge between surfaces without a geometric curve
-        }
-        auto ra = vertex_ref(el.GetType(), local[i][0]);
-        auto rb = vertex_ref(el.GetType(), local[i][1]);
-        E.scale = ng::Dist(mesh[el[local[i][0]]], mesh[el[local[i][1]]]);
-        auto at = [&](double t) {
-          return std::array<double, 2>{ra[0] + t * (rb[0] - ra[0]),
-                                       ra[1] + t * (rb[1] - ra[1])};
-        };
-        for (size_t j = 0; j < g1.size(); j++) {
-          E.fit_ref.push_back(at(g1[j]));
-          E.fit_w.push_back(w1[j]);
-        }
-        // A triangle without face coefficients (order 2) takes its interior
-        // shape from its edges alone.  Fitting the edge to the geometry by
-        // itself then lets it slide along its chord and bend that interior
-        // (measured 3.8x worse inside saddle-shaped torus triangles), so the
-        // interiors of such adjacent triangles join the edge's fit samples,
-        // each against its own surface.  An edge on a geometric curve stays
-        // fitted to the curve alone (trading it against a neighbour lifted a
-        // planar cap triangle off its plane), but still checks those
-        // interiors: any accepted change of any edge of the triangle then
-        // keeps the triangle within its Netgen distance on the final mesh.
-        std::vector<ng::SurfaceElementIndex> tris;
-        for (auto fs : edge_sels[ei]) {
-          const auto fel = mesh[fs];
-          if (fel.GetType() == ng::TRIG && R.curved.NumFaceCoefficients(top.GetFace(fs).Nr0()) == 0)
-            tris.push_back(fs);
-        }
-        // With limits, the edge is checked on the same uniform grid as the
-        // triangles (1/m_lim spacing), so edge and interior limits refer to
-        // the same points before and after.
-        if (tris.empty())
-          for (int j = 1; j <= ncheck; j++) E.check_ref.push_back(at(double(j) / (ncheck + 1)));
-        else
-          for (int j = 1; j < m_lim; j++) E.check_ref.push_back(at(double(j) / m_lim));
-        if (pass == 0) {   // the edge's own samples depend on its coefficients only
-          const double d = R.max_distance(E);
-          edge_base[ei] = d >= 0 ? d : inf;
-          Entity A = E;   // the edge's own samples on the audit grid
-          A.check_ref.clear();
-          for (int j = 1; j < m_aud; j++) A.check_ref.push_back(at(double(j) / m_aud));
-          edge_audit[ei] = A;
-        }
-        bool face_fit = false;
-        for (auto fs : tris) {
-          const auto fel = mesh[fs];
-          if (E.fit_sei.empty()) {
-            E.fit_sei.assign(E.fit_ref.size(), sei);
-            E.fit_surf.assign(E.fit_ref.size(), -1);
-            E.check_sei.assign(E.check_ref.size(), sei);
-            E.check_surf.assign(E.check_ref.size(), -1);
-            E.check_group.assign(E.check_ref.size(), 0);
-            E.group_limit = {edge_base[ei]};
-          }
-          const int grp = (int)E.group_limit.size();
-          E.group_limit.push_back(face_base[fs.Nr0()]);
-          const int fsn = mesh.GetFaceDescriptor(fel.GetIndex()).SurfNr();
-          if (!E.on_curve) {
-            face_fit = true;
-            for (size_t a = 0; a < g1.size(); a++)
-              for (size_t b = 0; b < g1.size(); b++) {
-                double yy = g1[b], xx = (1 - yy) * g1[a];
-                E.fit_ref.push_back({xx, yy});
-                E.fit_w.push_back(2 * w1[a] * w1[b] * (1 - yy));   // unit total per triangle
-                E.fit_sei.push_back(fs);
-                E.fit_surf.push_back(fsn);
-              }
-          }
-          for (int a = 1; a < m_lim; a++)
-            for (int b = 1; a + b < m_lim; b++) {
-              E.check_ref.push_back({double(a) / m_lim, double(b) / m_lim});
-              E.check_sei.push_back(fs);
-              E.check_surf.push_back(fsn);
-              E.check_group.push_back(grp);
-            }
-        }
-        if (!E.on_curve && E.scale > 0) {
-          ng::Vec<3> t0 = mesh[el[local[i][1]]] - mesh[el[local[i][0]]];
-          t0 *= 1.0 / E.scale;
-          ng::Point<3> q;
-          std::vector<ng::Vec<3>> nd;
-          auto rm = at(0.5);
-          if (R.project(E, rm, R.eval(sei, rm), q, nd)) {
-            ng::Vec<3> n0 = nd[0] - (nd[0] * t0) * t0;
-            double l = n0.Length();
-            if (l > 1e-8) E.free_dirs = {t0, (1.0 / l) * n0};
-          }
-        }
-
-        E.volumes = shared_volumes(top, {el[local[i][0]], el[local[i][1]]});
-
-        if (pass > 0 && !face_fit) continue;
-        // A later sweep refits an edge only if a coupled edge (another edge
-        // of an adjacent order-2 triangle) changed since its last fit.
-        if (pass > 0) {
-          bool dirty = false;
-          for (auto fs : tris)
-            for (auto e2 : top.GetEdges(fs))
-              dirty = dirty || (e2.Nr0() != ei && mod_step[e2.Nr0()] > fit_step[ei]);
-          if (!dirty) continue;
-        }
-        std::vector<ng::Vec<3>> prev(R.curved.EdgeCoefficients(ei), R.curved.EdgeCoefficients(ei) + n);
-        double before = 0, after = 0;
-        int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
-        fit_step[ei] = ++step;
-        for (int k = 0; k < n; k++)
-          if (prev[k] != R.curved.EdgeCoefficients(ei)[k]) { mod_step[ei] = step; break; }
-        tried[ei] = 1;
-        if (r == -1) ever_failed[ei] = 1;
-        if (r == -2) ever_distorted[ei] = 1;
-        if (r == -3) ever_limited[ei] = 1;
-        // Final distance of the edge's own samples (the last sweep's state).
-        if (E.group_limit.empty()) {
-          edge_after[ei] = after;
-        } else {
-          const std::vector<double> g = R.group_max(E);
-          edge_after[ei] = g.empty() ? after : g[0];
+      Entity E;
+      E.sei = sei;
+      auto it = curve_edge.find(ei);
+      if (it != curve_edge.end()) {
+        const ng::EdgeDescriptor & ed =
+            mesh.GetEdgeDescriptor(mesh[ng::SegmentIndex::FromNr0(it->second)]);
+        E.on_curve = true;
+        E.surfnr1 = ed.SurfNr(0);
+        E.surfnr2 = ed.SurfNr(1);
+        E.edgenr = ed.EdgeNr();
+      } else if (edge_surf[ei] >= 0) {
+        E.surfnr = edge_surf[ei];
+      } else {
+        continue;   // an edge between surfaces without a geometric curve
+      }
+      auto ra = vertex_ref(el.GetType(), local[i][0]);
+      auto rb = vertex_ref(el.GetType(), local[i][1]);
+      E.scale = ng::Dist(mesh[el[local[i][0]]], mesh[el[local[i][1]]]);
+      auto at = [&](double t) {
+        return std::array<double, 2>{ra[0] + t * (rb[0] - ra[0]),
+                                     ra[1] + t * (rb[1] - ra[1])};
+      };
+      for (size_t j = 0; j < g1.size(); j++) {
+        E.fit_ref.push_back(at(g1[j]));
+        E.fit_w.push_back(w1[j]);
+      }
+      for (int j = 1; j <= ncheck; j++) E.check_ref.push_back(at(double(j) / (ncheck + 1)));
+      if (!E.on_curve && E.scale > 0) {
+        ng::Vec<3> t0 = mesh[el[local[i][1]]] - mesh[el[local[i][0]]];
+        t0 *= 1.0 / E.scale;
+        ng::Point<3> q;
+        std::vector<ng::Vec<3>> nd;
+        auto rm = at(0.5);
+        if (R.project(E, rm, R.eval(sei, rm), q, nd)) {
+          ng::Vec<3> n0 = nd[0] - (nd[0] * t0) * t0;
+          double l = n0.Length();
+          if (l > 1e-8) E.free_dirs = {t0, (1.0 / l) * n0};
         }
       }
+
+      E.volumes = shared_volumes(top, {el[local[i][0]], el[local[i][1]]});
+
+      st.edges_tried++;
+      double before = 0, after = 0;
+      int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
+      if (r > 0) st.edges_accepted++;
+      if (r == -1) st.edges_failed++;
+      if (r == -2) st.edges_rejected_distortion++;
+      st.edge_dist_before = std::max(st.edge_dist_before, before);
+      st.edge_dist_after = std::max(st.edge_dist_after, after);
     }
-  }
-  // Final audit on the final mesh (user decision 2026-11-19): every edge
-  // and every order-2 triangle must stay within its Netgen distance on the
-  // guard grid and the audit grids.  Where it does not, Netgen's coefficients of the edge (or of
-  // all changed edges of the triangle) are restored, and the triangles next
-  // to restored edges are audited again until nothing changes.  Restoring
-  // only moves towards Netgen's state, so the loop terminates.  The guard is
-  // a sampled check, not a continuous bound.
-  auto differs = [&](int ei) {
-    const int n = (int)netgen_coef[ei].size();
-    const ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
-    for (int k = 0; k < n; k++)
-      for (int d = 0; d < 3; d++)
-        if (c[k](d) != netgen_coef[ei][k](d)) return true;
-    return false;
-  };
-  auto t1 = std::chrono::steady_clock::now();
-  st.seconds_sweeps = std::chrono::duration<double>(t1 - t0).count();
-  std::vector<char> restored(top.GetNEdges(), 0);
-  auto restore = [&](int ei) {
-    ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
-    for (size_t k = 0; k < netgen_coef[ei].size(); k++) c[k] = netgen_coef[ei][k];
-    restored[ei] = 1;
-  };
-  // Netgen's sup of an entity, evaluated lazily by swapping Netgen's
-  // coefficients of the given edges in and the current ones back.
-  auto netgen_sup = [&](const Entity & A, const std::vector<int> & eis) {
-    std::vector<std::vector<ng::Vec<3>>> cur;
-    for (int ei : eis) {
-      ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
-      cur.emplace_back(c, c + netgen_coef[ei].size());
-      for (size_t k = 0; k < netgen_coef[ei].size(); k++) c[k] = netgen_coef[ei][k];
-    }
-    const double d = R.max_distance(A);
-    for (size_t i = 0; i < eis.size(); i++) {
-      ng::Vec<3> * c = R.curved.EdgeCoefficients(eis[i]);
-      for (size_t k = 0; k < cur[i].size(); k++) c[k] = cur[i][k];
-    }
-    return d >= 0 ? d : inf;
-  };
-  // The candidate's sup is estimated on the 1/m_aud grid plus the change
-  // from the 1/(m_aud/2) subgrid (a Richardson-type allowance for the peak
-  // falling between samples); it must stay within Netgen's 1/m_aud sup.
-  // One pass over the 1/m_aud samples gives both maxima: all points (d)
-  // and the 1/(m_aud/2) subgrid (dh).
-  auto sup_pair = [&](const Entity & A, double & d, double & dh) {
-    d = dh = 0;
-    ng::Point<3> q;
-    std::vector<ng::Vec<3>> dirs;
-    for (size_t j = 0; j < A.check_ref.size(); j++) {
-      const auto & r = A.check_ref[j];
-      ng::Point<3> x = R.eval(A.check_el(j), r);
-      if (!R.project(A, A.check_el(j), A.check_sn(j), r, x, q, dirs)) return false;
-      const double dj = ng::Dist(x, q);
-      d = std::max(d, dj);
-      if (std::lround(r[0] * m_aud) % 2 == 0 && std::lround(r[1] * m_aud) % 2 == 0) dh = std::max(dh, dj);
-    }
-    return true;
-  };
-  auto exceeds = [&](const Entity & A, double & base, const std::vector<int> & eis) {
-    if (base < 0) base = netgen_sup(A, eis);   // -1: not yet evaluated
-    if (!(base < inf)) return false;
-    double d, dh;
-    if (!sup_pair(A, d, dh)) return true;
-    return d + std::max(0.0, d - dh) > base;
-  };
-  std::fill(edge_audit_base.begin(), edge_audit_base.end(), -1.0);
-  std::fill(face_audit_base.begin(), face_audit_base.end(), -1.0);
-  // An edge's own samples depend on its coefficients only, so each edge is
-  // audited once.  A triangle that passed is audited again only after one
-  // of its edges was restored.
-  for (int ei = 0; ei < top.GetNEdges(); ei++)
-    if (tried[ei] && differs(ei) && exceeds(edge_audit[ei], edge_audit_base[ei], {ei})) restore(ei);
-  std::vector<char> face_ok(mesh.GetNSE(), 0);
-  int round = 0;
-  std::chrono::steady_clock::time_point t_re;
-  for (bool again = true; again; round++) {
-    if (round == 1) t_re = std::chrono::steady_clock::now();
-    again = false;
-    for (int s = 0; s < mesh.GetNSE(); s++) {
-      if (!has_face_audit[s] || face_ok[s]) continue;
-      const auto sei = ng::SurfaceElementIndex::FromNr0(s);
-      std::vector<int> eis;
-      bool any = false;
-      for (auto e : top.GetEdges(sei)) {
-        eis.push_back(e.Nr0());
-        any = any || (netgen_coef[e.Nr0()].size() && differs(e.Nr0()));
-      }
-      if (!any || !exceeds(face_audit[s], face_audit_base[s], eis)) {
-        face_ok[s] = 1;
-        continue;
-      }
-      for (auto e : top.GetEdges(sei))
-        if (netgen_coef[e.Nr0()].size() && differs(e.Nr0())) {
-          restore(e.Nr0());
-          for (auto fs : edge_sels[e.Nr0()]) face_ok[fs.Nr0()] = 0;
-        }
-      face_ok[s] = 1;   // now Netgen's map on all its edges
-      again = true;
-    }
-  }
-  const auto t2 = std::chrono::steady_clock::now();
-  st.seconds_audit = std::chrono::duration<double>(t2 - t1).count();
-  st.seconds_reaudit = round > 1 ? std::chrono::duration<double>(t2 - t_re).count() : 0.0;
-  st.audit_rounds = round;
-  for (int ei = 0; ei < top.GetNEdges(); ei++) {
-    if (!tried[ei]) continue;
-    st.edges_tried++;
-    st.edges_restored_netgen += restored[ei];
-    if (restored[ei]) edge_after[ei] = edge_base[ei];
-    const int n = (int)netgen_coef[ei].size();
-    const ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
-    bool changed = false;
-    for (int k = 0; k < n && !changed; k++)
-      for (int d = 0; d < 3; d++) changed = changed || c[k](d) != netgen_coef[ei][k](d);
-    if (changed) st.edges_accepted++;
-    st.edges_failed += ever_failed[ei];
-    st.edges_rejected_distortion += ever_distorted[ei];
-    st.edges_kept_netgen_limit += ever_limited[ei];
-    if (edge_base[ei] < inf) st.edge_dist_before = std::max(st.edge_dist_before, edge_base[ei]);
-    st.edge_dist_after = std::max(st.edge_dist_after, edge_after[ei]);
   }
 
   // ---- Faces (after the edges they are blended with) ---------------------

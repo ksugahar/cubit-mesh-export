@@ -26,17 +26,7 @@ struct GeometricRefitStats
 {
   // failed: a projection was not trustworthy.  rejected_distortion: the
   // refit was closer to the geometry but would distort an element.
-  // Edge counts are per edge, over all sweeps: accepted means its final
-  // coefficients differ from Netgen's; failed / rejected_distortion /
-  // kept_netgen_limit mean at least one sweep ended that way.
-  // kept_netgen_limit: closer overall, but an edge or an adjacent order-2
-  // triangle interior would end farther than with Netgen's coefficients.
   int edges_tried = 0, edges_accepted = 0, edges_failed = 0, edges_rejected_distortion = 0;
-  int edges_kept_netgen_limit = 0;
-  int edges_restored_netgen = 0;   // restored to Netgen by the final audit
-  double seconds_sweeps = 0, seconds_audit = 0;   // edge sweeps; final audit and restore
-  double seconds_reaudit = 0;   // part of seconds_audit: rounds after the first (re-audit of restored neighbours)
-  int audit_rounds = 0;
   int faces_tried = 0, faces_accepted = 0, faces_failed = 0, faces_rejected_distortion = 0;
   double edge_dist_before = 0, edge_dist_after = 0;   // max sampled distance
   double face_dist_before = 0, face_dist_after = 0;

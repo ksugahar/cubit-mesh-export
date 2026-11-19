@@ -2,12 +2,10 @@
 
 ## Unreleased
 
-- Order-2 geometric refit: an edge inside a surface also fits the interiors of adjacent
-  triangles, which have no face coefficients at order 2, and such edges are swept three
-  times. The refit is kept only if the edge and each such triangle interior stay within
-  their distance under Netgen's own coefficients. The edge-only fit could slide an edge
-  along its chord and bend those interiors (torus, size 0.1: 3.5e-4 against Netgen's 9.0e-5).
-  Orders 3 and above are unchanged.
+- Order 2 keeps Netgen's curving coefficients: the geometric refit now applies to orders
+  3 and above only. At order 2 a triangle has no face coefficients, so refitting its edges
+  bent saddle-shaped interiors (torus, size 0.1: 3.5e-4 against Netgen's 9.0e-5), and
+  bounding every edge and triangle by Netgen's distance made the export about 35x slower.
 
 ## 2.6.0
 
