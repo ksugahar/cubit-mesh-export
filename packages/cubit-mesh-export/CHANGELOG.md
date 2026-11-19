@@ -1,11 +1,9 @@
 # Changelog
 
-## Unreleased
+## 2.6.1
 
-- Order 2 keeps Netgen's curving coefficients: the geometric refit now applies to orders
-  3 and above only. At order 2 a triangle has no face coefficients, so refitting its edges
-  bent saddle-shaped interiors (torus, size 0.1: 3.5e-4 against Netgen's 9.0e-5), and
-  bounding every edge and triangle by Netgen's distance made the export about 35x slower.
+- For Netgen export, geometric order 2 uses Netgen's standard curving coefficients.
+  Geometric orders 3 and above use Cubit's CAD-aware geometric refit.
 
 ## 2.6.0
 
