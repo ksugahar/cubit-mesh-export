@@ -704,6 +704,8 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   std::vector<double> edge_base(top.GetNEdges(), inf), edge_after(top.GetNEdges(), 0);
   std::vector<Entity> edge_audit(top.GetNEdges());
   std::vector<double> edge_audit_base(top.GetNEdges(), inf);
+  long step = 0;
+  std::vector<long> fit_step(top.GetNEdges(), 0), mod_step(top.GetNEdges(), 0);
   auto t0 = std::chrono::steady_clock::now();
   for (int pass = 0; pass < npass; pass++) {
     std::fill(done.begin(), done.end(), 0);
@@ -825,8 +827,21 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
         E.volumes = shared_volumes(top, {el[local[i][0]], el[local[i][1]]});
 
         if (pass > 0 && !face_fit) continue;
+        // A later sweep refits an edge only if a coupled edge (another edge
+        // of an adjacent order-2 triangle) changed since its last fit.
+        if (pass > 0) {
+          bool dirty = false;
+          for (auto fs : tris)
+            for (auto e2 : top.GetEdges(fs))
+              dirty = dirty || (e2.Nr0() != ei && mod_step[e2.Nr0()] > fit_step[ei]);
+          if (!dirty) continue;
+        }
+        std::vector<ng::Vec<3>> prev(R.curved.EdgeCoefficients(ei), R.curved.EdgeCoefficients(ei) + n);
         double before = 0, after = 0;
         int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
+        fit_step[ei] = ++step;
+        for (int k = 0; k < n; k++)
+          if (prev[k] != R.curved.EdgeCoefficients(ei)[k]) { mod_step[ei] = step; break; }
         tried[ei] = 1;
         if (r == -1) ever_failed[ei] = 1;
         if (r == -2) ever_distorted[ei] = 1;
@@ -883,34 +898,44 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   // The candidate's sup is estimated on the 1/m_aud grid plus the change
   // from the 1/(m_aud/2) subgrid (a Richardson-type allowance for the peak
   // falling between samples); it must stay within Netgen's 1/m_aud sup.
-  auto half = [&](const Entity & A) {
-    Entity H = A;
-    H.check_ref.clear();
-    for (const auto & r : A.check_ref) {
-      const double a = r[0] * m_aud, b = r[1] * m_aud;
-      if (std::lround(a) % 2 == 0 && std::lround(b) % 2 == 0) H.check_ref.push_back(r);
+  // One pass over the 1/m_aud samples gives both maxima: all points (d)
+  // and the 1/(m_aud/2) subgrid (dh).
+  auto sup_pair = [&](const Entity & A, double & d, double & dh) {
+    d = dh = 0;
+    ng::Point<3> q;
+    std::vector<ng::Vec<3>> dirs;
+    for (size_t j = 0; j < A.check_ref.size(); j++) {
+      const auto & r = A.check_ref[j];
+      ng::Point<3> x = R.eval(A.check_el(j), r);
+      if (!R.project(A, A.check_el(j), A.check_sn(j), r, x, q, dirs)) return false;
+      const double dj = ng::Dist(x, q);
+      d = std::max(d, dj);
+      if (std::lround(r[0] * m_aud) % 2 == 0 && std::lround(r[1] * m_aud) % 2 == 0) dh = std::max(dh, dj);
     }
-    return H;
+    return true;
   };
   auto exceeds = [&](const Entity & A, double & base, const std::vector<int> & eis) {
     if (base < 0) base = netgen_sup(A, eis);   // -1: not yet evaluated
     if (!(base < inf)) return false;
-    const double d = R.max_distance(A);
-    if (d < 0 || d > base) return true;
-    const double dh = R.max_distance(half(A));
-    return dh < 0 || d + std::max(0.0, d - dh) > base;
+    double d, dh;
+    if (!sup_pair(A, d, dh)) return true;
+    return d + std::max(0.0, d - dh) > base;
   };
   std::fill(edge_audit_base.begin(), edge_audit_base.end(), -1.0);
   std::fill(face_audit_base.begin(), face_audit_base.end(), -1.0);
-  for (bool again = true; again;) {
+  // An edge's own samples depend on its coefficients only, so each edge is
+  // audited once.  A triangle that passed is audited again only after one
+  // of its edges was restored.
+  for (int ei = 0; ei < top.GetNEdges(); ei++)
+    if (tried[ei] && differs(ei) && exceeds(edge_audit[ei], edge_audit_base[ei], {ei})) restore(ei);
+  std::vector<char> face_ok(mesh.GetNSE(), 0);
+  int round = 0;
+  std::chrono::steady_clock::time_point t_re;
+  for (bool again = true; again; round++) {
+    if (round == 1) t_re = std::chrono::steady_clock::now();
     again = false;
-    for (int ei = 0; ei < top.GetNEdges(); ei++)
-      if (tried[ei] && differs(ei) && exceeds(edge_audit[ei], edge_audit_base[ei], {ei})) {
-        restore(ei);
-        again = true;
-      }
     for (int s = 0; s < mesh.GetNSE(); s++) {
-      if (!has_face_audit[s]) continue;
+      if (!has_face_audit[s] || face_ok[s]) continue;
       const auto sei = ng::SurfaceElementIndex::FromNr0(s);
       std::vector<int> eis;
       bool any = false;
@@ -918,13 +943,23 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
         eis.push_back(e.Nr0());
         any = any || (netgen_coef[e.Nr0()].size() && differs(e.Nr0()));
       }
-      if (!any || !exceeds(face_audit[s], face_audit_base[s], eis)) continue;
+      if (!any || !exceeds(face_audit[s], face_audit_base[s], eis)) {
+        face_ok[s] = 1;
+        continue;
+      }
       for (auto e : top.GetEdges(sei))
-        if (netgen_coef[e.Nr0()].size() && differs(e.Nr0())) restore(e.Nr0());
+        if (netgen_coef[e.Nr0()].size() && differs(e.Nr0())) {
+          restore(e.Nr0());
+          for (auto fs : edge_sels[e.Nr0()]) face_ok[fs.Nr0()] = 0;
+        }
+      face_ok[s] = 1;   // now Netgen's map on all its edges
       again = true;
     }
   }
-  st.seconds_audit = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
+  const auto t2 = std::chrono::steady_clock::now();
+  st.seconds_audit = std::chrono::duration<double>(t2 - t1).count();
+  st.seconds_reaudit = round > 1 ? std::chrono::duration<double>(t2 - t_re).count() : 0.0;
+  st.audit_rounds = round;
   for (int ei = 0; ei < top.GetNEdges(); ei++) {
     if (!tried[ei]) continue;
     st.edges_tried++;

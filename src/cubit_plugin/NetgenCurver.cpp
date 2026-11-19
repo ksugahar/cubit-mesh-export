@@ -1349,13 +1349,13 @@ bool NetgenCurver::curve_and_extract(int order)
     PRINT_INFO("NetgenCurver: geometric refit - edges %d/%d accepted "
                "(%d failed, %d kept to avoid distortion, %d kept within Netgen's distance, %d restored to Netgen by the final audit), "
                "max distance %.3e -> %.3e; faces %d/%d accepted (%d failed, %d kept to avoid distortion), "
-               "max distance %.3e -> %.3e; edge sweeps %.2f s, audit %.2f s\n",
+               "max distance %.3e -> %.3e; edge sweeps %.2f s, audit %.2f s (re-audit %.2f s, %d rounds)\n",
                rs.edges_accepted, rs.edges_tried, rs.edges_failed,
                rs.edges_rejected_distortion, rs.edges_kept_netgen_limit, rs.edges_restored_netgen,
                rs.edge_dist_before, rs.edge_dist_after,
                rs.faces_accepted, rs.faces_tried, rs.faces_failed,
                rs.faces_rejected_distortion,
-               rs.face_dist_before, rs.face_dist_after, rs.seconds_sweeps, rs.seconds_audit);
+               rs.face_dist_before, rs.face_dist_after, rs.seconds_sweeps, rs.seconds_audit, rs.seconds_reaudit, rs.audit_rounds);
   }
 
   // Pyramids are evaluated correctly only by a Netgen 6.2.2608 runtime with
