@@ -670,7 +670,9 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
     const int n = R.curved.NumEdgeCoefficients(ei);
     if (n > 0) netgen_coef[ei].assign(R.curved.EdgeCoefficients(ei), R.curved.EdgeCoefficients(ei) + n);
   }
-  const int m_int = order + 4;   // strict-interior check grid of a triangle
+  // Limit grid: strict-interior points (a, b) / m_lim of a triangle and
+  // j / m_lim along an edge, the spacing of the independent readback.
+  const int m_lim = 24;
   std::vector<double> face_base(mesh.GetNSE(), inf);
   for (int s = 0; s < mesh.GetNSE(); s++) {
     const auto sei = ng::SurfaceElementIndex::FromNr0(s);
@@ -681,8 +683,8 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
     F.surfnr = mesh.GetFaceDescriptor(el.GetIndex()).SurfNr();
     F.scale = 0;
     for (int k = 0; k < 3; k++) F.scale = std::max(F.scale, ng::Dist(mesh[el[k]], mesh[el[(k + 1) % 3]]));
-    for (int a = 1; a <= m_int; a++)
-      for (int b = 1; a + b <= m_int; b++) F.check_ref.push_back({double(a) / (m_int + 1), double(b) / (m_int + 1)});
+    for (int a = 1; a < m_lim; a++)
+      for (int b = 1; a + b < m_lim; b++) F.check_ref.push_back({double(a) / m_lim, double(b) / m_lim});
     const double d = R.max_distance(F);
     if (d >= 0) face_base[s] = d;
   }
@@ -729,24 +731,36 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
           E.fit_ref.push_back(at(g1[j]));
           E.fit_w.push_back(w1[j]);
         }
-        for (int j = 1; j <= ncheck; j++) E.check_ref.push_back(at(double(j) / (ncheck + 1)));
-        if (pass == 0) {   // the edge's own samples depend on its coefficients only
-          const double d = R.max_distance(E);
-          edge_base[ei] = d >= 0 ? d : inf;
-        }
-
         // A triangle without face coefficients (order 2) takes its interior
         // shape from its edges alone.  Fitting the edge to the geometry by
         // itself then lets it slide along its chord and bend that interior
         // (measured 3.8x worse inside saddle-shaped torus triangles), so the
-        // interiors of such adjacent triangles join the edge's fit and check
-        // samples, each against its own surface.  An edge on a geometric curve
-        // stays fitted to the curve alone: the curve fixes it, and trading it
-        // against a neighbour lifted a planar cap triangle off its plane.
-        for (auto fs : E.on_curve ? std::vector<ng::SurfaceElementIndex>{} : edge_sels[ei]) {
+        // interiors of such adjacent triangles join the edge's fit samples,
+        // each against its own surface.  An edge on a geometric curve stays
+        // fitted to the curve alone (trading it against a neighbour lifted a
+        // planar cap triangle off its plane), but still checks those
+        // interiors: any accepted change of any edge of the triangle then
+        // keeps the triangle within its Netgen distance on the final mesh.
+        std::vector<ng::SurfaceElementIndex> tris;
+        for (auto fs : edge_sels[ei]) {
           const auto fel = mesh[fs];
-          if (fel.GetType() != ng::TRIG || R.curved.NumFaceCoefficients(top.GetFace(fs).Nr0()) > 0)
-            continue;
+          if (fel.GetType() == ng::TRIG && R.curved.NumFaceCoefficients(top.GetFace(fs).Nr0()) == 0)
+            tris.push_back(fs);
+        }
+        // With limits, the edge is checked on the same uniform grid as the
+        // triangles (1/m_lim spacing), so edge and interior limits refer to
+        // the same points before and after.
+        if (tris.empty())
+          for (int j = 1; j <= ncheck; j++) E.check_ref.push_back(at(double(j) / (ncheck + 1)));
+        else
+          for (int j = 1; j < m_lim; j++) E.check_ref.push_back(at(double(j) / m_lim));
+        if (pass == 0) {   // the edge's own samples depend on its coefficients only
+          const double d = R.max_distance(E);
+          edge_base[ei] = d >= 0 ? d : inf;
+        }
+        bool face_fit = false;
+        for (auto fs : tris) {
+          const auto fel = mesh[fs];
           if (E.fit_sei.empty()) {
             E.fit_sei.assign(E.fit_ref.size(), sei);
             E.fit_surf.assign(E.fit_ref.size(), -1);
@@ -758,17 +772,20 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
           const int grp = (int)E.group_limit.size();
           E.group_limit.push_back(face_base[fs.Nr0()]);
           const int fsn = mesh.GetFaceDescriptor(fel.GetIndex()).SurfNr();
-          for (size_t a = 0; a < g1.size(); a++)
-            for (size_t b = 0; b < g1.size(); b++) {
-              double yy = g1[b], xx = (1 - yy) * g1[a];
-              E.fit_ref.push_back({xx, yy});
-              E.fit_w.push_back(2 * w1[a] * w1[b] * (1 - yy));   // unit total per triangle
-              E.fit_sei.push_back(fs);
-              E.fit_surf.push_back(fsn);
-            }
-          for (int a = 1; a <= m_int; a++)
-            for (int b = 1; a + b <= m_int; b++) {
-              E.check_ref.push_back({double(a) / (m_int + 1), double(b) / (m_int + 1)});
+          if (!E.on_curve) {
+            face_fit = true;
+            for (size_t a = 0; a < g1.size(); a++)
+              for (size_t b = 0; b < g1.size(); b++) {
+                double yy = g1[b], xx = (1 - yy) * g1[a];
+                E.fit_ref.push_back({xx, yy});
+                E.fit_w.push_back(2 * w1[a] * w1[b] * (1 - yy));   // unit total per triangle
+                E.fit_sei.push_back(fs);
+                E.fit_surf.push_back(fsn);
+              }
+          }
+          for (int a = 1; a < m_lim; a++)
+            for (int b = 1; a + b < m_lim; b++) {
+              E.check_ref.push_back({double(a) / m_lim, double(b) / m_lim});
               E.check_sei.push_back(fs);
               E.check_surf.push_back(fsn);
               E.check_group.push_back(grp);
@@ -789,7 +806,7 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
 
         E.volumes = shared_volumes(top, {el[local[i][0]], el[local[i][1]]});
 
-        if (pass > 0 && E.fit_sei.empty()) continue;
+        if (pass > 0 && !face_fit) continue;
         double before = 0, after = 0;
         int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
         tried[ei] = 1;
