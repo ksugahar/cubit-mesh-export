@@ -1347,11 +1347,11 @@ bool NetgenCurver::curve_and_extract(int order)
   } else {
     GeometricRefitStats rs = geometric_refit(*ng_mesh_);
     PRINT_INFO("NetgenCurver: geometric refit - edges %d/%d accepted "
-               "(%d failed, %d kept to avoid distortion), max distance %.3e -> %.3e; "
-               "faces %d/%d accepted (%d failed, %d kept to avoid distortion), "
+               "(%d failed, %d kept to avoid distortion, %d kept within Netgen's distance), "
+               "max distance %.3e -> %.3e; faces %d/%d accepted (%d failed, %d kept to avoid distortion), "
                "max distance %.3e -> %.3e\n",
                rs.edges_accepted, rs.edges_tried, rs.edges_failed,
-               rs.edges_rejected_distortion,
+               rs.edges_rejected_distortion, rs.edges_kept_netgen_limit,
                rs.edge_dist_before, rs.edge_dist_after,
                rs.faces_accepted, rs.faces_tried, rs.faces_failed,
                rs.faces_rejected_distortion,

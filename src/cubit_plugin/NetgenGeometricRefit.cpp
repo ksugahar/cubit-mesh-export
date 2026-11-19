@@ -4,6 +4,7 @@
 
 #include "netgen_meshing.hpp"
 
+#include <limits>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -132,6 +133,11 @@ struct Entity
   ng::SurfaceElementIndex check_el(size_t j) const { return check_sei.empty() ? sei : check_sei[j]; }
   int fit_sn(size_t j) const { return fit_surf.empty() ? -1 : fit_surf[j]; }
   int check_sn(size_t j) const { return check_surf.empty() ? -1 : check_surf[j]; }
+  // Optional acceptance limits: check sample j belongs to group
+  // check_group[j], whose max distance may not exceed group_limit[group]
+  // (the distance with Netgen's coefficients).  Group 0 is the edge itself.
+  std::vector<int> check_group;
+  std::vector<double> group_limit;
   double scale = 1;              // characteristic length (edge length)
   // Directions in which each coefficient may change.  An edge inside a
   // surface can slide laterally without changing its distance to the
@@ -268,6 +274,21 @@ struct Refitter
       d = std::max(d, ng::Dist(x, q));
     }
     return d;
+  }
+
+  // Max sampled distance per check group, or empty if a projection failed.
+  std::vector<double> group_max(const Entity & e)
+  {
+    std::vector<double> g(e.group_limit.size(), 0.0);
+    ng::Point<3> q;
+    std::vector<ng::Vec<3>> dirs;
+    for (size_t j = 0; j < e.check_ref.size(); j++) {
+      ng::Point<3> x = eval(e.check_el(j), e.check_ref[j]);
+      if (!project(e, e.check_el(j), e.check_sn(j), e.check_ref[j], x, q, dirs)) return {};
+      double &m = g[e.check_group[j]];
+      m = std::max(m, ng::Dist(x, q));
+    }
+    return g;
   }
 
   // Surface area element |dx/dxi x dx/deta| at the entity's sample points.
@@ -554,11 +575,18 @@ struct Refitter
     const bool failed = after < 0;
     const bool degenerate = !areas_ok || !volumes_ok;
     const bool closer = !failed && after < before;
-    if (!closer || degenerate) {
+    bool within = true;
+    if (closer && !e.group_limit.empty()) {
+      const std::vector<double> g = group_max(e);
+      within = !g.empty();
+      for (size_t k = 0; within && k < g.size(); k++) within = g[k] <= e.group_limit[k];
+    }
+    if (!closer || degenerate || !within) {
       for (int k = 0; k < n; k++) coef[k] = saved[k];
       after = before;
       if (failed) return -1;
-      return closer ? -2 : 0;   // -2: closer, but it would distort elements
+      if (!closer) return 0;
+      return degenerate ? -2 : -3;   // -2: would distort; -3: beyond Netgen's distance
     }
     return 1;
   }
@@ -632,8 +660,35 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   // worse than the edge-only fit, three came within 10 %); the others once.
   // Statistics count each edge once: its first distance and last result.
   const int npass = 3;
-  std::vector<int> edge_result(top.GetNEdges(), 2);   // 2: not tried
-  std::vector<double> edge_before(top.GetNEdges(), 0), edge_after(top.GetNEdges(), 0);
+  const double inf = std::numeric_limits<double>::infinity();
+  // Netgen's coefficients are the baseline (user decision 2026-11-19): with
+  // adjacent order-2 triangles, an edge refit is kept only when the edge and
+  // each such triangle interior stay within their distance under Netgen's
+  // coefficients, measured before any refit.
+  std::vector<std::vector<ng::Vec<3>>> netgen_coef(top.GetNEdges());
+  for (int ei = 0; ei < top.GetNEdges(); ei++) {
+    const int n = R.curved.NumEdgeCoefficients(ei);
+    if (n > 0) netgen_coef[ei].assign(R.curved.EdgeCoefficients(ei), R.curved.EdgeCoefficients(ei) + n);
+  }
+  const int m_int = order + 4;   // strict-interior check grid of a triangle
+  std::vector<double> face_base(mesh.GetNSE(), inf);
+  for (int s = 0; s < mesh.GetNSE(); s++) {
+    const auto sei = ng::SurfaceElementIndex::FromNr0(s);
+    const auto el = mesh[sei];
+    if (el.GetType() != ng::TRIG || R.curved.NumFaceCoefficients(top.GetFace(sei).Nr0()) > 0) continue;
+    Entity F;
+    F.sei = sei;
+    F.surfnr = mesh.GetFaceDescriptor(el.GetIndex()).SurfNr();
+    F.scale = 0;
+    for (int k = 0; k < 3; k++) F.scale = std::max(F.scale, ng::Dist(mesh[el[k]], mesh[el[(k + 1) % 3]]));
+    for (int a = 1; a <= m_int; a++)
+      for (int b = 1; a + b <= m_int; b++) F.check_ref.push_back({double(a) / (m_int + 1), double(b) / (m_int + 1)});
+    const double d = R.max_distance(F);
+    if (d >= 0) face_base[s] = d;
+  }
+  std::vector<char> tried(top.GetNEdges(), 0), ever_failed(top.GetNEdges(), 0),
+      ever_distorted(top.GetNEdges(), 0), ever_limited(top.GetNEdges(), 0);
+  std::vector<double> edge_base(top.GetNEdges(), inf), edge_after(top.GetNEdges(), 0);
   for (int pass = 0; pass < npass; pass++) {
     std::fill(done.begin(), done.end(), 0);
     for (int s = 0; s < mesh.GetNSE(); s++) {
@@ -675,6 +730,10 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
           E.fit_w.push_back(w1[j]);
         }
         for (int j = 1; j <= ncheck; j++) E.check_ref.push_back(at(double(j) / (ncheck + 1)));
+        if (pass == 0) {   // the edge's own samples depend on its coefficients only
+          const double d = R.max_distance(E);
+          edge_base[ei] = d >= 0 ? d : inf;
+        }
 
         // A triangle without face coefficients (order 2) takes its interior
         // shape from its edges alone.  Fitting the edge to the geometry by
@@ -693,7 +752,11 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
             E.fit_surf.assign(E.fit_ref.size(), -1);
             E.check_sei.assign(E.check_ref.size(), sei);
             E.check_surf.assign(E.check_ref.size(), -1);
+            E.check_group.assign(E.check_ref.size(), 0);
+            E.group_limit = {edge_base[ei]};
           }
+          const int grp = (int)E.group_limit.size();
+          E.group_limit.push_back(face_base[fs.Nr0()]);
           const int fsn = mesh.GetFaceDescriptor(fel.GetIndex()).SurfNr();
           for (size_t a = 0; a < g1.size(); a++)
             for (size_t b = 0; b < g1.size(); b++) {
@@ -703,12 +766,12 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
               E.fit_sei.push_back(fs);
               E.fit_surf.push_back(fsn);
             }
-          const int m = order + 4;
-          for (int a = 1; a <= m; a++)
-            for (int b = 1; a + b <= m; b++) {
-              E.check_ref.push_back({double(a) / (m + 1), double(b) / (m + 1)});
+          for (int a = 1; a <= m_int; a++)
+            for (int b = 1; a + b <= m_int; b++) {
+              E.check_ref.push_back({double(a) / (m_int + 1), double(b) / (m_int + 1)});
               E.check_sei.push_back(fs);
               E.check_surf.push_back(fsn);
+              E.check_group.push_back(grp);
             }
         }
         if (!E.on_curve && E.scale > 0) {
@@ -729,21 +792,33 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
         if (pass > 0 && E.fit_sei.empty()) continue;
         double before = 0, after = 0;
         int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
-        if (pass == 0) edge_before[ei] = before;
-        // A later sweep that keeps the edge (0) does not undo an earlier refit.
-        if (pass == 0 || r != 0) edge_result[ei] = r;
-        edge_after[ei] = after;
+        tried[ei] = 1;
+        if (r == -1) ever_failed[ei] = 1;
+        if (r == -2) ever_distorted[ei] = 1;
+        if (r == -3) ever_limited[ei] = 1;
+        // Final distance of the edge's own samples (the last sweep's state).
+        if (E.group_limit.empty()) {
+          edge_after[ei] = after;
+        } else {
+          const std::vector<double> g = R.group_max(E);
+          edge_after[ei] = g.empty() ? after : g[0];
+        }
       }
     }
   }
   for (int ei = 0; ei < top.GetNEdges(); ei++) {
-    const int r = edge_result[ei];
-    if (r == 2) continue;
+    if (!tried[ei]) continue;
     st.edges_tried++;
-    if (r > 0) st.edges_accepted++;
-    if (r == -1) st.edges_failed++;
-    if (r == -2) st.edges_rejected_distortion++;
-    st.edge_dist_before = std::max(st.edge_dist_before, edge_before[ei]);
+    const int n = (int)netgen_coef[ei].size();
+    const ng::Vec<3> * c = R.curved.EdgeCoefficients(ei);
+    bool changed = false;
+    for (int k = 0; k < n && !changed; k++)
+      for (int d = 0; d < 3; d++) changed = changed || c[k](d) != netgen_coef[ei][k](d);
+    if (changed) st.edges_accepted++;
+    st.edges_failed += ever_failed[ei];
+    st.edges_rejected_distortion += ever_distorted[ei];
+    st.edges_kept_netgen_limit += ever_limited[ei];
+    if (edge_base[ei] < inf) st.edge_dist_before = std::max(st.edge_dist_before, edge_base[ei]);
     st.edge_dist_after = std::max(st.edge_dist_after, edge_after[ei]);
   }
 
