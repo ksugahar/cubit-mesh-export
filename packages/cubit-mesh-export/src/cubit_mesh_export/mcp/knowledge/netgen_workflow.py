@@ -93,7 +93,12 @@ least-squares problem.  Edges are also refitted from a second start with the
 highest coefficient removed, since from Netgen's order-5 start the solve
 settles in a worse minimum than the one the hierarchical basis contains.  Set
 `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` to export Netgen's coefficients for A/B
-comparison.
+comparison.  At order 2 a triangle has no face coefficients, so its interior
+follows its edges alone; an edge inside a surface therefore also fits the
+interiors of its adjacent order-2 triangles (three sweeps), and an edge on a
+geometric curve stays fitted to the curve.  Fitting the edge alone slid it
+along its chord on saddle-shaped surfaces and raised the torus interior
+distance 3.8x above Netgen's own coefficients.
 
 ### Pyramids require the patched Netgen 6.2.2608 runtime
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Order-2 geometric refit: an edge inside a surface also fits the interiors of adjacent
+  triangles, which have no face coefficients at order 2, and such edges are swept three
+  times. The edge-only fit could slide an edge along its chord and bend those interiors
+  (torus, size 0.1: 3.4e-4 to 8.4e-5 maximum surface distance). Orders 3 and above are unchanged.
+
 ## 2.6.0
 
 - Rename the MCP server command from `mcp-server-cubit` to `cubit-mcp`; the old command is removed.

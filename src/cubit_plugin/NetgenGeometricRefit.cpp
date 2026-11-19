@@ -123,6 +123,15 @@ struct Entity
   int edgenr = -1;                  // curve: geometric edge number
   std::vector<std::array<double, 2>> fit_ref, check_ref;  // reference points
   std::vector<double> fit_w;
+  // Optional per-sample surface element and surface (-1: the entity's own
+  // geometry).  An order-2 edge also samples the interiors of adjacent
+  // triangles, whose shape it alone determines.
+  std::vector<ng::SurfaceElementIndex> fit_sei, check_sei;
+  std::vector<int> fit_surf, check_surf;
+  ng::SurfaceElementIndex fit_el(size_t j) const { return fit_sei.empty() ? sei : fit_sei[j]; }
+  ng::SurfaceElementIndex check_el(size_t j) const { return check_sei.empty() ? sei : check_sei[j]; }
+  int fit_sn(size_t j) const { return fit_surf.empty() ? -1 : fit_surf[j]; }
+  int check_sn(size_t j) const { return check_surf.empty() ? -1 : check_surf[j]; }
   double scale = 1;              // characteristic length (edge length)
   // Directions in which each coefficient may change.  An edge inside a
   // surface can slide laterally without changing its distance to the
@@ -199,10 +208,20 @@ struct Refitter
                const ng::Point<3> & x, ng::Point<3> & q,
                std::vector<ng::Vec<3>> & dirs)
   {
-    const auto el = mesh[e.sei];
+    return project(e, e.sei, -1, r, x, q, dirs);
+  }
+
+  // sei: the surface element r refers to; surf >= 0 projects onto that
+  // surface instead of the entity's own curve or surface.
+  bool project(const Entity & e, ng::SurfaceElementIndex sei, int surf,
+               const std::array<double, 2> & r, const ng::Point<3> & x,
+               ng::Point<3> & q, std::vector<ng::Vec<3>> & dirs)
+  {
+    const auto el = mesh[sei];
+    const int surfnr = surf >= 0 ? surf : e.surfnr;
     q = x;
     dirs.clear();
-    if (e.on_curve) {
+    if (e.on_curve && surf < 0) {
       ng::EdgePointGeomInfo egi;
       geo.ProjectPointEdge(e.surfnr1, e.surfnr2, q, &egi, e.edgenr);
       ng::Vec<3> t = geo.GetTangent(q, e.surfnr1, e.surfnr2, egi, e.edgenr);
@@ -225,8 +244,8 @@ struct Refitter
         gi.u += lam[k] * el.GeomInfoPi(k + 1).u;
         gi.v += lam[k] * el.GeomInfoPi(k + 1).v;
       }
-      if (!geo.ProjectPointGI(e.surfnr, q, gi)) return false;
-      ng::Vec<3> n = geo.GetNormal(e.surfnr, q, &gi);
+      if (!geo.ProjectPointGI(surfnr, q, gi)) return false;
+      ng::Vec<3> n = geo.GetNormal(surfnr, q, &gi);
       double nl = n.Length();
       if (!(nl > 0)) return false;
       dirs.push_back((1.0 / nl) * n);
@@ -242,9 +261,10 @@ struct Refitter
     double d = 0;
     ng::Point<3> q;
     std::vector<ng::Vec<3>> dirs;
-    for (const auto & r : e.check_ref) {
-      ng::Point<3> x = eval(e.sei, r);
-      if (!project(e, r, x, q, dirs)) return -1;
+    for (size_t j = 0; j < e.check_ref.size(); j++) {
+      const auto & r = e.check_ref[j];
+      ng::Point<3> x = eval(e.check_el(j), r);
+      if (!project(e, e.check_el(j), e.check_sn(j), r, x, q, dirs)) return -1;
       d = std::max(d, ng::Dist(x, q));
     }
     return d;
@@ -254,11 +274,13 @@ struct Refitter
   std::vector<double> area_samples(const Entity & e)
   {
     std::vector<double> a;
-    for (const auto * pts : {&e.check_ref, &e.fit_ref})
-      for (const auto & r : *pts) {
+    for (int which = 0; which < 2; which++)
+      for (size_t j = 0; j < (which ? e.fit_ref : e.check_ref).size(); j++) {
+        const auto & r = (which ? e.fit_ref : e.check_ref)[j];
+        const auto sei = which ? e.fit_el(j) : e.check_el(j);
         ng::Point<3> x;
         ng::Mat<3, 2> jac;
-        curved.CalcSurfaceTransformation(ng::Point<2>(r[0], r[1]), e.sei, x, jac);
+        curved.CalcSurfaceTransformation(ng::Point<2>(r[0], r[1]), sei, x, jac);
         ng::Vec<3> c0(jac(0, 0), jac(1, 0), jac(2, 0)), c1(jac(0, 1), jac(1, 1), jac(2, 1));
         a.push_back(ng::Cross(c0, c1).Length());
       }
@@ -319,12 +341,12 @@ struct Refitter
 
     // Basis values: the mapping is affine in the coefficients.
     std::vector<ng::Point<3>> x0(np);
-    for (int j = 0; j < np; j++) x0[j] = eval(e.sei, e.fit_ref[j]);
+    for (int j = 0; j < np; j++) x0[j] = eval(e.fit_el(j), e.fit_ref[j]);
     std::vector<double> phi(n * np);
     for (int k = 0; k < n; k++) {
       coef[k](0) += 1.0;
       for (int j = 0; j < np; j++)
-        phi[k * np + j] = eval(e.sei, e.fit_ref[j])(0) - x0[j](0);
+        phi[k * np + j] = eval(e.fit_el(j), e.fit_ref[j])(0) - x0[j](0);
       coef[k](0) -= 1.0;
     }
 
@@ -343,7 +365,7 @@ struct Refitter
         ng::Point<3> x = x0[j];
         for (int k = 0; k < n; k++)
           for (int c = 0; c < 3; c++) x(c) += phi[k * np + j] * d[3 * k + c];
-        if (!project(e, e.fit_ref[j], x, q, dirs)) return false;
+        if (!project(e, e.fit_el(j), e.fit_sn(j), e.fit_ref[j], x, q, dirs)) return false;
         const double sw = std::sqrt(e.fit_w[j]);
         for (const auto & nv : dirs) {
           double r = nv * (x - q);
@@ -593,79 +615,136 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   // ---- Edges -------------------------------------------------------------
   std::vector<char> done(top.GetNEdges(), 0);
   std::vector<int> edge_surf(top.GetNEdges(), -2);
+  std::vector<std::vector<ng::SurfaceElementIndex>> edge_sels(top.GetNEdges());
   for (int s = 0; s < mesh.GetNSE(); s++) {
     const auto sei = ng::SurfaceElementIndex::FromNr0(s);
     int sn = mesh.GetFaceDescriptor(mesh[sei].GetIndex()).SurfNr();
     for (auto e : top.GetEdges(sei)) {
       int ei = e.Nr0();
+      edge_sels[ei].push_back(sei);
       if (edge_surf[ei] == -2) edge_surf[ei] = sn;
       else if (edge_surf[ei] != sn) edge_surf[ei] = -1;   // two surfaces
     }
   }
 
-  for (int s = 0; s < mesh.GetNSE(); s++) {
-    const auto sei = ng::SurfaceElementIndex::FromNr0(s);
-    const auto el = mesh[sei];
-    auto edges = top.GetEdges(sei);
-    auto local = ng::MeshTopology::GetEdges(el.GetType());
-    for (int i = 0; i < edges.Size(); i++) {
-      int ei = edges[i].Nr0();
-      if (done[ei]) continue;
-      done[ei] = 1;
-      int n = R.curved.NumEdgeCoefficients(ei);
-      if (n <= 0) continue;
+  // Edges that also fit adjacent order-2 triangles depend on their
+  // neighbours, so they are swept three times (one sweep left the cone 3x
+  // worse than the edge-only fit, three came within 10 %); the others once.
+  // Statistics count each edge once: its first distance and last result.
+  const int npass = 3;
+  std::vector<int> edge_result(top.GetNEdges(), 2);   // 2: not tried
+  std::vector<double> edge_before(top.GetNEdges(), 0), edge_after(top.GetNEdges(), 0);
+  for (int pass = 0; pass < npass; pass++) {
+    std::fill(done.begin(), done.end(), 0);
+    for (int s = 0; s < mesh.GetNSE(); s++) {
+      const auto sei = ng::SurfaceElementIndex::FromNr0(s);
+      const auto el = mesh[sei];
+      auto edges = top.GetEdges(sei);
+      auto local = ng::MeshTopology::GetEdges(el.GetType());
+      for (int i = 0; i < edges.Size(); i++) {
+        int ei = edges[i].Nr0();
+        if (done[ei]) continue;
+        done[ei] = 1;
+        int n = R.curved.NumEdgeCoefficients(ei);
+        if (n <= 0) continue;
 
-      Entity E;
-      E.sei = sei;
-      auto it = curve_edge.find(ei);
-      if (it != curve_edge.end()) {
-        const ng::EdgeDescriptor & ed =
-            mesh.GetEdgeDescriptor(mesh[ng::SegmentIndex::FromNr0(it->second)]);
-        E.on_curve = true;
-        E.surfnr1 = ed.SurfNr(0);
-        E.surfnr2 = ed.SurfNr(1);
-        E.edgenr = ed.EdgeNr();
-      } else if (edge_surf[ei] >= 0) {
-        E.surfnr = edge_surf[ei];
-      } else {
-        continue;   // an edge between surfaces without a geometric curve
-      }
-      auto ra = vertex_ref(el.GetType(), local[i][0]);
-      auto rb = vertex_ref(el.GetType(), local[i][1]);
-      E.scale = ng::Dist(mesh[el[local[i][0]]], mesh[el[local[i][1]]]);
-      auto at = [&](double t) {
-        return std::array<double, 2>{ra[0] + t * (rb[0] - ra[0]),
-                                     ra[1] + t * (rb[1] - ra[1])};
-      };
-      for (size_t j = 0; j < g1.size(); j++) {
-        E.fit_ref.push_back(at(g1[j]));
-        E.fit_w.push_back(w1[j]);
-      }
-      for (int j = 1; j <= ncheck; j++) E.check_ref.push_back(at(double(j) / (ncheck + 1)));
-      if (!E.on_curve && E.scale > 0) {
-        ng::Vec<3> t0 = mesh[el[local[i][1]]] - mesh[el[local[i][0]]];
-        t0 *= 1.0 / E.scale;
-        ng::Point<3> q;
-        std::vector<ng::Vec<3>> nd;
-        auto rm = at(0.5);
-        if (R.project(E, rm, R.eval(sei, rm), q, nd)) {
-          ng::Vec<3> n0 = nd[0] - (nd[0] * t0) * t0;
-          double l = n0.Length();
-          if (l > 1e-8) E.free_dirs = {t0, (1.0 / l) * n0};
+        Entity E;
+        E.sei = sei;
+        auto it = curve_edge.find(ei);
+        if (it != curve_edge.end()) {
+          const ng::EdgeDescriptor & ed =
+              mesh.GetEdgeDescriptor(mesh[ng::SegmentIndex::FromNr0(it->second)]);
+          E.on_curve = true;
+          E.surfnr1 = ed.SurfNr(0);
+          E.surfnr2 = ed.SurfNr(1);
+          E.edgenr = ed.EdgeNr();
+        } else if (edge_surf[ei] >= 0) {
+          E.surfnr = edge_surf[ei];
+        } else {
+          continue;   // an edge between surfaces without a geometric curve
         }
+        auto ra = vertex_ref(el.GetType(), local[i][0]);
+        auto rb = vertex_ref(el.GetType(), local[i][1]);
+        E.scale = ng::Dist(mesh[el[local[i][0]]], mesh[el[local[i][1]]]);
+        auto at = [&](double t) {
+          return std::array<double, 2>{ra[0] + t * (rb[0] - ra[0]),
+                                       ra[1] + t * (rb[1] - ra[1])};
+        };
+        for (size_t j = 0; j < g1.size(); j++) {
+          E.fit_ref.push_back(at(g1[j]));
+          E.fit_w.push_back(w1[j]);
+        }
+        for (int j = 1; j <= ncheck; j++) E.check_ref.push_back(at(double(j) / (ncheck + 1)));
+
+        // A triangle without face coefficients (order 2) takes its interior
+        // shape from its edges alone.  Fitting the edge to the geometry by
+        // itself then lets it slide along its chord and bend that interior
+        // (measured 3.8x worse inside saddle-shaped torus triangles), so the
+        // interiors of such adjacent triangles join the edge's fit and check
+        // samples, each against its own surface.  An edge on a geometric curve
+        // stays fitted to the curve alone: the curve fixes it, and trading it
+        // against a neighbour lifted a planar cap triangle off its plane.
+        for (auto fs : E.on_curve ? std::vector<ng::SurfaceElementIndex>{} : edge_sels[ei]) {
+          const auto fel = mesh[fs];
+          if (fel.GetType() != ng::TRIG || R.curved.NumFaceCoefficients(top.GetFace(fs).Nr0()) > 0)
+            continue;
+          if (E.fit_sei.empty()) {
+            E.fit_sei.assign(E.fit_ref.size(), sei);
+            E.fit_surf.assign(E.fit_ref.size(), -1);
+            E.check_sei.assign(E.check_ref.size(), sei);
+            E.check_surf.assign(E.check_ref.size(), -1);
+          }
+          const int fsn = mesh.GetFaceDescriptor(fel.GetIndex()).SurfNr();
+          for (size_t a = 0; a < g1.size(); a++)
+            for (size_t b = 0; b < g1.size(); b++) {
+              double yy = g1[b], xx = (1 - yy) * g1[a];
+              E.fit_ref.push_back({xx, yy});
+              E.fit_w.push_back(2 * w1[a] * w1[b] * (1 - yy));   // unit total per triangle
+              E.fit_sei.push_back(fs);
+              E.fit_surf.push_back(fsn);
+            }
+          const int m = order + 4;
+          for (int a = 1; a <= m; a++)
+            for (int b = 1; a + b <= m; b++) {
+              E.check_ref.push_back({double(a) / (m + 1), double(b) / (m + 1)});
+              E.check_sei.push_back(fs);
+              E.check_surf.push_back(fsn);
+            }
+        }
+        if (!E.on_curve && E.scale > 0) {
+          ng::Vec<3> t0 = mesh[el[local[i][1]]] - mesh[el[local[i][0]]];
+          t0 *= 1.0 / E.scale;
+          ng::Point<3> q;
+          std::vector<ng::Vec<3>> nd;
+          auto rm = at(0.5);
+          if (R.project(E, rm, R.eval(sei, rm), q, nd)) {
+            ng::Vec<3> n0 = nd[0] - (nd[0] * t0) * t0;
+            double l = n0.Length();
+            if (l > 1e-8) E.free_dirs = {t0, (1.0 / l) * n0};
+          }
+        }
+
+        E.volumes = shared_volumes(top, {el[local[i][0]], el[local[i][1]]});
+
+        if (pass > 0 && E.fit_sei.empty()) continue;
+        double before = 0, after = 0;
+        int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
+        if (pass == 0) edge_before[ei] = before;
+        // A later sweep that keeps the edge (0) does not undo an earlier refit.
+        if (pass == 0 || r != 0) edge_result[ei] = r;
+        edge_after[ei] = after;
       }
-
-      E.volumes = shared_volumes(top, {el[local[i][0]], el[local[i][1]]});
-
-      st.edges_tried++;
-      double before = 0, after = 0;
-      int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
-      if (r > 0) st.edges_accepted++;
-      if (r == -1) st.edges_failed++;
-      if (r == -2) st.edges_rejected_distortion++;
-      st.edge_dist_before = std::max(st.edge_dist_before, before);
-      st.edge_dist_after = std::max(st.edge_dist_after, after);
     }
+  }
+  for (int ei = 0; ei < top.GetNEdges(); ei++) {
+    const int r = edge_result[ei];
+    if (r == 2) continue;
+    st.edges_tried++;
+    if (r > 0) st.edges_accepted++;
+    if (r == -1) st.edges_failed++;
+    if (r == -2) st.edges_rejected_distortion++;
+    st.edge_dist_before = std::max(st.edge_dist_before, edge_before[ei]);
+    st.edge_dist_after = std::max(st.edge_dist_after, edge_after[ei]);
   }
 
   // ---- Faces (after the edges they are blended with) ---------------------
