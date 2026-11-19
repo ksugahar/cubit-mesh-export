@@ -91,7 +91,11 @@ Tikhonov weight of 1e-10 held back the order-5 coefficients, and the normal
 equations (condition 1e14 for order-5 faces) were solved instead of the
 least-squares problem.  Edges are also refitted from a second start with the
 highest coefficient removed, since from Netgen's order-5 start the solve
-settles in a worse minimum than the one the hierarchical basis contains.  Set
+settles in a worse minimum than the one the hierarchical basis contains.
+Order 2 is exported with Netgen's coefficients unchanged: an order-2 triangle
+has no face coefficients, so an edge refit bends its interior (torus: up to
+9x worse inside), and keeping every triangle within Netgen's distance cost
+about 35x Netgen's export time.  Set
 `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` to export Netgen's coefficients for A/B
 comparison.
 

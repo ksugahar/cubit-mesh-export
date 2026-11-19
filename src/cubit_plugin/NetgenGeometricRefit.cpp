@@ -580,6 +580,12 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
   Refitter R(mesh);
   const ng::MeshTopology & top = mesh.GetTopology();
   const int order = R.curved.GetOrder();
+  // Order 2 keeps Netgen's coefficients (user decision 2026-11-19).  An
+  // order-2 triangle has no face coefficients, so its interior follows its
+  // edges: an edge-only refit bent saddle-shaped triangles (torus interiors
+  // up to 9x worse than Netgen), and keeping every triangle within Netgen's
+  // distance made the export about 35x slower than Netgen.
+  if (order <= 2) return st;
 
   // Edges that lie on a geometric curve (mesh segments).
   std::unordered_map<int, int> curve_edge;   // edge -> segment
