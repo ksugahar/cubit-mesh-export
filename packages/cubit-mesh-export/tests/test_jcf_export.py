@@ -1,4 +1,4 @@
-"""Static solver input (.jcf) export: writer and named-settings contracts, without Cubit.
+"""Static and frequency solver input (.jcf) export: writer and named-settings contracts, without Cubit.
 
 Guards: the writer stays standalone (stdlib + NumPy), magnets off +z get their own coordinate
 system, flow-in faces from a sideset go to the coil element the current leaves, pyramid faces map to
@@ -222,3 +222,69 @@ def test_sideset_report_names_unused_sidesets_and_shared_faces(mods):
                                              9: ("", [(5, 6, 7)])}), {})["unused_sidesets"]
     assert unused == [{"cubit_id": 7, "name": "sym"}, {"cubit_id": 8, "name": ""},
                       {"cubit_id": 9, "name": ""}]   # blank or repeated names stay distinct
+
+
+# ----------------------------------------------------------------------------- frequency study
+FREQ = {"study": "frequency", "frequency": 50, "unit": "m",
+        "materials": [{"part": 1, "name": "Air", "mu_r": 1},
+                      {"part": 2, "name": "Copper", "mu_r": 1, "resistivity": 1.724e-8}],
+        "external_field": {"axis": [0, 0, 1], "amplitude": 0.02, "phase": 30}}
+# root.xml of FREQ on _stack, pinned from the output solved with JMAG 25.2 (2026-11-23).
+FREQ_ROOT_SHA256 = "21799613dea48201fed148ddfcebb383bea4b3f32c04c9b4df97c8b0a9639363"
+
+
+def test_frequency_root_is_pinned(mods, tmp_path):
+    import hashlib
+    jw, _ = mods
+    jw.write_jcf(_stack(jw), tmp_path / "f.jcf", FREQ)
+    root = zipfile.ZipFile(tmp_path / "f.jcf").read("root.xml")
+    assert hashlib.sha256(root).hexdigest() == FREQ_ROOT_SHA256
+    text = root.decode()
+    for needle in ('<parameter name="solver_id">1</parameter>', 'name="flg_use_conductivity">1<',
+                   'name="function_type">1<', 'name="amplitude" unit="tesla">0.02<',
+                   'name="phase" unit="deg">30<', 'column_units="Hz" name="step_table"'):
+        assert needle in text, needle
+
+
+def test_static_is_unchanged_by_the_frequency_option(mods, tmp_path):
+    jw, _ = mods
+    spec = {**FREQ, "study": "static", "external_field": {"axis": [0, 0, 1], "value": 0.02}}
+    del spec["frequency"]
+    jw.write_jcf(_stack(jw), tmp_path / "s.jcf", spec)
+    text = _root(tmp_path / "s.jcf")
+    assert "solver_id" not in text and 'name="flg_use_conductivity">0<' in text
+    assert 'name="function_type">0<' in text
+
+
+@pytest.mark.parametrize("change, match", [
+    ({"study": "transient"}, "'static' or 'frequency'"),
+    ({"frequency": None}, "positive 'frequency'"),
+    ({"frequency": 0}, "positive 'frequency'"),
+    ({"frequency": True}, "positive 'frequency'"),
+    ({"frequency": float("nan")}, "positive 'frequency'"),
+    ({"external_field": {"axis": [0, 0, 1], "value": 0.02}}, "'amplitude'"),
+    ({"external_field": {"amplitude": 0.02, "ring_radius": 10}}, "'amplitude'"),
+    ({"materials": [{"part": 1, "name": "Air", "mu_r": 1},
+                    {"part": 2, "name": "Steel", "bh": [[0, 0], [100, 1.0]]}]}, r"\['bh'"),
+])
+def test_frequency_refuses_unchecked_input(mods, tmp_path, change, match):
+    jw, _ = mods
+    with pytest.raises(jw.JcfError, match=match):
+        jw.write_jcf(_stack(jw), tmp_path / "x.jcf", {**FREQ, **change})
+    assert not (tmp_path / "x.jcf").exists()
+
+
+def test_frequency_refuses_groups(mods, tmp_path):
+    jw, _ = mods
+    spec = {**FREQ, "boundaries": [{"type": "symmetry", "face_nodes": [(1, 2, 3, 4)], "label": "sym"}]}
+    with pytest.raises(jw.JcfError, match="does not support"):
+        jw.write_jcf(_stack(jw), tmp_path / "g.jcf", spec)
+
+
+def test_settings_pass_the_study_through(mods):
+    _, jm = mods
+    cb = FakeCubit({1: "air", 2: "cu"}, {})
+    spec = jm.settings_to_spec(cb, {"study": "frequency", "frequency": 100,
+                                    "material_library": {"air": {"mu_r": 1}, "cu": {"resistivity": 1.7e-8}},
+                                    "block_materials": {"air": "air", "cu": "cu"}})
+    assert spec["study"] == "frequency" and spec["frequency"] == 100

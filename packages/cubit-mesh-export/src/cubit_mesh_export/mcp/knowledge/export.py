@@ -574,7 +574,7 @@ Export:
 
 - **Export**: Netgen, Gmsh, Nastran and ELF/MAGIC run the C++ APREPRO export
   commands. VTK writes ASCII VTK XML (.vtu) from Python (`cubit_mesh_export.vtu`).
-  JMAG writes a static solver input from an analysis-settings JSON
+  JMAG writes a static or frequency solver input from an analysis-settings JSON
   (`cubit_mesh_export.jmag`).
 - Solver orchestration is outside the Cubit plugin. Downstream applications
   consume exported meshes through their own process boundary.

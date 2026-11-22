@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- JMAG (.jcf) export writes a frequency study: `"study": "frequency"` with `"frequency"` in Hz,
+  linear materials, eddy-current conductors and a sinusoidal external field (`amplitude`, `phase`).
+  Magnets, B-H steel, coils and boundaries are refused for this study.
+
 ## 2.6.1
 
 - For Netgen export, geometric order 2 uses Netgen's standard curving coefficients.

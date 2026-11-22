@@ -1,10 +1,12 @@
-"""Standalone writer of a static magnetic solver input in the .jcf container format.
+"""Standalone writer of a static or frequency magnetic solver input in the .jcf container format.
 
 Writes from mesh data in memory with the standard library and NumPy only; no solver,
 pre-processor, license or other Python package is needed. Only the parameters known to be
-read by the solver are written (static analysis: linear materials, external field, linear
+read by the solver are written (static study: linear materials, external field, linear
 permanent magnets, nonlinear B-H steel with lamination factor, coils with a flow-in face or a
-direction vector, symmetry boundaries; hexahedra, tetrahedra, prisms and pyramids).
+direction vector, symmetry boundaries; hexahedra, tetrahedra, prisms and pyramids). A frequency
+study (``study="frequency"``, ``frequency`` in Hz) takes linear materials, eddy-current
+conductors and a sinusoidal external field only.
 
 Provenance: derived from the template-free builder of the author's private solver-interface
 package (MIT), reduced to writing. Additions here: a magnet whose direction is not +z gets its
@@ -330,8 +332,21 @@ def build_root_xml(spec: dict, parts: set, groups: list) -> bytes:
     ids = [int(m["part"]) for m in mats]
     if len(set(ids)) != len(ids) or set(ids) != parts:
         raise JcfError(f"materials must cover each mesh part {sorted(parts)} once; got {sorted(ids)}")
-    if spec.get("study", "static") != "static":
-        raise JcfError("only a static study is supported")
+    study = spec.get("study", "static")
+    if study not in ("static", "frequency"):
+        raise JcfError("study must be 'static' or 'frequency'")
+    freq = study == "frequency"
+    if freq:
+        f = spec.get("frequency")
+        if not isinstance(f, (int, float)) or isinstance(f, bool) or not np.isfinite(f) or f <= 0:
+            raise JcfError("a frequency study needs a finite positive 'frequency' in Hz")
+        # Checked against the solver: linear materials, solid eddy-current conductors and a
+        # sinusoidal external field. Nothing else is written for this study.
+        unchecked = sorted({g[3] for g in groups}
+                           | {"magnet" for m in mats if m.get("magnet")}
+                           | {"bh" for m in mats if m.get("bh") is not None})
+        if unchecked:
+            raise JcfError(f"a frequency study does not support {unchecked}")
     u = spec.get("unit", "mm")
     lu = u if u in ("m", "mm", "cm") else None
     out = ['<?xml version="1.0" encoding="UTF-8"?>\n<jmag>\n']
@@ -376,7 +391,8 @@ def build_root_xml(spec: dict, parts: set, groups: list) -> bytes:
             if m.get("output"):
                 out.append(_p("flg_io_material", 1))
         if m.get("resistivity") is not None:
-            out.append(_p("flg_conductivity_unit", 1) + _p("flg_use_conductivity", 0)
+            # eddy currents flow only with flg_use_conductivity 1 (frequency study)
+            out.append(_p("flg_conductivity_unit", 1) + _p("flg_use_conductivity", 1 if freq else 0)
                        + _p("conductivity_1", float(m["resistivity"]), unit="ohm_m") + _p("flg_electric_property1", 0))
         out.append(_p("material_category", _material_category(m)))   # importers need it
         out.append("\t\t</material>\n")
@@ -395,10 +411,25 @@ def build_root_xml(spec: dict, parts: set, groups: list) -> bytes:
     for k, v in ctl.items():
         out.append(_p(k, v, unit="Intensity" if k in _INTENSITY else None))
     out.append("\t\t</condition>\n")
+    # A frequency study reads its analysis frequency from step_table[0][0].
+    steps = [[spec["frequency"], 0, 1], [2 * spec["frequency"], 0, 1]] if freq else [[0, 0, 1], [1, 0, 1]]
     out.append('\t\t<condition name="Step">\n' + _p("step_type", 1) + _p("num_analysis_step", 1)
-               + _table("step_table", [[0, 0, 1], [1, 0, 1]]) + "\t\t</condition>\n")
+               + _table("step_table", steps, "Hz" if freq else "") + "\t\t</condition>\n")
     ef = spec.get("external_field")
-    if ef:
+    if ef and freq:
+        # B(t) = amplitude * sin(2 pi f t + phase) along axis; amplitude is the peak in T.
+        if set(ef) - {"axis", "amplitude", "phase"} or "amplitude" not in ef:
+            raise JcfError("a frequency external_field takes 'amplitude' (T, peak), 'phase' (deg) "
+                           "and 'axis' only")
+        out.append('\t\t<condition name="ExternalField">\n' + _p("function_type", 1)
+                   + _p("ring_radius", 100000, unit="m") + _p("num_division", 120)
+                   + _point("axis_vector", ef.get("axis", [0, 0, 1]))
+                   + _p("amplitude", float(ef["amplitude"]), unit="tesla")
+                   + _p("phase", float(ef.get("phase", 0)), unit="deg")
+                   + '\t\t\t<parameter rows="0" cols="3" encoding="0" column_units="" '
+                     'name="external_field_table" type="table">\n\t\t\t</parameter>\n'
+                   + "\t\t</condition>\n")
+    elif ef:
         table = ef.get("table") or [[0, ef["value"], 0], [1000, ef["value"], 0]]
         out.append('\t\t<condition name="ExternalField">\n'
                    + _p("ring_radius", ef.get("ring_radius", 100000), unit="m")
@@ -445,6 +476,8 @@ def build_root_xml(spec: dict, parts: set, groups: list) -> bytes:
                + "".join(extra_cs) + "\t</coordinate_system_data>\n")
     out.append('\t<control_parameters module="common">\n')
     com = {"max_plot_size": 1000, "version": 191, "unit_input": 1, "plot_mode": 1}
+    if freq:                             # the study type; without it the file solves as static
+        com["solver_id"] = 1
     if lu:                               # length unit of the model
         com["unit_label"] = lu
         com["unit_output"] = UNITS[lu]

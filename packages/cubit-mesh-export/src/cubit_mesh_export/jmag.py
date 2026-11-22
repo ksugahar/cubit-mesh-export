@@ -1,4 +1,4 @@
-"""Export the active Cubit mesh as a static solver input (.jcf).
+"""Export the active Cubit mesh as a static or frequency solver input (.jcf).
 
 The analysis settings are a JSON object that names Cubit blocks and sidesets:
 
@@ -18,8 +18,13 @@ The analysis settings are a JSON object that names Cubit blocks and sidesets:
 caller). Every block needs a material. Lengths (``origin``) are in ``unit``. A flow-in sideset
 lists the faces the current crosses and ``normal`` is the current direction across them. Each
 face goes to the coil element whose outward normal points along ``normal``, the element the
-current leaves; this is the convention checked against the solver. Only static analysis is
-written.
+current leaves; this is the convention checked against the solver.
+
+The default is a static study. A frequency study adds ``"study": "frequency"`` and
+``"frequency"`` in Hz. It takes linear materials (a ``resistivity`` makes a block an
+eddy-current conductor) and a sinusoidal external field
+``{"axis": [0, 0, 1], "amplitude": 0.01, "phase": 45}`` (peak T, degrees). Magnets, B-H
+steel, coils and boundaries are refused for this study.
 
 ``boundaries`` replaced the former ``symmetry_sidesets`` list, which is now rejected:
 ``"symmetry_sidesets": ["sym"]`` becomes ``"boundaries": {"sym": "symmetry"}``.
@@ -31,7 +36,7 @@ from __future__ import annotations
 from . import jcf_writer as jw
 
 SETTINGS_KEYS = {"unit", "material_library", "block_materials", "external_field", "coils",
-                 "boundaries", "control"}
+                 "boundaries", "control", "study", "frequency"}
 _FREE_MESH = ("Cubit deletes mesh that no geometry owns (free mesh, e.g. from MeshImport) when "
               "control returns to the GUI; mesh the geometry instead")
 
@@ -101,6 +106,9 @@ def settings_to_spec(cubit, settings: dict) -> dict:
     if unnamed:
         raise ValueError(f"blocks {unnamed} have no material in block_materials")
     spec = {"unit": settings.get("unit", "mm"), "materials": materials, "magnets": magnets}
+    for key in ("study", "frequency"):
+        if key in settings:
+            spec[key] = settings[key]
     if settings.get("external_field") is not None:
         spec["external_field"] = settings["external_field"]
     if settings.get("control"):

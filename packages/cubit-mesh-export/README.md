@@ -204,7 +204,7 @@ and sidesets. See the [COMSOL transfer guide](https://github.com/ksugahar/cubit-
 for the direct mesh workflow.
 
 JMAG (.jcf) asks for an analysis settings JSON file, then for the output path,
-and writes a static analysis input from the active mesh. The settings name Cubit
+and writes a static or frequency analysis input from the active mesh. The settings name Cubit
 blocks and sidesets: `block_materials` maps every block to an entry of
 `material_library` (inline, or a JSON file next to the settings), `coils` give
 current, turns and a flow-in sideset or direction, `external_field` is optional,
@@ -213,7 +213,7 @@ former `symmetry_sidesets` key is rejected. See the
 [JMAG JCF settings JSON guide (Japanese)](https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/jcf_settings_ja.md) for examples.
 The full schema is in the `cubit_mesh_export.jmag` module documentation.
 See the [reproducible Cubit and JMAG ExecSolver example](https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/jcf_static_example/README.md).
-Only static analysis is written. To copy the wheel's starter settings into
+A frequency study (`"study": "frequency"`, `"frequency"` in Hz) takes linear materials, eddy-current conductors (blocks with a `resistivity`) and a sinusoidal `external_field` with `amplitude` (peak T), `phase` (degrees) and `axis`; it refuses magnets, B-H steel, coils and boundaries. To copy the wheel's starter settings into
 your working directory without importing Cubit or the package, run this in
 the Python environment where the wheel is installed:
 
