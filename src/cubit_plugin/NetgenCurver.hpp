@@ -145,9 +145,6 @@ public:
   // Write all high-order nodes (beyond vertex nodes) to Gmsh format
   void write_ho_nodes_gmsh(std::ofstream &fid) const;
 
-  // Write all high-order nodes to Nastran format (order 2 only)
-  void write_ho_nodes_nastran(std::ofstream &fid, bool is_3d) const;
-
   // Get the Gmsh element type code for a given base type and order
   static int gmsh_element_type(int base_nn, int elem_type, int order);
 

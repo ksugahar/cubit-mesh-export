@@ -30,14 +30,11 @@ class NetgenCurver;
 
 // --- Edge tables for high-order connectivity ---
 // Internal order matches VTK convention (used by build_ho_conn_nc).
-// GMSH and Nastran use DIFFERENT orders — reorder tables below.
+// GMSH uses a DIFFERENT order — reorder tables below.
 //
 // Internal (= VTK) edge order:
 //   HEX:   bottom(4) + top(4) + vertical(4)
 //   WEDGE: bottom_tri(3) + top_tri(3) + vertical(3)
-// Nastran edge order:
-//   CHEXA: bottom(4) + vertical(4) + top(4)
-//   CPENTA: bottom_tri(3) + vertical(3) + top_tri(3)
 // GMSH edge order: vertex-grouped (see gmsh.info Section 10.2)
 //
 // Reorder semantics: out[nv + reorder[i]] = conn[nv + i]
@@ -101,26 +98,6 @@ namespace EdgeTables {
                                                  false,false,false,false};
   inline constexpr bool tri_gmsh_flip[3] = {false,false,false};
   inline constexpr bool quad_gmsh_flip[4] = {false,false,false,false};
-
-  // --- Nastran BDF reorder: internal pos i -> Nastran file pos reorder[i] ---
-  // Derived from GMSH source (MHexahedron.h getVertexBDF, MPrism.h getVertexBDF)
-  // Nastran CHEXA: bottom(4) + vertical(4) + top(4) (swaps top/vertical vs internal)
-  // Nastran CPENTA: bottom(3) + vertical(3) + top(3) (swaps top/vertical vs internal)
-  inline constexpr int tet_bdf_reorder[6] = {0,1,2,3,4,5};  // identity
-  inline constexpr int hex_bdf_reorder[12] = {0,1,2,3,8,9,10,11,4,5,6,7};
-  inline constexpr int wedge_bdf_reorder[9] = {0,1,2,6,7,8,3,4,5};
-  inline constexpr int pyramid_bdf_reorder[8] = {0,1,2,3,4,5,6,7};  // identity
-  inline constexpr int tri_bdf_reorder[3] = {0,1,2};  // identity
-  inline constexpr int quad_bdf_reorder[4] = {0,1,2,3};  // identity
-
-  // --- VTK reorder: internal pos i -> VTK file pos reorder[i] ---
-  // Derived from GMSH source (GModelIO_VTK.cpp reader + MHexahedron.h getVertexVTK)
-  inline constexpr int tet_vtk_reorder[6] = {0,1,2,3,4,5};  // identity
-  inline constexpr int hex_vtk_reorder[12] = {0,1,10,3,2,6,7,4,5,8,11,9};
-  inline constexpr int wedge_vtk_reorder[9] = {0,6,3,2,5,4,1,8,7};
-  inline constexpr int pyramid_vtk_reorder[8] = {0,1,2,3,4,5,6,7};  // identity (GMSH VTK reader doesn't handle type 27)
-  inline constexpr int tri_vtk_reorder[3] = {0,1,2};  // identity
-  inline constexpr int quad_vtk_reorder[4] = {0,1,2,3};  // identity
 }
 
 // --- Data types ---

@@ -2356,20 +2356,6 @@ void NetgenCurver::write_ho_nodes_gmsh(std::ofstream &fid) const
   }
 }
 
-void NetgenCurver::write_ho_nodes_nastran(std::ofstream &fid, bool is_3d) const
-{
-  fid << "$\n$ Generated high-order nodes (NetgenCurver)\n$\n";
-  for (auto &pair : ho_node_coords_) {
-    int nid = pair.first;
-    auto &c = pair.second;
-    char line1[128], line2[128];
-    std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.5f%16.5f",
-                  nid, 0, c[0], c[1]);
-    std::snprintf(line2, sizeof(line2), "*       %16.5f", c[2]);
-    fid << line1 << "\n" << line2 << "\n";
-  }
-}
-
 // Gmsh element type codes for higher orders
 int NetgenCurver::gmsh_element_type(int base_nn, int elem_type, int order)
 {
@@ -2426,7 +2412,6 @@ std::vector<int> NetgenCurver::get_edge_nodes(int, int) const { return {}; }
 std::vector<int> NetgenCurver::get_face_nodes(int, int, int) const { return {}; }
 std::vector<int> NetgenCurver::get_vol_nodes(int, int, int, int) const { return {}; }
 void NetgenCurver::write_ho_nodes_gmsh(std::ofstream &) const {}
-void NetgenCurver::write_ho_nodes_nastran(std::ofstream &, bool) const {}
 int NetgenCurver::gmsh_element_type(int, int, int) { return 0; }
 
 #endif  // HAVE_NETGEN

@@ -2,12 +2,7 @@
 #ifdef HAVE_NETGEN
 #include "ExportNetgenCommand.hpp"
 #endif
-#include "ExportNastranCommand.hpp"
 #include "ExportGmshCommand.hpp"
-#include "ExportVtkCommand.hpp"
-#include "ExportFemeemCommand.hpp"
-#include "ExportMegCommand.hpp"
-#include "ExportModelCaptureCommand.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -48,12 +43,7 @@ std::vector<std::string> CubitMeshExportPlugin::get_keys()
 #ifdef HAVE_NETGEN
   keys.push_back("ExportNetgenCommand");
 #endif
-  keys.push_back("ExportNastranCommand");
   keys.push_back("ExportGmshCommand");
-  keys.push_back("ExportVtkCommand");
-  keys.push_back("ExportFemeemCommand");
-  keys.push_back("ExportMegCommand");
-  keys.push_back("ExportModelCaptureCommand");
   return keys;
 }
 
@@ -64,18 +54,8 @@ CubitCommand* CubitMeshExportPlugin::create_command(const std::string &key)
     return new ExportNetgenCommand();
   else
 #endif
-  if (key == "ExportNastranCommand")
-    return new ExportNastranCommand();
-  else if (key == "ExportGmshCommand")
+  if (key == "ExportGmshCommand")
     return new ExportGmshCommand();
-  else if (key == "ExportVtkCommand")
-    return new ExportVtkCommand();
-  else if (key == "ExportFemeemCommand")
-    return new ExportFemeemCommand();
-  else if (key == "ExportMegCommand")
-    return new ExportMegCommand();
-  else if (key == "ExportModelCaptureCommand")
-    return new ExportModelCaptureCommand();
   return nullptr;
 }
 

@@ -255,8 +255,8 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
 }
 
 // ========================================================================
-// Reorder HO edge nodes from Nastran canonical to GMSH file format order.
-// GMSH .msh uses a different edge ordering than Nastran/VTK (see gmsh.info
+// Reorder HO edge nodes from the internal order to GMSH file format order.
+// GMSH .msh uses a different edge ordering than the internal order (see gmsh.info
 // Section 10.2). Vertices (first nv nodes) are unchanged.
 // ========================================================================
 static std::vector<int> reorder_for_gmsh(const std::vector<int> &conn,

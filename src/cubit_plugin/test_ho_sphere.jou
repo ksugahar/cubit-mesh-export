@@ -14,7 +14,5 @@ volume all size 3
 mesh volume all
 
 # Test exports
-export nastran_bdf "C:/temp/cubit_mesh_export_test_sphere_o1.bdf" order 1 overwrite
-export nastran_bdf "C:/temp/cubit_mesh_export_test_sphere_o2.bdf" order 2 overwrite
 export gmsh "C:/temp/cubit_mesh_export_test_sphere_o1.msh" order 1 overwrite
 export gmsh "C:/temp/cubit_mesh_export_test_sphere_o2.msh" order 2 overwrite

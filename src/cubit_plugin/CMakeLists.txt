@@ -134,7 +134,7 @@ endif()
 # --------------------------------------------------------
 # Target 1: cubit_mesh_export.ccm (command plugin, goes to plugins/)
 #
-# Registers APREPRO commands: export gmsh/nastran/vtk/netgen
+# Registers APREPRO commands: export gmsh/netgen
 # Loaded by Python API (CUBIT_PLUGIN_DIR) and by cubitcomp
 # (-commandplugindir).
 # --------------------------------------------------------
@@ -146,19 +146,8 @@ set(CCM_SOURCES
     # HighOrderMesh removed — NetgenCurver is the sole curving path (no fallback)
     NetgenCurver.cpp
     NetgenCurver.hpp
-    ExportNastranCommand.cpp
-    ExportNastranCommand.hpp
     ExportGmshCommand.cpp
     ExportGmshCommand.hpp
-    ExportVtkCommand.cpp
-    ExportVtkCommand.hpp
-    ExportFemeemCommand.cpp
-    ExportFemeemCommand.hpp
-    ExportMegCommand.cpp
-    ExportMegCommand.hpp
-    ExportModelCaptureCommand.cpp
-    ExportModelCaptureCommand.hpp
-    ModelCaptureRecord.hpp
 )
 
 # Netgen-dependent sources: callbackgeom + ExportNetgenCommand
@@ -260,13 +249,6 @@ option(CUBIT_MODEL_CAPTURE_CONTRACT_TESTS "Build neutral CAD source-record contr
 if(CUBIT_MODEL_CAPTURE_CONTRACT_TESTS)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   enable_testing()
-  add_executable(cubit_model_capture_contract tests/model_capture_contract.cpp)
-  target_compile_features(cubit_model_capture_contract PRIVATE cxx_std_17)
-  target_include_directories(cubit_model_capture_contract PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-  add_test(NAME cubit_model_capture_record COMMAND "${Python3_EXECUTABLE}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_model_capture_record.py"
-    "$<TARGET_FILE:cubit_model_capture_contract>")
-  set_tests_properties(cubit_model_capture_record PROPERTIES TIMEOUT 40)
 endif()
 option(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS "Build compact periodic curved geometry contracts" OFF)
 if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
