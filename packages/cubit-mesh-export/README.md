@@ -168,8 +168,10 @@ The no-argument `cubit-smoke-test` uses the package-owned
 The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
 bundled PySide6.
 
-The Export menu holds a single action, **Export Netgen (.vol)...**, which opens
-the Netgen export dialog directly; the toolbar has the same single button.
+The toolbar button **Export Netgen (.vol)...** opens the Netgen `.vol` export
+dialog in one click. Cubit's menu API adds actions under a menu title, so the
+Export menu holds that same single action: Export -> Export Netgen (.vol)...,
+with no format choice.
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
 > machine-wide `CUBIT_PLUGIN_DIR` environment variable. A stale setting can cause Cubit
