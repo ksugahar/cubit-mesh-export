@@ -137,7 +137,7 @@ def test_export_menu_is_one_level_menu_bar_action():
     source = EXPORT_MENU.read_text(encoding="utf-8")
 
     assert "bar.addAction(action)" in source
-    assert "QTimer.singleShot(0, _attach_menu_action)" in source
+    assert "QTimer.singleShot(0, lambda: _deferred_attach(generation))" in source
     assert "bar.removeAction(action)" in source
     assert "emclaro" not in source.replace("``emclaro.add_to_menu``", "")
     assert "QMenu(" not in source

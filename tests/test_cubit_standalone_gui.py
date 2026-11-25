@@ -54,6 +54,7 @@ def test_gui_startup_imports_only_local_menu(monkeypatch):
 def test_menu_action_is_released_before_python_shutdown():
     source = (SOURCE / 'cubit_mesh_export/cubit_gui/cubit_export_menu.py').read_text(encoding='utf-8')
     assert 'app.aboutToQuit.connect(remove_menu)' in source
+    assert '_attach_generation += 1' in source
     assert 'return _detach_menu_action()' in source
 
 

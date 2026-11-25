@@ -690,6 +690,9 @@ _MENU_OBJECT_NAME = "cubit_mesh_export_export_action"
 # touches Cubit-owned menu objects.
 _menu_action = None
 _shutdown_connected = False
+# Bumped by every install/remove.  A deferred re-attach only runs while its
+# generation is still current, so remove_menu() cancels a pending one.
+_attach_generation = 0
 
 
 def _on_export_triggered(_checked=False):
@@ -724,11 +727,21 @@ def _detach_menu_action():
     _menu_action = None
     if action is None:
         return False
-    bar = action.parent()
-    if bar is not None:
-        bar.removeAction(action)
-    action.deleteLater()
+    try:
+        bar = action.parent()
+        if bar is not None:
+            bar.removeAction(action)
+        action.deleteLater()
+    except RuntimeError:
+        # Cubit replaced its menu bar during startup; the old bar and its
+        # child action are already destroyed on the C++ side.
+        pass
     return True
+
+
+def _deferred_attach(generation):
+    if generation == _attach_generation:
+        _attach_menu_action()
 
 
 def install_menu():
@@ -745,12 +758,14 @@ def install_menu():
     Returns True on success, or None when the Cubit main window is
     unavailable (batch mode, or Cubit not present).
     """
-    global _shutdown_connected
+    global _shutdown_connected, _attach_generation
+    _attach_generation += 1
+    generation = _attach_generation
     if _attach_menu_action() is None:
         print("[cubit-mesh-export] Cubit main window not available - "
               "Export menu not installed")
         return None
-    QTimer.singleShot(0, _attach_menu_action)
+    QTimer.singleShot(0, lambda: _deferred_attach(generation))
     app = QApplication.instance()
     if app is not None and not _shutdown_connected:
         app.aboutToQuit.connect(remove_menu)
@@ -760,7 +775,9 @@ def install_menu():
 
 
 def remove_menu():
-    """Remove the Export menu-bar action this module added."""
+    """Remove the Export action and cancel any pending re-attach."""
+    global _attach_generation
+    _attach_generation += 1
     return _detach_menu_action()
 
 

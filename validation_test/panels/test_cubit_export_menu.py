@@ -38,7 +38,7 @@ from cubit_qt_test_env import configure_cubit_qt  # noqa: E402
 _DLL_DIRECTORY = configure_cubit_qt()
 sys.path.insert(0, os.path.join(_REPO_ROOT, "packages", "cubit-mesh-export",
                               "src", "cubit_mesh_export", "cubit_gui"))
-from PySide6.QtWidgets import QApplication, QMainWindow  # noqa: E402
+from PySide6.QtWidgets import QApplication, QMainWindow, QMenuBar  # noqa: E402
 
 
 # Module under test.  Top-level `import cubit` is forbidden in the
@@ -179,36 +179,62 @@ class TestNetgenCommand(_DialogTestBase):
 
 
 class TestInstallMenu(unittest.TestCase):
+    """install_menu() against a fixture window injected through find_claro.
+
+    Real main-window discovery is covered separately by TestFindClaro; here
+    the target window is fixed so stray top-level windows cannot win.
+    """
 
     def setUp(self):
-        _ensure_qapp()
+        self.app = _ensure_qapp()
         self.win = QMainWindow()
         self.win.setObjectName("Claro")
         self.calls = []
-        self._orig = rem.launch_netgen_export
+        self._orig_launch = rem.launch_netgen_export
+        self._orig_find = rem.find_claro
         rem.launch_netgen_export = lambda: self.calls.append("netgen")
+        rem.find_claro = lambda: self.win
 
     def tearDown(self):
         rem.remove_menu()
-        rem.launch_netgen_export = self._orig
+        self.app.processEvents()
+        rem.launch_netgen_export = self._orig_launch
+        rem.find_claro = self._orig_find
         self.win.deleteLater()
+        self.app.processEvents()
 
-    def _ours(self):
-        return [a for a in self.win.menuBar().actions()
+    def _ours(self, win=None):
+        win = win or self.win
+        return [a for a in win.menuBar().actions()
                 if a.objectName() == rem._MENU_OBJECT_NAME]
 
     def test_install_adds_one_top_level_export_action(self):
         self.assertTrue(rem.install_menu())
+        self.app.processEvents()
         (action,) = self._ours()
         self.assertEqual(action.text(), "&Export")
         self.assertIsNone(action.menu())
         action.trigger()
         self.assertEqual(self.calls, ["netgen"])
 
-    def test_install_is_idempotent_and_removable(self):
+    def test_install_is_idempotent(self):
         rem.install_menu()
         rem.install_menu()
+        self.app.processEvents()
         self.assertEqual(len(self._ours()), 1)
+
+    def test_remove_cancels_pending_reattach(self):
+        rem.install_menu()
+        self.assertTrue(rem.remove_menu())
+        self.app.processEvents()
+        self.assertEqual(self._ours(), [])
+
+    def test_reattach_follows_a_replaced_menu_bar(self):
+        rem.install_menu()
+        self.win.setMenuBar(QMenuBar())  # deletes the old bar, as Cubit does at startup
+        self.app.processEvents()
+        (action,) = self._ours()
+        self.assertIs(action.parent(), self.win.menuBar())
         self.assertTrue(rem.remove_menu())
         self.assertEqual(self._ours(), [])
 
