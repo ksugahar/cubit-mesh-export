@@ -21,10 +21,6 @@ def main():
         raise RuntimeError(f"Not the installed candidate wheel: {installed}")
     fixture = _find_sample_jou()
     assert fixture.is_file() and fixture.is_relative_to(installed)
-    settings = installed / "examples/jmag/settings.json"
-    public_example = Path(__file__).resolve().parents[1] / "packages/cubit-mesh-export/docs/settings.json"
-    assert settings.is_file(), f"JMAG settings example missing from the installed wheel: {settings}"
-    assert settings.read_bytes() == public_example.read_bytes(), "Packaged JMAG settings differ from the documentation example"
     gui = installed / "cubit_gui"
     assert (gui / "register_toolbar.py").is_file()
     assert toolbar_smoke._probe_path().is_file()
@@ -66,12 +62,7 @@ def main():
             assert archive.extractfile("scripts/cubit_export_menu.py").read() == (gui / "cubit_export_menu.py").read_bytes()
             expected_launchers = {
                 "scripts/export_gmsh.py",
-                "scripts/export_comsol.py",
-                "scripts/export_jcf.py",
-                "scripts/export_meg.py",
-                "scripts/export_nastran.py",
                 "scripts/export_netgen.py",
-                "scripts/export_vtu.py",
             }
             launchers = [name for name in archive.getnames() if name.startswith("scripts/export_")]
             assert sorted(launchers) == sorted(expected_launchers), (

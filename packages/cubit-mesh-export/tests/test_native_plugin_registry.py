@@ -1,21 +1,20 @@
 """Source contract for the independently owned native Cubit plugin."""
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[3]
 PLUGIN = ROOT / "src" / "cubit_plugin"
 
 
-def test_native_plugin_has_one_bdf_command_and_product_owned_identity():
+def test_native_plugin_registers_only_maintained_commands_and_product_owned_identity():
     registry = (PLUGIN / "CubitMeshExportPlugin.cpp").read_text(encoding="utf-8")
-    header = (PLUGIN / "ExportNastranCommand.hpp").read_text(encoding="utf-8")
-    implementation = (PLUGIN / "ExportNastranCommand.cpp").read_text(
-        encoding="utf-8"
-    )
 
-    assert registry.count('keys.push_back("ExportNastranCommand")') == 1
-    assert header.count("class ExportNastranCommand") == 1
-    assert implementation.count('"export nastran_bdf ') == 2
+    keys = re.findall(r'keys\.push_back\("(\w+)"\)', registry)
+    assert keys == ["ExportNetgenCommand", "ExportGmshCommand"], keys
+    for retired in ("Nastran", "Vtk", "Femeem", "Meg", "ModelCapture"):
+        assert not (PLUGIN / f"Export{retired}Command.cpp").exists(), retired
+        assert not (PLUGIN / f"Export{retired}Command.hpp").exists(), retired
     assert "CubitMeshExportPlugin" in registry
     assert "CoilCommand" not in registry
     assert not (PLUGIN / "CoilCommand.cpp").exists()

@@ -27,11 +27,6 @@ PROBE_SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
     "Netgen (.vol)",
     "Gmsh (.msh)",
-    "Nastran (.bdf)",
-    "VTK (.vtu)",
-    "COMSOL (.mphtxt)",
-    "JMAG (.jcf)",
-    "ELF/MAGIC (.meg)",
 ]
 
 

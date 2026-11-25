@@ -18,7 +18,7 @@ def _counts(value: Mapping[str, object]) -> dict[str, int]:
 
 
 def cubit_pyramid_mixed_export_gate(summary: Mapping[str, object]) -> dict[str, object]:
-    """Gate explicit pyramid preservation across Gmsh and Nastran exports."""
+    """Gate explicit pyramid preservation in the Gmsh export."""
     if not isinstance(summary, Mapping):
         raise ValueError("summary must be a mapping")
     counts = _counts(_mapping(summary, "element_counts"))
@@ -26,7 +26,6 @@ def cubit_pyramid_mixed_export_gate(summary: Mapping[str, object]) -> dict[str, 
     quality = _mapping(summary, "quality")
     gmsh = _mapping(summary, "gmsh_header")
     independent = _mapping(summary, "gmsh_independent")
-    bdf = {str(key).upper(): int(value) for key, value in _mapping(summary, "nastran_cards").items()}
     companions = _mapping(summary, "gmsh_companions")
 
     gmsh_counts = _counts(_mapping(independent, "element_counts"))
@@ -76,10 +75,6 @@ def cubit_pyramid_mixed_export_gate(summary: Mapping[str, object]) -> dict[str, 
             gmsh_volumes.get(kind, 0.0) > 0.0 for kind in ("hex", "pyramid", "tet")
         ),
         "gmsh_volume_matches_cad": math.isfinite(volume_error) and volume_error <= 1.0e-2,
-        "nastran_preserves_explicit_cpyram": bdf.get("CHEXA", 0)
-        == counts.get("hex", 0)
-        and bdf.get("CPYRAM", 0) == counts.get("pyramid", 0)
-        and bdf.get("CTETRA", 0) == counts.get("tet", 0),
         "gmsh_launch_companions_recorded": all(
             companions.get(name) is True
             for name in ("geo", "geo_opt", "msh_opt")
@@ -96,15 +91,11 @@ def cubit_pyramid_mixed_export_gate(summary: Mapping[str, object]) -> dict[str, 
             "gmsh_cad_volume_relative_error": volume_error,
             "hex_scaled_jacobian_minimum": float(hex_scaled.get("min", math.nan)),
             "tet_scaled_jacobian_minimum": float(tet_scaled.get("min", math.nan)),
-            "nastran_card_counts": {
-                key: bdf.get(key, 0) for key in ("CHEXA", "CPYRAM", "CTETRA")
-            },
         },
         "lesson": (
             "Keep pyramids explicit when validating a conformal hex-to-tet transition. "
-            "Match Cubit counts to Gmsh type 5/7/4 blocks, integrate each family, and "
-            "require default Nastran export to retain CPYRAM rather than silently "
-            "dropping or collapsing transition cells."
+            "Match Cubit counts to Gmsh type 5/7/4 blocks and integrate each family "
+            "so transition cells are never silently dropped or collapsed."
         ),
     }
 
@@ -141,11 +132,9 @@ def cubit_pyramid_source_plugin_replay_gate(
         )
         is True
         and summary.get("combined_journal_plugin_command_succeeded") is True,
-        "runtime_and_export_migrations_recorded": "2024.3 Python init"
+        "runtime_migration_recorded": "2024.3 Python init"
         in str(transforms.get("cubit_runtime", ""))
-        and "combined journal startup" in str(transforms.get("cubit_runtime", ""))
-        and "export_3D_Nastran" in str(transforms.get("nastran_export_migration", ""))
-        and "export nastran_bdf" in str(transforms.get("nastran_export_migration", "")),
+        and "combined journal startup" in str(transforms.get("cubit_runtime", "")),
         "current_cubit_version_recorded": str(summary.get("version", "")).startswith(
             "2026.8"
         ),

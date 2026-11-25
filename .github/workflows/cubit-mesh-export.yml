@@ -149,7 +149,8 @@ jobs:
                   raise SystemExit(
                       f'wheel payload {name} does not match native_payloads.json')
           ccm = payload_contents['cubit_mesh_export.ccm']
-          for retired_token in (b'CoilCommand', b'export jmag_nastran',
+          for retired_token in (b'CoilCommand', b'export jmag_nastran', b'ExportMegCommand',
+                                b'ExportNastranCommand', b'ExportVtkCommand', b'ExportFemeemCommand', b'ExportModelCaptureCommand',
                                 b'RadiaPlugin', b'RADIA_LAUNCHER_CONFIG'):
               if retired_token in ccm:
                   raise SystemExit(
@@ -211,10 +212,6 @@ jobs:
             tests\test_cubit_pytest_boundary.py `
             tests\test_cubit_auto_kelvin_entry.py `
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
-            packages\cubit-mesh-export\tests\test_jcf_export.py `
-            packages\cubit-mesh-export\tests\test_vtu_export.py `
-            packages\cubit-mesh-export\tests\test_comsol_export.py `
-            packages\cubit-mesh-export\tests\test_export_menu_sideset_report.py `
             packages\cubit-mesh-export\tests\test_smoke_command.py `
             packages\cubit-mesh-export\tests\test_runtime_contract.py `
             packages\cubit-mesh-export\tests\test_native_curver_connectivity.py `
@@ -397,7 +394,8 @@ jobs:
           leaked = [item for item in retired if any(name.endswith(item) for name in names)]
           if leaked:
               raise SystemExit(f"release wheel contains retired GUI payloads: {leaked}")
-          for retired_token in (b"CoilCommand", b"export jmag_nastran",
+          for retired_token in (b"CoilCommand", b"export jmag_nastran", b"ExportMegCommand",
+                                b"ExportNastranCommand", b"ExportVtkCommand", b"ExportFemeemCommand", b"ExportModelCaptureCommand",
                                 b"RadiaPlugin", b"RADIA_LAUNCHER_CONFIG"):
               if retired_token in ccm:
                   raise SystemExit(
@@ -587,7 +585,8 @@ jobs:
           leaked = [item for item in retired if any(name.endswith(item) for name in names)]
           if leaked:
               raise SystemExit(f"release wheel contains retired GUI payloads: {leaked}")
-          for retired_token in (b"CoilCommand", b"export jmag_nastran",
+          for retired_token in (b"CoilCommand", b"export jmag_nastran", b"ExportMegCommand",
+                                b"ExportNastranCommand", b"ExportVtkCommand", b"ExportFemeemCommand", b"ExportModelCaptureCommand",
                                 b"RadiaPlugin", b"RADIA_LAUNCHER_CONFIG"):
               if retired_token in ccm:
                   raise SystemExit(

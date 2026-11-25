@@ -32,7 +32,6 @@ def _public() -> dict:
             "element_counts": {"hex": 8, "pyramid": 4, "tet": 115, "other_3d": 0},
             "volume_by_type": {"hex": 1000.0, "pyramid": 117.8, "tet": 882.2},
         },
-        "nastran_cards": {"CHEXA": 8, "CPYRAM": 4, "CTETRA": 115},
         "gmsh_companions": {"geo": True, "geo_opt": True, "msh_opt": True},
         "gmsh_cad_volume_relative_error": 0.0,
     }
@@ -50,7 +49,6 @@ def _source() -> dict:
         "combined_journal_plugin_command_succeeded": True,
         "compatibility_transforms": {
             "cubit_runtime": "2024.3 Python init -> 2025.12 combined journal startup",
-            "nastran_export_migration": "cubit_mesh_export.export_3D_Nastran -> export nastran_bdf",
         },
         "version": "2026.8",
         "process": {
@@ -72,17 +70,17 @@ def _source() -> dict:
 def test_public_gate_accepts_explicit_pyramid_exports() -> None:
     result = public_gate(_public())
     assert result["status"] == "ok"
-    assert result["metrics"]["nastran_card_counts"]["CPYRAM"] == 4
+    assert result["metrics"]["element_counts"]["pyramid"] == 4
     assert json.loads(cubit_pyramid_mixed_export_gate(_public()))["status"] == "ok"
 
 
 def test_public_gate_rejects_dropped_pyramids_and_volume_drift() -> None:
     summary = copy.deepcopy(_public())
-    summary["nastran_cards"]["CPYRAM"] = 0
+    summary["gmsh_independent"]["element_counts"]["pyramid"] = 0
     summary["gmsh_cad_volume_relative_error"] = 0.1
     result = public_gate(summary)
     assert result["status"] == "needs_attention"
-    assert "nastran_preserves_explicit_cpyram" in result["issues"]
+    assert "gmsh_counts_match_cubit" in result["issues"]
     assert "gmsh_volume_matches_cad" in result["issues"]
 
 

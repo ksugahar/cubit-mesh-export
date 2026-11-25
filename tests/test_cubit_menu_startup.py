@@ -6,6 +6,7 @@ import ast
 import importlib.util
 import os
 from pathlib import Path
+import re
 import sys
 import types
 
@@ -152,13 +153,8 @@ def test_export_menu_does_not_force_a_journal_save():
     source = EXPORT_MENU.read_text(encoding="utf-8")
 
     assert "ensure_jou_path" not in source
-    # Output files of the Python writers are chosen with a save dialog; a journal never is.
-    tree = ast.parse(source)
-    savers = sorted(f.name for f in tree.body if isinstance(f, ast.FunctionDef)
-                    and any(getattr(c.func, "attr", "") == "getSaveFileName"
-                            for c in ast.walk(f) if isinstance(c, ast.Call)))
-    assert savers == ["_run_comsol_export", "_run_jcf_export", "_run_vtu_export"], savers
-    assert source.count("getSaveFileName(") == len(savers)
+    # Native export commands take their output path from the export dialog; no save dialog.
+    assert "getSaveFileName(" not in source
     assert "save journal" not in source
     assert "_current_journal_hint" in source
 
@@ -193,11 +189,16 @@ def test_find_claro_matches_capital_c_object_name():
         assert "QtJournalEditor" in source, path
 
 
-def test_nastran_action_uses_the_solver_neutral_command():
-    """The visible menu uses the package-owned BDF command."""
+def test_menu_offers_only_the_maintained_formats():
+    """Only Netgen and Gmsh are menu actions; retired formats are absent."""
     source = EXPORT_MENU.read_text(encoding="utf-8")
 
-    assert "export nastran_bdf" in source
+    for retired in ("export nastran_bdf", "export meg", "export vtk", "export femeem",
+                    "FMT_VTU", "FMT_JCF", "FMT_MEG", "FMT_COMSOL", "COMSOL", "mphtxt",
+                    "nastran", "femeem"):
+        assert retired not in source, retired
+    labels = re.findall(r'^\s+\("([^"]+)", FMT_\w+,$', source, flags=re.MULTILINE)
+    assert labels == ["Netgen (.vol)", "Gmsh (.msh)"], labels
 
 
 def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
@@ -222,10 +223,10 @@ def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
     monkeypatch.setitem(sys.modules, "cubit_export_menu", fake_menu)
     original_path = list(sys.path)
     try:
-        for fmt in ("netgen_vol", "gmsh", "nastran", "vtu", "comsol", "jcf", "meg"):
+        for fmt in ("netgen_vol", "gmsh"):
             exec(namespace["_activate_code"](fmt), {})
     finally:
         sys.path[:] = original_path
 
-    assert calls == ["netgen_vol", "gmsh", "nastran", "vtu", "comsol", "jcf", "meg"]
+    assert calls == ["netgen_vol", "gmsh"]
 

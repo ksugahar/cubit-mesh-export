@@ -317,11 +317,6 @@ def _toolbar_expected_files(install_dir):
     for relative in (
         "scripts/export_netgen.py",
         "scripts/export_gmsh.py",
-        "scripts/export_nastran.py",
-        "scripts/export_vtu.py",
-        "scripts/export_comsol.py",
-        "scripts/export_jcf.py",
-        "scripts/export_meg.py",
         "icons/cubit_mesh_export.svg",
     ):
         pairs.append((source / relative, install_dir / relative))

@@ -121,7 +121,6 @@ class TestExportKnowledge:
         "gmsh_v4":        ["msh", "4.2", "gmsh"],
         "curved":         ["curved", "order", "netgen"],
         "netgen":         ["vol", "netgen"],
-        "nastran":        ["nastran", "bdf"],
         "exodus":         ["exodus", "genesis", "block", "sideset"],
         "decision_guide": ["format", "choose", "decision", "recommend"],
     }

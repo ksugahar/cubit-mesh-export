@@ -373,7 +373,7 @@ regression/CI. Geometry kernel is **ACIS** -> importing native `.sat` avoids a t
 | Abaqus | `.inp` | often edit element formulation in the deck |
 | Calculix | Abaqus-style `.inp` (plugin) | element names follow Abaqus (C3D8, C3D20) |
 | LS-DYNA | `.k` | supported |
-| Nastran / ANSYS / I-deas / Patran | respective | listed as supported (verify extensions in docs) |
+| ANSYS / I-deas / Patran | respective | listed as supported (verify extensions in docs) |
 | OpenFOAM | **polyMesh** dir | Cubit writes points/faces/owner/neighbour/boundary |
 | Fluent | `.msh` | native |
 - **meshio** (open-source Python) fills export gaps (consumes Exodus/.inp). **Polyhedral
@@ -533,7 +533,7 @@ Top-to-bottom guided pipeline in Power Tools; issues the same commands as manual
    refine/smooth/delete.
 6. Boundary conditions: make blocks/sidesets/nodesets from CAD entities (Ctrl-click multi-
    select); meshing auto-pulls the corresponding faces/nodes into the set.
-7. Export: native Genesis/Exodus (broadest downstream, incl. MOOSE) or Abaqus/Nastran/Patran/
+7. Export: native Genesis/Exodus (broadest downstream, incl. MOOSE) or Abaqus/Patran/
    LS-DYNA/Fluent/OpenFOAM/...; option to force-overwrite.
 
 ### Blocks / sidesets / nodesets (Exodus model)

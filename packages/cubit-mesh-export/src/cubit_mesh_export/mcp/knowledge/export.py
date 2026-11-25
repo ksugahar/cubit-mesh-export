@@ -29,24 +29,10 @@ readiness claim.
 
 ## Supported Formats
 
-CAD source capture is separate from these mesh formats:
-`export model_capture "model.json" units mm` records source topology, named
-one-volume blocks, CAD-face sidesets and33 samples per supported curve.
-Millimetres are an explicit author declaration, not inferred or converted.
-No mesh or solver runs. A separate construction adapter validates its supported
-geometry, records approximation and source-to-target correspondence, and takes
-explicit physical mappings bound to the capture SHA256. Material/BC values are
-never inferred from labels. Unsupported geometry must fail before mutation;
-this is not a general exact CAD translator. Existing files are never replaced.
-
 | Command | Format | Max Order | Notes |
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
 | `export gmsh "f.msh" order N` | Gmsh v4.2 (.msh + .geo/.opt) | 1-3 | Raw data plus launch companion; open `.geo` |
-| `export nastran_bdf "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | Mesh interchange; `nopyramid` for limited consumers |
-| `export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
-| `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
-| `export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | Creates directory with 4 files |
 
 Order 2+ uses NetgenCurver (compact_netgen BuildCurvedElements + ACIS projection).
 No fallback to HighOrderMesh (removed).
@@ -302,42 +288,6 @@ For simple 2nd order without geometry, use `export netgen "mesh.vol" order 2`.
 `export netgen` replaces all of them.
 """
 
-EXPORT_NASTRAN = """
-# Nastran BDF Export (order 1-2)
-
-```
-export nastran_bdf "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
-```
-
-No block assignment required.
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| order | 1 | 1=CTETRA/CHEXA, 2=CTETRA10/CHEXA20 (via NetgenCurver) |
-| dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
-| nopyramid | off | Convert pyramids to degenerate hex for consumers without CPYRAM support |
-
-## Supported Elements
-
-| Order 1 | Order 2 | Card |
-|---------|---------|------|
-| CTETRA (4) | CTETRA (10) | Tetrahedron |
-| CHEXA (8) | CHEXA (20) | Hexahedron |
-| CPENTA (6) | CPENTA (15) | Wedge/Prism |
-| CPYRAM (5) | CPYRAM (13) | Pyramid |
-| CTRIA3 (3) | CTRIA6 (6) | Triangle |
-| CQUAD4 (4) | CQUAD8 (8) | Quadrilateral |
-
-**IMPORTANT**: Use `export nastran_bdf`, not Cubit's built-in `export nastran`
-(a different contract). There is no alternate or compatibility command name.
-
-The emitted BDF is a **mesh-interchange artifact**, not a complete analysis
-deck: material cards, loads, boundary conditions, and solver setup remain owned
-by the downstream application. Before promotion, run an independent parser and
-then `cubit_nastran_consumer_gate`; a successful parse does not prove that a
-consumer preserved P2 order or retained the imported mesh.
-"""
-
 EXPORT_EXODUS = """
 # Exodus II Export
 
@@ -406,23 +356,19 @@ EXPORT_COMPARISON = """
 |----------|-------------------|-----|
 | NGSolve FEM (any order) | `export netgen "f.vol" order N` | Order 1-5 via ACIS CallbackGeometry |
 | GMSH visualization | `export gmsh "f.msh" order N` | v4.2, order 1-3 |
-| Nastran mesh consumer | `export nastran_bdf "f.bdf" order N` | Order 1-2; validate each consumer independently |
-| ParaView visualization | `export vtk "f.vtk" order N` | Order 1-2 |
-| ELF/MAGIC solver | `export meg "f.meg"` | Order 1, ELF element type labels |
-| FEMEEM solver | `export femeem "dir"` | Order 1, tet only |
 
 ## Feature Comparison
 
-| Feature | netgen | gmsh | nastran | vtk | meg | femeem |
-|---------|--------|------|---------|-----|-----|--------|
-| Max order | 5 | 3 | 2 | 2 | 1 | 1 |
-| Tet | Yes | Yes | Yes | Yes | Yes | Yes |
-| Hex | Yes | Yes | Yes | Yes | Yes | No |
-| Wedge | Yes | Yes (o2) | Yes | Yes | Yes | No |
-| Pyramid | Yes | Yes | Yes | Yes | degen hex | No |
-| Labels | block+sideset | block+sideset | block | block | block+sideset | block |
-| 2D mode | No | Yes | Yes | Yes | Yes (twod/axi) | No |
-| Companion | .vol.json | .geo + .geo.opt launch recipe | - | - | - | d3 |
+| Feature | netgen | gmsh |
+|---------|--------|------|
+| Max order | 5 | 3 |
+| Tet | Yes | Yes |
+| Hex | Yes | Yes |
+| Wedge | Yes | Yes (o2) |
+| Pyramid | Yes | Yes |
+| Labels | block+sideset | block+sideset |
+| 2D mode | No | Yes |
+| Companion | .vol.json | .geo + .geo.opt launch recipe |
 
 ## Checked .vol solver input vs Gmsh post-processing support
 
@@ -457,35 +403,6 @@ EXPORT_DECISION_GUIDE = """
   # For NGSolve use export netgen instead
   ```
 
-## "I need a Nastran mesh handoff"
-
--> Use `export nastran_bdf` (order 1-2):
-  ```python
-  cubit.cmd('export nastran_bdf "mesh.bdf" order 2 overwrite')
-  cubit.cmd('export nastran_bdf "mesh.bdf" order 2 nopyramid overwrite')
-  ```
-
-### Consumer-specific pyramid support
-
-Some consumers cannot read standard CPYRAM elements. When Cubit generates a
-mixed hex-tet mesh, pyramid transition elements appear at the interface. Two
-deliberate routes are available:
-
-1. **Use nopyramid** (recommended): Writes pyramids as degenerate CHEXA
-   ```python
-   cubit.cmd('export nastran_bdf "mesh.bdf" nopyramid overwrite')
-   ```
-
-2. **Use pure tet mesh**: Avoids pyramids entirely
-   ```python
-   cubit.cmd("volume all scheme tetmesh")
-   # ... mesh and export ...
-   ```
-
-**When to give up on hex**: If Cubit cannot webcut/decompose the geometry
-into sweepable sub-volumes, switch to `tetmesh`. Forcing hex on complex
-geometry leads to poor quality or failed meshing.
-
 ## "I need multi-physics (MOOSE, Sierra)"
 
 -> Use `export_exodus()`
@@ -508,25 +425,6 @@ geometry leads to poor quality or failed meshing.
 |--------|-----------|----|----|-----------|
 | netgen (.vol) | 5 | No | Yes | NetgenCurver + ACIS |
 | gmsh (.msh) | 3 | Yes | Yes | NetgenCurver + ACIS |
-| nastran (.bdf) | 2 | Yes | Yes | NetgenCurver + ACIS |
-| vtk (.vtk) | 2 | Yes | Yes | NetgenCurver + ACIS |
-| meg (.meg) | 1 | Yes | Yes | - |
-| femeem (dir) | 1 (tet) | No | Yes | - |
-
-## IMPORTANT: `export nastran_bdf` (NOT `export nastran`)
-
-Cubit has a **built-in** `export nastran` command (e.g., `export nastran "f.bdf" overwrite everything`).
-The cubit-mesh-export writer uses a different command name to avoid conflict:
-
-```python
-# CORRECT: mesh-interchange export (supports order 2 and nopyramid)
-cubit.cmd('export nastran_bdf "mesh.bdf" order 2 dimension 3 overwrite')
-
-# DIFFERENT CONTRACT: Cubit's built-in Nastran writer
-cubit.cmd('export nastran "mesh.bdf" overwrite everything')
-```
-
-`export nastran_bdf` is the sole cubit-mesh-export BDF command.
 
 ## Troubleshooting: High-Order Export
 
@@ -541,13 +439,13 @@ is loaded from the plugins/ directory.
 cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
 ```
 
-### HEX20/TET10 has wrong node count in .msh/.bdf (order 2)
+### HEX20/TET10 has wrong node count in .msh (order 2)
 
 **Symptom**: GMSH crashes opening .msh, or HEX20 element has 8 nodes instead of 20.
 
 **Cause** (fixed 2026-04-05): Volume element internal edges were not registered
 in `edge_ho_nodes_`. Only surface element edges were registered, so internal
-edges (not shared with any surface) had no HO nodes in the .msh/.bdf connectivity.
+edges (not shared with any surface) had no HO nodes in the .msh connectivity.
 The .vol export was unaffected (uses Netgen internal mesh, not edge_ho_nodes_).
 
 **Verification**: Check HEX20 node count in .msh file:
@@ -565,17 +463,9 @@ Menu bar: File Edit View Display Tools Export Help
 Export:
   Netgen (.vol)
   Gmsh (.msh)
-  Nastran (.bdf)
-  VTK (.vtu)
-  COMSOL (.mphtxt)
-  JMAG (.jcf)
-  ELF/MAGIC (.meg)
 ```
 
-- **Export**: Netgen, Gmsh, Nastran and ELF/MAGIC run the C++ APREPRO export
-  commands. VTK writes ASCII VTK XML (.vtu) from Python (`cubit_mesh_export.vtu`).
-  JMAG writes a static solver input from an analysis-settings JSON
-  (`cubit_mesh_export.jmag`).
+- **Export**: Netgen and Gmsh run the C++ APREPRO export commands.
 - Solver orchestration is outside the Cubit plugin. Downstream applications
   consume exported meshes through their own process boundary.
 - **Mesh p-convergence demo**: `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`
@@ -666,25 +556,6 @@ for bnd_name, cad_area in cad["boundaries"].items():
 Do NOT compare `Integrate(CF(1), mesh, BND)` (total) against
 `sum(cad["boundaries"].values())` -- the total BND includes internal faces.
 
-## Known Limitation: VTK Quadratic Pyramid (GMSH read)
-
-GMSH API cannot read VTK cell type 27 (VTK_QUADRATIC_PYRAMID, 13 nodes).
-This causes "Unknown type of cell 27" error in docs mesh-evaluation round-trip
-when the model contains pyramids and VTK order 2 is tested.
-
-This is a GMSH limitation, not a VTK export bug. The VTK file itself is
-valid and can be opened in ParaView or other VTK readers.
-
-VTK cell types used by Cubit Mesh Export:
-| Element | Order 1 | Order 2 |
-|---------|---------|---------|
-| Tet     | 10      | 24 (VTK_QUADRATIC_TETRA) |
-| Hex     | 12      | 25 (VTK_QUADRATIC_HEXAHEDRON) |
-| Wedge   | 13      | 26 (VTK_QUADRATIC_WEDGE) |
-| Pyramid | 14      | 27 (VTK_QUADRATIC_PYRAMID) -- GMSH cannot read |
-| Tri     | 5       | 22 (VTK_QUADRATIC_TRIANGLE) |
-| Quad    | 9       | 23 (VTK_QUADRATIC_QUAD) |
-
 ## .vol.json Companion File
 
 Every `export netgen` produces a companion .vol.json:
@@ -722,7 +593,6 @@ def get_export_documentation(format: str = "all") -> str:
 		"gmsh_v4": EXPORT_GMSH_V4,
 		"curved": EXPORT_CURVED,
 		"netgen": EXPORT_CURVED,  # Alias: old name redirects to export netgen
-		"nastran": EXPORT_NASTRAN,
 		"exodus": EXPORT_EXODUS,
 		"comparison": EXPORT_COMPARISON,
 		"decision_guide": EXPORT_DECISION_GUIDE,

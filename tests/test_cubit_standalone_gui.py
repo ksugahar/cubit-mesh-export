@@ -90,9 +90,7 @@ def test_radia_contains_no_legacy_gui_bridges_or_test_implementation():
     assert not (ROOT / 'src/radia/panels/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl').exists()
 
 
-@pytest.mark.parametrize('name,fmt', [('netgen', 'netgen_vol'), ('gmsh', 'gmsh'),
-                                    ('nastran', 'nastran'), ('vtu', 'vtu'),
-                                    ('jcf', 'jcf'), ('meg', 'meg')])
+@pytest.mark.parametrize('name,fmt', [('netgen', 'netgen_vol'), ('gmsh', 'gmsh')])
 @pytest.mark.parametrize('has_file', [False, True, 'stale'])
 def test_official_toolbar_play_without_dunder_file(monkeypatch, tmp_path, name, fmt, has_file):
     source = SOURCE / f'cubit_mesh_export/cubit_gui/cubit_toolbar/scripts/export_{name}.py'

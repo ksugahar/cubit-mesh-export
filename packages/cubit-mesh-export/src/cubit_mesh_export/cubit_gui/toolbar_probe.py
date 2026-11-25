@@ -20,11 +20,6 @@ SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
     "Netgen (.vol)",
     "Gmsh (.msh)",
-    "Nastran (.bdf)",
-    "VTK (.vtu)",
-    "COMSOL (.mphtxt)",
-    "JMAG (.jcf)",
-    "ELF/MAGIC (.meg)",
 ]
 RESULT_PATH = os.environ.get(
     "CUBIT_MESH_EXPORT_TOOLBAR_PROBE_RESULT",

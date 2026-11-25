@@ -15,9 +15,9 @@ def check_missing_block_registration(filepath: str, lines: List[str]) -> List[Di
 	findings = []
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
 		r'curved|exodus)\s*\('
-		r'|export\s+(?:netgen|gmsh|nastran|vtk)\s'
+		r'|export\s+(?:netgen|gmsh)\s'
 	)
 	block_pattern = re.compile(r'cubit\.cmd\s*\(\s*["\'].*\bblock\b', re.IGNORECASE)
 
@@ -341,7 +341,7 @@ def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	findings = []
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
 		r'curved|exodus)\s*\('
 	)
 	mesh_pattern = re.compile(
@@ -380,7 +380,6 @@ def check_export_file_extension(filepath: str, lines: List[str]) -> List[Dict]:
 	# Map export functions to expected extensions
 	extension_map = {
 		r'export_(?:Gmsh_ver[24]|gmsh_v[24])': ['.msh'],
-		r'export_(?:Nastran|nastran)': ['.bdf', '.nas', '.dat'],
 				r'export_exodus': ['.exo', '.e', '.ex2'],
 	}
 
@@ -455,7 +454,7 @@ def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
 	)
 	non_exodus_export = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
 		r'NetgenMesh|netgen|netgen_with_names)\s*\('
 	)
 
@@ -493,7 +492,7 @@ def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
 	# Only check files that have export calls
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
 		r'curved|exodus)\s*\('
 	)
 	has_export = any(

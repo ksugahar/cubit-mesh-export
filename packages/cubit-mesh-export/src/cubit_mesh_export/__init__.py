@@ -5,7 +5,6 @@ The Cubit plugin (cubit_mesh_export.ccm) provides mesh export commands:
   export netgen "model.vol" order N   -- High-order curved .vol
   export gmsh "model.msh"             -- GMSH v4.2 raw data
                                         + model.geo launch companion
-  export nastran_bdf "model.bdf"      -- Nastran mesh interchange
 
 Consistency checking (does NOT require Cubit):
   check-vol model.vol --strict-labels
@@ -20,7 +19,6 @@ cubit-plugin-install deploys plugin binaries to Cubit.
 # fails even though the exact pinned Netgen wheel is installed.
 import netgen as _netgen  # noqa: F401
 
-# Native CAD capture: export model_capture "model.json" units mm.
 # Consumer construction/physics adapters remain separate from this package.
 __version__ = "2.6.1"
 

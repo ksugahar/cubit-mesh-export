@@ -195,7 +195,7 @@ EXODUS_DATA_MODEL = """
 Cubit is built on the Exodus II mesh format (developed by Sandia, open
 source, on GitHub as part of the CCAs project). Understanding how
 blocks, sidesets, and nodesets differ is essential when exporting to
-Abaqus, Ansys, Nastran, OpenFOAM, or the validation runtime Radia + NGSolve stack.
+Abaqus, Ansys, OpenFOAM, or the validation runtime Radia + NGSolve stack.
 
 ## Quick reference
 
@@ -278,7 +278,7 @@ cubit.cmd('nodeset 2 name "corners"')
 
 ## validation runtime policy: `export` uses blocks only
 
-The `export netgen` / `export gmsh` / `export nastran_bdf`
+The `export netgen` / `export gmsh`
 commands (from the `cubit_mesh_export` validation runtime plugin) read from blocks
 only. Sidesets and nodesets are ignored by this plugin.
 
@@ -286,7 +286,7 @@ If you need boundary conditions in the downstream solver:
 
 - For **NGSolve**: name the *OCC faces* before meshing, not sidesets.
   See `cubit_docs topic=netgen` for the `set_name_for_occ_face` workflow.
-- For **Abaqus / Nastran / Gmsh v4.2**: use plain `export abaqus` etc.,
+- For **Abaqus**: use plain `export abaqus` etc.,
   which do translate sidesets and nodesets.
 
 See `cubit_docs topic=scripting_blocks_only_policy` for details.

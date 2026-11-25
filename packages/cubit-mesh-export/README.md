@@ -4,17 +4,8 @@ Export high-order curved meshes from Coreform Cubit directly to Netgen/NGSolve
 `.vol`. Use `check-vol` to verify the exported mesh and its named regions and
 boundaries before analysis. The standalone tools run without Radia.
 
-Nastran BDF export supports first- and second-order elements. Gmsh MSH 4.2 output
-supports visualization and post-processing. The ELF/MAGIC writer exports
-`.meg` directly from Cubit. The Export menu writes ASCII VTK XML `.vtu` and
-JMAG `.jcf`; the `export vtk` command writes Legacy `.vtk`.
-
-## Neutral CAD capture
-
-`export model_capture "model.json" units mm` records CAD topology and explicit
-block/sideset identity for separate construction adapters, without meshing.
-Read [the model-capture contract](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/docs/model_capture.md) for supported source
-records, mandatory units, approximation limits and external physical mappings.
+The only mesh formats are Netgen `.vol` (`export netgen`) and Gmsh MSH 4.2
+(`export gmsh`) for visualization and post-processing.
 
 ## Explicit named periodic export
 
@@ -78,8 +69,7 @@ programs or indirect Merge/Include inputs. Before any native initialization,
 NodeData/ElementData/ElementNodeData field tags above 2147483647 are rejected
 explicitly without remapping. Mesh-only size_t tags and pure-Python inventory
 reading have no such upper bound; field tag 2^28 remains supported.
-Independent validation can also compare explicit BDF/VTK reference meshes;
-MSH content is preflighted even under those suffixes, and GEO is rejected.
+Any other input, including GEO, is rejected.
 The independent Gmsh Jacobian/volume calculations are unchanged.
 
 Order-3 pyramid export to Gmsh is refused with an explicit element/order error:
@@ -127,7 +117,7 @@ Combined Radia installations must also pass Radia's declared exporter
 compatibility check; standalone operation does not import Radia.
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2026.8 only):
-  - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
+  - `export {netgen|gmsh}` APREPRO commands
   - Cubit-owned **Export** menu plus the Cubit Mesh Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
@@ -194,77 +184,7 @@ The no-argument `cubit-smoke-test` uses the package-owned
 The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
 bundled PySide6.
 
-The menu lists, in order: Netgen (.vol), Gmsh (.msh), Nastran (.bdf),
-VTK (.vtu), COMSOL (.mphtxt), JMAG (.jcf) and ELF/MAGIC (.meg). VTK (.vtu) writes
-block cells and sideset faces with full-precision coordinates; every volume
-element must belong to a block.
-
-COMSOL (.mphtxt) exports a quadratic tetrahedral mesh and a JSON map of blocks
-and sidesets. See the [COMSOL transfer guide](https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/comsol-transfer.md)
-for the direct mesh workflow.
-
-JMAG (.jcf) asks for an analysis settings JSON file, then for the output path,
-and writes a static analysis input from the active mesh. The settings name Cubit
-blocks and sidesets: `block_materials` maps every block to an entry of
-`material_library` (inline, or a JSON file next to the settings), `coils` give
-current, turns and a flow-in sideset or direction, `external_field` is optional,
-and `boundaries` maps sideset names to a boundary type (`symmetry` only). The
-former `symmetry_sidesets` key is rejected. See the
-[JMAG JCF settings JSON guide (Japanese)](https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/jcf_settings_ja.md) for examples.
-The full schema is in the `cubit_mesh_export.jmag` module documentation.
-See the [reproducible Cubit and JMAG ExecSolver example](https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/jcf_static_example/README.md).
-Only static analysis is written. To copy the wheel's starter settings into
-your working directory without importing Cubit or the package, run this in
-the Python environment where the wheel is installed:
-
-```python
-from importlib.metadata import distribution
-from pathlib import Path
-
-template = distribution("cubit-mesh-export").locate_file(
-    "cubit_mesh_export/examples/jmag/settings.json"
-)
-with Path("settings.json").open("xb") as output:
-    output.write(template.read_bytes())
-```
-
-Set the block names, sideset names, and analysis parameters for your model
-before selecting the file in the Cubit Export menu.
-
-For batch export on Windows with Cubit 2026.8, run the script below with
-64-bit CPython 3.12 after installing the wheel and its dependencies in that
-environment (`python -m pip install cubit-mesh-export`). The package imports
-Netgen at startup, so the wheel's pinned `netgen-mesher` dependency must also
-be importable for JCF export.
-
-```python
-import json
-import os
-from pathlib import Path
-import sys
-
-cubit_bin = r"C:\Program Files\Coreform Cubit 2026.8\bin"
-cubit_dlls = os.add_dll_directory(cubit_bin)  # Keep the handle alive.
-sys.path.insert(0, cubit_bin)
-
-import cubit
-from cubit_mesh_export.jmag import export_jcf
-
-cubit.init(["cubit", "-nographics", "-batch", "-nojournal", "-noinitfile"])
-if not cubit.cmd('open "model.cub5"'):
-    raise RuntimeError("Cubit could not open model.cub5")
-settings_path = Path("settings.json")
-settings = json.loads(settings_path.read_text(encoding="utf-8"))
-library = settings.get("material_library")
-if isinstance(library, str):
-    library_path = settings_path.parent / library
-    settings["material_library"] = json.loads(library_path.read_text(encoding="utf-8"))
-export_jcf("model.jcf", settings)
-```
-
-Use the path to your Cubit installation and an already meshed `.cub5` model.
-The menu resolves a `material_library` file name relative to `settings.json`;
-with the Python API the caller loads that file into a dictionary as shown.
+The menu lists, in order: Netgen (.vol) and Gmsh (.msh).
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
 > machine-wide `CUBIT_PLUGIN_DIR` environment variable. A stale setting can cause Cubit
@@ -330,15 +250,7 @@ retains its temporary work directory together with `vol-check.json` (or
 ```
 export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
 export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.2 raw data + .geo launch
-export nastran_bdf "model.bdf" order 2 overwrite             # Nastran BDF
-export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
-
-`export nastran_bdf` is the only supported Nastran command. Nastran output is
-a mesh-interchange deck: blocks become PSOLID or
-PSHELL properties, sidesets become collision-free PSHELL properties, and
-nodesets become SET1 cards.  The exporter does not invent MAT cards; assign
-physical material data in the receiving solver.
 
 For Radia post-processing, `.geo` is the standard launch artifact. The Gmsh
 export writes:
@@ -352,7 +264,7 @@ Associate/open `.geo` for normal review; treat `.msh` as optional raw
 mesh/data inspection.
 
 The `export netgen` command additionally accepts Kelvin / symmetry
-options (see below). The other formats do not consume Kelvin.
+options (see below). Gmsh export does not consume Kelvin.
 
 ### Free Sculpt meshes
 

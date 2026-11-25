@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Remove the JMAG (.jcf) export: the menu and toolbar action, `cubit_mesh_export.jmag`,
+  the JCF writer, its settings example and its guides.
+- Remove the ELF/MAGIC (.meg) export: the `export meg` command, the menu and toolbar action.
+- Remove the COMSOL (.mphtxt), Nastran BDF (`export nastran_bdf`), VTK/VTU (`export vtk`,
+  `cubit_mesh_export.vtu`) and FEMEEM (`export femeem`) exports, the
+  `cubit_nastran_consumer_gate` MCP tool and their knowledge. The only mesh formats are
+  Netgen (.vol) and Gmsh (.msh); the Export menu and toolbar list exactly these two.
+- Remove the `export model_capture` command: the native plugin registers only
+  `export netgen` and `export gmsh`.
+
 ## 2.6.1
 
 - For Netgen export, geometric order 2 uses Netgen's standard curving coefficients.

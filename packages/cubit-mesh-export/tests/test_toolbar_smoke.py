@@ -58,8 +58,8 @@ def test_display_contract_accepts_one_visible_complete_toolbar():
             "action is not visible: Gmsh",
         ),
         (
-            lambda data: data["action_enabled"].update({"VTK (.vtu)": False}),
-            "action is not enabled: VTK",
+            lambda data: data["action_enabled"].update({"Netgen (.vol)": False}),
+            "action is not enabled: Netgen",
         ),
         (
             lambda data: data.update(toolbar_menu_has_cubit_mesh_export=False),

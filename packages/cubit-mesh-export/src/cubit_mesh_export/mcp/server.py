@@ -2,7 +2,7 @@
 Cubit Mesh Export MCP Server
 
 Provides tools for:
-- Export function documentation (Gmsh, Nastran, Netgen, Exodus)
+- Export function documentation (Netgen, Gmsh, Exodus)
 - Netgen/NGSolve high-order curving workflows (SetGeomInfo, name-based)
 - Cubit scripting patterns and best practices
 - Cubit Python API reference (600+ functions, entity classes)
@@ -48,7 +48,6 @@ from cubit_mesh_export.mcp.knowledge.format_routing import get_format_routing_do
 from cubit_mesh_export.mcp.knowledge.coreform_webinars import get_coreform_webinar_documentation
 from cubit_mesh_export.mcp.vol_inventory import cubit_hex_geometry_refinement_gate, cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate, cubit_mapped_boundary_layer_shell_gate as _cubit_mapped_boundary_layer_shell_gate, cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate, cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate, cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate, cubit_webcut_conformal_hex_gate as _cubit_webcut_conformal_hex_gate, cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate, cubit_helical_partition_mesh_gate as _cubit_helical_partition_mesh_gate, cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate, cubit_boundary_layer_candidate_gate as _cubit_boundary_layer_candidate_gate, cubit_boundary_layer_journal_recovery_gate as _cubit_boundary_layer_journal_recovery_gate, cubit_embedded_region_mixed_transition_gate as _cubit_embedded_region_mixed_transition_gate, cubit_embedded_pipe_source_recovery_gate as _cubit_embedded_pipe_source_recovery_gate, cubit_mixed_order_series_inventory_gate, summarize_netgen_vol_inventory
 from cubit_mesh_export.mcp.gmsh_v42 import gmsh_v42_mixed_order_series_gate, summarize_gmsh_v42_ascii
-from cubit_mesh_export.mcp.nastran_consumer import evaluate_nastran_consumer_contract
 from cubit_mesh_export.mcp._support.lazy_call import lazy_callable
 _cubit_loft_high_order_vol_series_gate = lazy_callable(".high_order_export_gate", "cubit_loft_high_order_vol_series_gate", __package__)
 _cubit_helical_conductor_source_gate = lazy_callable(".helical_conductor_gate", "cubit_helical_conductor_source_gate", __package__)
@@ -92,7 +91,7 @@ HEADLESS/batch route are the PRIMARY way agents drive Cubit --
 `cubit_batch_try` / `cubit_mesh_auto` / `.jou` playback for mesh
 generation, exports, and validation. Every LLM/MCP Cubit operation is
 batch/nographics. Never launch or attach to the Cubit GUI. For visualization,
-render exported Gmsh/VTK artifacts outside the Cubit session.
+render exported Gmsh artifacts outside the Cubit session.
 
 Human handoff: cubit_import_journal reads a human-saved .jou without
 execution or GUI attachment; cubit_session_journal exports Cubit's native
@@ -621,7 +620,6 @@ def cubit_docs(topic: str = "all") -> str:
 	        "gmsh_v42"               - Gmsh v4.2 format (export gmsh)
 	        "gmsh_v4"               - Gmsh v4.2 format policy
 	        "netgen"                - Netgen .vol export (export netgen)
-	        "nastran"               - Nastran BDF (export nastran_bdf + consumer gate)
 	        "exodus"                - Exodus II (Cubit built-in)
 	        "export_comparison"     - Format comparison and decision matrix
 	        "export_decision_guide" - Decision tree for format selection
@@ -685,7 +683,7 @@ def cubit_docs(topic: str = "all") -> str:
 		return (
 			"# Cubit Documentation\n\n"
 			"Use topic prefixes to navigate:\n"
-			"- `export_*` - Export format documentation (gmsh_v42, netgen, nastran, etc.)\n"
+			"- `export_*` - Export format documentation (gmsh_v42, netgen, etc.)\n"
 			"- `scripting_*` - Python scripting guide (blocks, mesh_schemes, etc.)\n"
 			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n"
 			"- `panel_*` - optional Radia solver handoff conventions\n\n"
@@ -757,45 +755,6 @@ def cubit_docs(topic: str = "all") -> str:
 		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*. "
 		f"Examples: export_overview, scripting_blocks, api_core"
 	)
-
-
-@_validation.tool(
-	title="Validate Nastran Mesh Consumer Contract",
-	annotations=ToolAnnotations(
-		readOnlyHint=True,
-		destructiveHint=False,
-		idempotentHint=True,
-		openWorldHint=False,
-	),
-)
-def cubit_nastran_consumer_gate(
-	summary: dict,
-	bbox_tolerance: float = 1e-10,
-	require_material_assignment: bool = True,
-	require_set_semantics: bool = False,
-) -> str:
-	"""Validate a Cubit BDF handoff without conflating producer and consumer faults.
-
-	The gate requires independent BDF parse evidence and then checks whether a
-	downstream consumer preserved dimension, element/node counts, second order,
-	bounding box, imported-mesh ownership, and material assignment. It rejects
-	consumer-side remeshing and complete-analysis-deck claims.
-	"""
-	try:
-		result = evaluate_nastran_consumer_contract(
-			summary,
-			bbox_tolerance=bbox_tolerance,
-			require_material_assignment=require_material_assignment,
-			require_set_semantics=require_set_semantics,
-		)
-	except (TypeError, ValueError) as exc:
-		result = {
-			"policy": "cubit_nastran_consumer_contract_v1",
-			"status": "invalid_input",
-			"passed": False,
-			"error": str(exc),
-		}
-	return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -1450,7 +1409,7 @@ def cubit_mixed_transition_source_gate(
 
 @_validation.tool()
 def cubit_pyramid_mixed_export_gate(summary: dict) -> str:
-	"""Gate explicit hex/pyramid/tet preservation in Gmsh and Nastran.
+	"""Gate explicit hex/pyramid/tet preservation in the Gmsh export.
 	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	try:
@@ -2233,7 +2192,7 @@ def get_lint_rules() -> str:
 			'severity': 'MODERATE',
 			'description': 'Export file extension does not match the format.',
 			'trigger': 'export gmsh "mesh.vtk" (wrong extension)',
-			'fix': 'Use correct extension: .msh, .bdf, .exo, .vol',
+			'fix': 'Use correct extension: .msh, .exo, .vol',
 		},
 		{
 			'rule': 'curve-without-export-curved',
@@ -3600,7 +3559,7 @@ def cubit_examples(query: str, limit: int = 3,
 	  2. **Local lab archive**: `public-safe curated corpus` (~145 .jou/.py
 	     across years of research projects — twisted wire, claw-pole
 	     alternator, kelvin transformation, TEAM problems, helical
-	     coils, mesh AI, and Nastran/VTU pipelines)
+	     coils, and mesh AI)
 	     + durable Radia repo lanes (`docs/`, `validation_test/`,
 	     `src/radia/panels/samples`).
 	     Lab-curated items get a small score boost.
@@ -6835,12 +6794,7 @@ def cubit_export_decision_guide() -> str:
 		"|------|---------|----------|\n"
 		"| NGSolve FEM (recommended) | export netgen \"f.vol\" order N | 1-5 |\n"
 		"| GMSH visualization | export gmsh \"f.msh\" order N | 1-3 |\n"
-		"| Nastran mesh interchange | export nastran_bdf \"f.bdf\" order N | 1-2 |\n"
-		"| ParaView | export vtk \"f.vtk\" order N | 1-2 |\n"
-		"| ELF/MAGIC | export meg \"f.meg\" | 1 |\n"
-		"| Cubit-native archival | export mesh \"f.exo\" | all |\n\n"
-		"For BDF promotion, call `cubit_nastran_consumer_gate`: independent "
-		"parsing proves the exporter, while order/mesh retention proves the consumer.\n"
+		"| Cubit-native archival | export mesh \"f.exo\" | all |\n"
 	)
 
 

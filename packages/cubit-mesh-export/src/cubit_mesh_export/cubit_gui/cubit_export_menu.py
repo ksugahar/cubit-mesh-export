@@ -4,10 +4,9 @@ Cubit Mesh Export menu — Claro-registered menu + PySide6 export dialogs.
 The menu itself is registered through Cubit's own Claro API
 (`emclaro.add_to_menu`), so Cubit owns the menu and it
 survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
-run inside Cubit's embedded Python interpreter.  Netgen, Gmsh, Nastran
-and MEG run the .ccm APREPRO `export ...` commands after collecting user
-input through Qt dialogs parented to the Cubit main window.  VTU, COMSOL
-and JCF are written by this package's Python writers.
+run inside Cubit's embedded Python interpreter.  Netgen and Gmsh
+run the .ccm APREPRO `export ...` commands after collecting user
+input through Qt dialogs parented to the Cubit main window.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
 and `cubit_mesh_export.mcp.knowledge.custom_toolbar` (TOOLBAR_PYTHON_SCRIPT_
@@ -182,62 +181,16 @@ def _ensure_model(cubit_mod, parent):
 # Stable format keys used by the exporter-owned settings file.
 FMT_NETGEN = "netgen_vol"
 FMT_GMSH = "gmsh"
-FMT_NASTRAN = "nastran"
-FMT_VTU = "vtu"
-FMT_COMSOL = "comsol"
-FMT_JCF = "jcf"
-FMT_MEG = "meg"
 
 _FORMAT_TITLES = {
     FMT_NETGEN: "Export Netgen Vol",
     FMT_GMSH: "Gmsh MSH 4.2 post-processing support",
-    FMT_NASTRAN: "Export Nastran BDF",
-    FMT_MEG: "Export MEG (ELF/MAGIC)",
 }
 
 _FORMAT_EXTS = {
     FMT_NETGEN: ".vol",
     FMT_GMSH: ".msh",
-    FMT_NASTRAN: ".bdf",
-    FMT_MEG: ".meg",
 }
-
-
-def _elf_labels_for_dim(dim_idx):
-    """ELF label options per Dimension dropdown index.
-
-    dim_idx: 0=3D(T), 1=2D(K), 2=Axisym(R)
-    "(none)" = skip the block during MEG export (e.g. air regions).
-    """
-    if dim_idx == 0:
-        return ["(none) - Skip export",
-                "MMB - Magnetic body",
-                "MMS - Magnetic shell",
-                "MMT - Magnetic thin",
-                "MMP - Permanent magnet",
-                "MWL - Nonlinear magnet (fixed local axis)",
-                "MWV - Nonlinear magnet (direction vectors)",
-                "MCL - Coil line",
-                "MCO - Current conductor",
-                "MAB - Armature block",
-                "MAT - Armature thin",
-                "MBB - Boundary"]
-    return ["(none) - Skip export",
-            "MMB - Magnetic body",
-            "MMT - Magnetic thin",
-            "MMP - Permanent magnet",
-            "MWL - Nonlinear magnet (fixed local axis)",
-            "MWV - Nonlinear magnet (direction vectors)",
-            "MCL - Coil line",
-            "MCO - Current conductor",
-            "MAB - Armature block",
-            "MAT - Armature thin",
-            "MBB - Boundary"]
-
-
-def _elf_prefix(text):
-    """Extract 3-char prefix from combo text 'MMB - Magnetic body'."""
-    return text[:3]
 
 
 class ExportDialog(QDialog):
@@ -247,8 +200,7 @@ class ExportDialog(QDialog):
     the same `export` APREPRO command is emitted.  Per-format
     settings are persisted to
     ``%APPDATA%/cubit-mesh-export/export_settings.json``
-    under the format key (``netgen_vol`` / ``gmsh`` / ``nastran`` /
-    ``meg``).
+    under the format key (``netgen_vol`` / ``gmsh``).
     """
 
     def __init__(self, fmt, source_path_hint, cubit_mod, parent=None):
@@ -299,10 +251,7 @@ class ExportDialog(QDialog):
 
         # --- Order combo ---------------------------------------------
         self._order = QComboBox()
-        if fmt == FMT_MEG:
-            # Always order 1 — no form row
-            self._order.addItem("1 (linear)")
-        elif fmt == FMT_NETGEN:
+        if fmt == FMT_NETGEN:
             self._order.addItems(["1", "2", "3", "4", "5"])
             self._order.setCurrentIndex(2)  # default 3
             self._order.currentIndexChanged.connect(self._update_preview)
@@ -322,44 +271,12 @@ class ExportDialog(QDialog):
 
         # --- Dimension ----------------------------------------------
         self._dimension = QComboBox()
-        if fmt == FMT_MEG:
-            self._dimension.addItems(
-                ["3D (threed)", "2D (twod)", "Axisymmetric"])
-        else:
-            self._dimension.addItems(["3D", "2D"])
+        self._dimension.addItems(["3D", "2D"])
         self._dimension.currentIndexChanged.connect(self._update_preview)
         if fmt != FMT_NETGEN:
             form.addRow("Dimension:", self._dimension)
 
-        # --- NoPyramid (Nastran only) -------------------------------
-        self._nopyramid = None
-        if fmt == FMT_NASTRAN:
-            self._nopyramid = QComboBox()
-            self._nopyramid.addItems(
-                ["Keep pyramids",
-                 "Convert pyramids to degenerate hexes"])
-            self._nopyramid.currentIndexChanged.connect(self._update_preview)
-            form.addRow("Pyramids:", self._nopyramid)
-
-        # --- MEG block label table ----------------------------------
-        self._block_table = None
-        if fmt == FMT_MEG:
-            layout.addLayout(form)
-            layout.addWidget(QLabel("Block -> ELF Label:"))
-            self._block_table = QTableWidget(0, 3)
-            self._block_table.setHorizontalHeaderLabels(
-                ["Block", "Name", "ELF Type"])
-            self._block_table.horizontalHeader().setStretchLastSection(True)
-            self._block_table.setColumnWidth(0, 50)
-            self._block_table.setColumnWidth(1, 140)
-            self._block_table.setMinimumHeight(120)
-            self._block_table.setMaximumHeight(250)
-            layout.addWidget(self._block_table)
-            self._populate_block_table()
-            # Re-populate labels when DIM changes
-            self._dimension.currentIndexChanged.connect(self._update_preview)
-        else:
-            layout.addLayout(form)
+        layout.addLayout(form)
 
         # --- Kelvin / symmetry (Netgen .vol only) -------------------
         self._kelvin_enable = None
@@ -456,8 +373,6 @@ class ExportDialog(QDialog):
             self._order.setCurrentIndex(int(s["order"]))
         if "dimension" in s:
             self._dimension.setCurrentIndex(int(s["dimension"]))
-        if self._nopyramid and "nopyramid" in s:
-            self._nopyramid.setCurrentIndex(int(s["nopyramid"]))
         if self._kelvin_enable and "kelvin_enable" in s:
             self._kelvin_enable.setChecked(bool(s["kelvin_enable"]))
         if self._kelvin_mesh_size and "kelvin_mesh_size" in s:
@@ -530,90 +445,10 @@ class ExportDialog(QDialog):
             cmd = (f'export gmsh "{f}" order {order} '
                    f'dimension {dim}')
 
-        elif fmt == FMT_NASTRAN:
-            dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'export nastran_bdf "{f}" order {order} '
-                   f'dimension {dim}')
-            if self._nopyramid and self._nopyramid.currentIndex() == 1:
-                cmd += " nopyramid"
-
-        elif fmt == FMT_MEG:
-            dim_idx = self._dimension.currentIndex()
-            dim_opt = ("threed", "twod", "axisymmetric")[dim_idx]
-            cmd = f'export meg "{f}" {dim_opt}'
-            if self._block_table and self._block_table.rowCount() > 0:
-                pairs = []
-                for r in range(self._block_table.rowCount()):
-                    id_item = self._block_table.item(r, 0)
-                    combo = self._block_table.cellWidget(r, 2)
-                    if id_item and combo:
-                        prefix = _elf_prefix(combo.currentText())
-                        if prefix == "(no":  # "(none) - Skip export"
-                            continue
-                        pairs.append(f"{id_item.text()}:{prefix}")
-                if pairs:
-                    cmd += f' labels "{",".join(pairs)}"'
-
         return cmd + " overwrite"
 
     # ------------------------------------------------------------------
-    def _populate_block_table(self):
-        if self._block_table is None:
-            return
-        block_ids = self._cubit.get_block_id_list()
-        self._block_table.setRowCount(len(block_ids))
-        dim_idx = self._dimension.currentIndex() if self._dimension else 0
-        labels = _elf_labels_for_dim(dim_idx)
-        for r, bid in enumerate(block_ids):
-            name = self._cubit.get_block_name(bid) or "(unnamed)"
-
-            id_item = QTableWidgetItem(str(bid))
-            id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
-            self._block_table.setItem(r, 0, id_item)
-
-            name_item = QTableWidgetItem(name)
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self._block_table.setItem(r, 1, name_item)
-
-            combo = QComboBox()
-            combo.addItems(labels)
-            qname = name.upper()
-            default_idx = 1  # MMB
-            if (qname in ("AIR", "KELVIN")
-                    or qname.startswith("AIR_")
-                    or qname.startswith("KELVIN_")):
-                default_idx = 0  # (none)
-            else:
-                for i in range(1, len(labels)):
-                    if qname.startswith(_elf_prefix(labels[i])):
-                        default_idx = i
-                        break
-            combo.setCurrentIndex(default_idx)
-            combo.currentIndexChanged.connect(self._update_preview)
-            self._block_table.setCellWidget(r, 2, combo)
-
-    def _update_block_labels(self):
-        if self._block_table is None or self._dimension is None:
-            return
-        labels = _elf_labels_for_dim(self._dimension.currentIndex())
-        for r in range(self._block_table.rowCount()):
-            combo = self._block_table.cellWidget(r, 2)
-            if combo is None:
-                continue
-            current = _elf_prefix(combo.currentText())
-            combo.blockSignals(True)
-            combo.clear()
-            combo.addItems(labels)
-            for i, lbl in enumerate(labels):
-                if _elf_prefix(lbl) == current:
-                    combo.setCurrentIndex(i)
-                    break
-            combo.blockSignals(False)
-
-    # ------------------------------------------------------------------
     def _update_preview(self):
-        if self._fmt == FMT_MEG:
-            self._update_block_labels()
         self._preview.setText(self.cubit_command())
         self._preview.setCursorPosition(0)
 
@@ -626,8 +461,6 @@ class ExportDialog(QDialog):
             "order": self._order.currentIndex(),
             "dimension": self._dimension.currentIndex(),
         }
-        if self._nopyramid:
-            s["nopyramid"] = self._nopyramid.currentIndex()
         if self._kelvin_enable:
             s["kelvin_enable"] = self._kelvin_enable.isChecked()
         if self._kelvin_mesh_size:
@@ -644,7 +477,7 @@ class ExportDialog(QDialog):
 
 
 # ----------------------------------------------------------------------
-# Generic export runner — applies to GMSH / Nastran / MEG
+# Generic export runner — applies to GMSH
 # (Netgen Vol has its own runner with subprocess verification, see below.)
 # ----------------------------------------------------------------------
 
@@ -941,115 +774,6 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
-def sideset_notes(result):
-    """Lines describing reported sidesets; empty when there is nothing to report."""
-    result = result or {}
-    lines = []
-    for key, title in (("unused_sidesets", "Sidesets not used by the settings"),
-                       ("unexported_sidesets", "Sidesets with no exported face")):
-        rows = result.get(key) or []
-        if rows:
-            lines.append(f"{title}: " + ", ".join(f"{row['name']!r} (id {row['cubit_id']})" for row in rows))
-    for row in result.get("overlaps") or []:
-        if "faces" in row:            # JCF: mesh faces
-            lines.append(f"Faces shared by sidesets {row['sidesets']}: {row['faces']}")
-        else:                         # MPHTXT: triangles, grouped into geometric entities
-            lines.append(f"Triangles shared by sidesets {row['sideset_ids']}: {row['triangles']} "
-                         f"in {len(row['file_indices'])} geometric entities")
-    return lines
-
-
-def _report_sidesets(parent, title, result):
-    lines = sideset_notes(result)
-    for line in lines:
-        print(line)
-    if lines:
-        QMessageBox.information(parent, title, chr(10).join(lines))
-
-
-def _run_jcf_export(parent):
-    """Read the analysis settings and export the current Cubit mesh."""
-    from cubit_mesh_export.jmag import export_jcf
-
-    config_path, _ = QFileDialog.getOpenFileName(
-        parent, "Select analysis settings", "", "JSON (*.json)")
-    if not config_path:
-        return
-    out, _ = QFileDialog.getSaveFileName(
-        parent, "Export JCF", "mesh.jcf", "JCF (*.jcf)")
-    if not out:
-        return
-    if not out.lower().endswith(".jcf"):
-        out += ".jcf"
-    try:
-        with open(config_path, encoding="utf-8") as stream:
-            config = json.load(stream)
-        if not isinstance(config, dict):
-            raise ValueError("Analysis settings must be a JSON object")
-        library = config.get("material_library")
-        if isinstance(library, str):
-            library_path = os.path.join(os.path.dirname(config_path), library)
-            with open(library_path, encoding="utf-8") as stream:
-                config["material_library"] = json.load(stream)
-        result = export_jcf(out, config)
-    except Exception as exc:
-        QMessageBox.warning(parent, "JCF export failed", str(exc))
-        return
-    print(f"Export complete: {out}")
-    _report_sidesets(parent, "JCF export: sidesets", result)
-    return result
-
-
-def _run_vtu_export(parent):
-    """Write the current Cubit mesh as ASCII VTK XML (.vtu)."""
-    from cubit_mesh_export.vtu import export_vtu
-
-    out, _ = QFileDialog.getSaveFileName(
-        parent, "Export VTU", "mesh.vtu", "VTK XML UnstructuredGrid (*.vtu)")
-    if not out:
-        return
-    if not out.lower().endswith(".vtu"):
-        out += ".vtu"
-    try:
-        result = export_vtu(out)
-    except Exception as exc:
-        QMessageBox.warning(parent, "VTU export failed", str(exc))
-        return
-    print(f"Export complete: {out}")
-    return result
-
-
-def _run_comsol_export(parent):
-    from PySide6.QtWidgets import QInputDialog
-    from cubit_mesh_export.comsol import export_mphtxt
-
-    unit, accepted = QInputDialog.getItem(
-        parent, "COMSOL export", "Cubit model coordinate unit:", ["mm", "m", "cm", "um"], 0, False)
-    if not accepted:
-        return
-    order, accepted = QInputDialog.getItem(
-        parent, "COMSOL export", "Element order of the Cubit mesh:",
-        ["1 (TETRA4)", "2 (TETRA10)"], 1, False)
-    if not accepted:
-        return
-    path, _ = QFileDialog.getSaveFileName(
-        parent, "Export COMSOL mesh", "mesh.mphtxt", "COMSOL mesh (*.mphtxt)")
-    if not path:
-        return
-    if not path.lower().endswith(".mphtxt"):
-        path += ".mphtxt"
-    try:
-        result = export_mphtxt(
-            path, meters_per_unit={"m": 1, "cm": 0.01, "mm": 0.001, "um": 1e-6}[unit],
-            order=int(order[0]))
-    except Exception as exc:
-        QMessageBox.warning(parent, "COMSOL export failed", str(exc))
-        return
-    print(f"Export complete: {path}")
-    _report_sidesets(parent, "COMSOL export: sidesets", result)
-    return result
-
-
 def launch_export(fmt):
     """Launch one export dialog from Cubit's official custom toolbar.
 
@@ -1062,12 +786,6 @@ def launch_export(fmt):
     parent = find_claro()
     if parent is None:
         raise RuntimeError("Cubit main window is not available")
-    if fmt == FMT_COMSOL:
-        return _run_comsol_export(parent)
-    if fmt == FMT_JCF:
-        return _run_jcf_export(parent)
-    if fmt == FMT_VTU:
-        return _run_vtu_export(parent)
     import cubit as cubit_mod
     if fmt == FMT_NETGEN:
         return _run_netgen_export(cubit_mod, parent)
@@ -1099,16 +817,6 @@ _MENU_SPECS = (
      "Export curved mesh with labels (.vol, order 1-5)"),
     ("Gmsh (.msh)", FMT_GMSH,
      "Gmsh MSH 4.2 export for post-processing and visualization; solver meshes are checked .vol"),
-    ("Nastran (.bdf)", FMT_NASTRAN,
-     "Export mesh to Nastran BDF format (.bdf, order 1-2)"),
-    ("VTK (.vtu)", FMT_VTU,
-     "Export block elements and sideset faces as ASCII VTK XML (.vtu)"),
-    ("COMSOL (.mphtxt)", FMT_COMSOL,
-     "Export a quadratic tetrahedral mesh for COMSOL"),
-    ("JMAG (.jcf)", FMT_JCF,
-     "Export a static solver input from named blocks and sidesets (.jcf)"),
-    ("ELF/MAGIC (.meg)", FMT_MEG,
-     "Export mesh to ELF/MAGIC MEG format (1st-order)"),
 )
 
 

@@ -1068,21 +1068,6 @@ with io.XDMFFile(MPI.COMM_WORLD, "mesh.xdmf", "r") as f:
 
 Source: forum.coreform.com/t/2172 (2082 views - Workflow for FEniCS)
 
-## VTK / VTU Export
-
-Cubit does **not** have a built-in VTK writer. Options:
-
-1. **MeshIO** conversion:
-   ```python
-   # Export as Exodus from Cubit, then convert
-   cubit.cmd('export mesh "mesh.exo" overwrite')
-   # meshio convert mesh.exo mesh.vtu
-   ```
-
-3. **ParaView** can read Exodus directly.
-
-Source: forum.coreform.com/t/2025 (1658 views - VTK/VTU export)
-
 ## CalculiX (C3D20 Node Ordering)
 
 Cubit uses Exodus node ordering. CalculiX uses different ordering
@@ -1321,33 +1306,6 @@ FORUM_VENDOR_TIPS = """
 
 Knowledge from official Coreform support interactions and vendor guidance.
 
-## Pressure Boundary Condition Bug
-
-**CRITICAL**: Pressure boundary conditions on Curves do NOT export correctly
-to Nastran format. This is a known bug (reported to Coreform developer as of 2021).
-
-```python
-# CORRECT: Pressure on Surface
-cubit.cmd('create pressure name "load" on surface 1 magnitude 998')
-# -> Exports as PLOAD4 card in Nastran
-
-# WRONG: Pressure on Curve (bug - does not export correctly)
-cubit.cmd('create pressure name "load" on curve 5 magnitude 998')
-```
-
-**Workaround**: Always apply pressure BCs to surfaces, not curves.
-
-## Node Numbering in Nastran Export
-
-Node ordering in Nastran export is NOT ascending by default:
-- Elements are written in ascending order
-- Each element's node IDs are assigned starting from the block's start_id
-- Use `renumber` to get clean sequential numbering:
-
-```
-renumber node all in Volume all start_id 1 uniqueids
-```
-
 ## Offset Webcut (Advanced Decomposition)
 
 The `offset_tool` webcut variant cuts inward from surface boundaries.
@@ -1385,7 +1343,6 @@ compress       # renumber all entity IDs to be sequential
 
 - `uniqueids` ensures no duplicate IDs
 - Element ordering follows block assignment order, not spatial order
-- For clean exports, renumber before `export nastran`
 """
 
 FORUM_MESH_COPY = """

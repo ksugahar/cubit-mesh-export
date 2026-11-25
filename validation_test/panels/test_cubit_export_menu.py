@@ -6,13 +6,11 @@ C++ Qt5 .ccl plugin in 2026-05.  Tests use Cubit 2026.8 embedded Python and its 
 Coverage:
     A. Module imports + symbol surface
     B. Export actions are registered through Cubit's Claro API
-    C. ExportDialog.cubit_command() round-trip for the four command formats
+    C. ExportDialog.cubit_command() round-trip for the two command formats
        (default options yield the expected `export ...` APREPRO
         commands so the .ccm side is unchanged)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
-    E. Nastran nopyramid flag
-    F. Exactly seven Export actions, in order, each dispatched by launch_export
-    G. MEG labels (block table mocking)
+    F. Exactly three Export actions, in order, each dispatched by launch_export
     H. install_menu() idempotency on a stub QMainWindow
     I. Current journal is an optional output-name hint, never a prerequisite
     J. Settings persistence round-trip
@@ -69,16 +67,11 @@ class TestModuleSurface(unittest.TestCase):
     def test_format_constants(self):
         self.assertEqual(rem.FMT_NETGEN, "netgen_vol")
         self.assertEqual(rem.FMT_GMSH, "gmsh")
-        self.assertEqual(rem.FMT_NASTRAN, "nastran")
-        self.assertEqual(rem.FMT_VTU, "vtu")
-        self.assertEqual(rem.FMT_JCF, "jcf")
-        self.assertEqual(rem.FMT_MEG, "meg")
+        self.assertFalse(hasattr(rem, "FMT_COMSOL"))
 
     def test_format_extensions(self):
         self.assertEqual(rem._FORMAT_EXTS[rem.FMT_NETGEN], ".vol")
         self.assertEqual(rem._FORMAT_EXTS[rem.FMT_GMSH], ".msh")
-        self.assertEqual(rem._FORMAT_EXTS[rem.FMT_NASTRAN], ".bdf")
-        self.assertEqual(rem._FORMAT_EXTS[rem.FMT_MEG], ".meg")
 
     def test_public_callables_present(self):
         for name in ("install_menu", "find_claro", "_current_journal_hint",
@@ -132,9 +125,6 @@ class _DialogTestBase(unittest.TestCase):
             f.write("# fake journal\n")
 
     def _make_dialog(self, fmt, cubit_stub=None):
-        # All formats except MEG never touch the cubit_mod; MEG calls
-        # get_block_id_list -> we stub it as empty so the block table
-        # stays empty.
         stub = cubit_stub or MagicMock()
         stub.get_block_id_list = MagicMock(return_value=[])
         d = rem.ExportDialog(fmt, self._jou, stub)
@@ -210,70 +200,6 @@ class TestGmshCommand(_DialogTestBase):
         self.assertIn("dimension 2", d.cubit_command())
 
 
-class TestNastranCommand(_DialogTestBase):
-
-    def test_default_command(self):
-        d = self._make_dialog(rem.FMT_NASTRAN)
-        cmd = d.cubit_command()
-        self.assertRegex(
-            cmd,
-            r'^export nastran_bdf "[^"]+\.bdf" order \d+ '
-            r'dimension 3 overwrite$')
-        # nopyramid default = off
-        self.assertNotIn("nopyramid", cmd)
-
-    def test_nopyramid_flag(self):
-        d = self._make_dialog(rem.FMT_NASTRAN)
-        d._nopyramid.setCurrentIndex(1)  # "Yes"
-        self.assertIn("nopyramid", d.cubit_command())
-
-
-class TestMegCommand(_DialogTestBase):
-
-    def test_default_3d(self):
-        d = self._make_dialog(rem.FMT_MEG)
-        cmd = d.cubit_command()
-        self.assertRegex(
-            cmd,
-            r'^export meg "[^"]+\.meg" threed overwrite$')
-
-    def test_2d_dimension(self):
-        d = self._make_dialog(rem.FMT_MEG)
-        # MEG combo items are ["3D (threed)", "2D (twod)", "Axisymmetric"]
-        # -- index 1 is the 2D entry (label != "2D" exactly).
-        d._dimension.setCurrentIndex(1)
-        self.assertIn(" twod ", d.cubit_command())
-
-    def test_axisym_dimension(self):
-        d = self._make_dialog(rem.FMT_MEG)
-        # 3rd combo entry is "Axisymmetric"
-        d._dimension.setCurrentIndex(2)
-        self.assertIn(" axisymmetric ", d.cubit_command())
-
-    def test_block_labels_passthrough(self):
-        # Stub cubit with a single block "iron" -> default MMB
-        stub = MagicMock()
-        stub.get_block_id_list = MagicMock(return_value=[1])
-        stub.get_block_name = MagicMock(return_value="iron")
-        d = rem.ExportDialog(rem.FMT_MEG, self._jou, stub)
-        cmd = d.cubit_command()
-        self.assertIn('labels "1:MMB"', cmd)
-
-    def test_air_block_skipped(self):
-        # AIR / KELVIN should default to "(none) - Skip export"
-        stub = MagicMock()
-        stub.get_block_id_list = MagicMock(return_value=[7, 8])
-        stub.get_block_name = MagicMock(side_effect=["air", "iron"])
-        d = rem.ExportDialog(rem.FMT_MEG, self._jou, stub)
-        cmd = d.cubit_command()
-        # air -> skipped, only iron labeled
-        self.assertIn('labels "8:MMB"', cmd)
-        self.assertNotIn("7:", cmd)
-
-
-# ----------------------------------------------------------------------
-# H. install_menu() idempotency on stub QMainWindow
-# ----------------------------------------------------------------------
 class _FakePyAction:
     def __init__(self):
         self.text = ""
@@ -318,19 +244,18 @@ class TestInstallMenu(unittest.TestCase):
         sys.modules.pop("emclaro", None)
         rem._claro_keepalive.clear()
 
-    def test_install_creates_menu_with_7_export_actions(self):
+    def test_install_creates_menu_with_3_export_actions(self):
         self.assertTrue(rem.install_menu())
         self.assertEqual(self.removed, [rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 1)
         menu_title, actions, component = self.added[0]
         self.assertEqual(menu_title, rem._CLARO_MENU_TITLE)
         self.assertEqual(component, rem._CLARO_COMPONENT)
-        self.assertEqual(len(actions), 7)
+        self.assertEqual(len(actions), 2)
         self.assertEqual(
             [action.text for action in actions],
             [
-                "Netgen (.vol)", "Gmsh (.msh)", "Nastran (.bdf)", "VTK (.vtu)",
-                "COMSOL (.mphtxt)", "JMAG (.jcf)", "ELF/MAGIC (.meg)",
+                "Netgen (.vol)", "Gmsh (.msh)",
             ],
         )
         self.assertTrue(all("launch_export" in action.activate_method
@@ -342,7 +267,7 @@ class TestInstallMenu(unittest.TestCase):
         self.assertEqual(self.removed,
                          [rem._CLARO_COMPONENT, rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 2)
-        self.assertEqual(len(rem._claro_keepalive), 8)
+        self.assertEqual(len(rem._claro_keepalive), 4)
 
 
 class TestFindClaro(unittest.TestCase):

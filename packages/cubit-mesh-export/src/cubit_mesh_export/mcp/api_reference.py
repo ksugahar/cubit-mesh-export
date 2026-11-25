@@ -947,10 +947,6 @@ cubit.cmd('import acis "file.sat" attributes_off')
 # STEP
 cubit.cmd('import step "file.stp"')
 
-# Nastran
-cubit.cmd('import nastran "file.bdf"')
-cubit.cmd('import nastran mesh geometry "file.bdf" feature_angle 135.00')
-
 # Patran
 cubit.cmd('import patran mesh geometry "file.pat" feature_angle 135.00')
 
@@ -968,10 +964,6 @@ nearly-flat surfaces.
 ## Export Formats
 
 ```python
-# Nastran (large format for double precision)
-cubit.cmd('export nastran "file.bdf" dimension 3 overwrite everything large')
-cubit.cmd('export nastran "file.bdf" block 1 dimension 3 large overwrite')
-
 # ACIS / SAT
 cubit.cmd('export acis "file.sat" ascii overwrite')
 cubit.cmd('set geometry version 2500')  # older version for compatibility
