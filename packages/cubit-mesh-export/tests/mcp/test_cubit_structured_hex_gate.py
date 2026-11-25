@@ -21,13 +21,6 @@ def lattice_summary() -> dict:
 			"shape": {"count": 24, "min": 0.98},
 		},
 		"geometry": {"cad_volume": 24.0},
-		"gmsh_header": {"status": "ok", "mesh_format": "4.2", "binary": False},
-		"gmsh_independent": {
-			"hex_count": 24,
-			"node_count": 60,
-			"non_hex_volume_count": 0,
-			"integrated_volume": 24.0,
-		},
 	}
 
 
@@ -69,16 +62,13 @@ def test_accepts_interval_lattice_quality_and_independent_volume():
 	assert result["metrics"]["expected_node_count"] == 60
 
 
-def test_rejects_large_count_without_lattice_or_export_closure():
+def test_rejects_large_count_without_lattice_closure():
 	summary = copy.deepcopy(lattice_summary())
 	summary["element_counts"]["hex"] = 25
-	summary["gmsh_independent"]["integrated_volume"] = 23.0
 	result = call_lattice(summary)
 	assert result["status"] == "needs_attention"
 	assert set(result["issues"]) >= {
 		"hex_count_is_interval_product",
-		"gmsh_counts_match_live_inventory",
-		"gmsh_integrated_volume_matches_cad",
 	}
 
 

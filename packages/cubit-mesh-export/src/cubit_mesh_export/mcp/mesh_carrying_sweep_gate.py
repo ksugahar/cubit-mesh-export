@@ -49,7 +49,6 @@ def cubit_mesh_carrying_straight_sweep_gate(
     counts = _counts(summary.get("element_counts", {}))
     quality = _mapping(summary.get("quality", {}), "quality")
     scaled = _mapping(quality.get("scaled_jacobian", {}), "scaled_jacobian")
-    gmsh = _mapping(summary.get("gmsh_export", {}), "gmsh_export")
     z_levels = _float_sequence(summary.get("z_levels", []), "z_levels")
     column_depths = [
         int(value)
@@ -95,11 +94,6 @@ def cubit_mesh_carrying_straight_sweep_gate(
         "uniform_column_depth": column_depths == [intervals + 1],
         "scaled_jacobian_above_threshold": scaled_min >= min_scaled_jacobian,
         "cad_volume_matches_expected": volume_error <= volume_relative_tolerance,
-        "gmsh_ascii_v42": str(gmsh.get("mesh_format", "")) == "4.2"
-        and gmsh.get("binary") is False,
-        "gmsh_counts_match_live": int(gmsh.get("node_count", -1)) == node_count
-        and int(gmsh.get("hex_count", -1)) == counts.get("hex", 0)
-        and int(gmsh.get("other_volume_count", -1)) == 0,
     }
     return {
         "policy": "cubit_mesh_carrying_straight_sweep_gate_v1",

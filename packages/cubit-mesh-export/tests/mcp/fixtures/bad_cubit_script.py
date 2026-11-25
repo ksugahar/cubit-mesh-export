@@ -47,8 +47,8 @@ cme.export_netgen(cubit, "output.vol")
 
 # missing-mesh-command + missing-block-registration:
 # export called but no mesh command and no proper block registration
-cme.export_Gmsh_ver4(cubit, "output.vtk")
-# wrong-file-extension: .vtk extension for Gmsh export
+cme.export_exodus(cubit, "output.vtk")
+# wrong-file-extension: .vtk extension for Exodus export
 
 # missing-boundary-block + missing-block-names:
 # volume block without surface block, no block names

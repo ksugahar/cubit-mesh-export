@@ -37,16 +37,6 @@ def cubit_region_owned_mixed_mesh_gate(
     )
     quality_raw = _mapping(summary.get("quality") or {}, "quality")
     geometry = _mapping(summary.get("geometry") or {}, "geometry")
-    export = _mapping(summary.get("gmsh_export") or {}, "gmsh_export")
-    header = _mapping(export.get("header") or {}, "gmsh_export.header")
-    inventory = _mapping(summary.get("gmsh_inventory") or {}, "gmsh_inventory")
-    inventory_counts_raw = _mapping(
-        inventory.get("volume_family_counts") or {},
-        "gmsh_inventory.volume_family_counts",
-    )
-    inventory_counts = {
-        str(key).lower(): int(value) for key, value in inventory_counts_raw.items()
-    }
 
     counts = {str(key).lower(): int(value) for key, value in counts_raw.items()}
     if any(value < 0 for value in counts.values()):
@@ -135,21 +125,6 @@ def cubit_region_owned_mixed_mesh_gate(
         and all(count == 1 for count in interface_by_conductor.values()),
         "cad_partition_volume_is_conserved": isfinite(volume_error)
         and volume_error <= volume_limit,
-        "gmsh_ascii_v42_handoff_complete": int(export.get("bytes", 0)) > 0
-        and len(str(export.get("sha256", ""))) == 64
-        and str(header.get("version", "")) == "4.2"
-        and int(header.get("file_type", -1)) == 0
-        and all(
-            header.get(name) is True
-            for name in ("has_entities_section", "has_nodes_section", "has_elements_section")
-        ),
-        "parsed_gmsh_topology_matches_cubit": inventory.get("status") == "ok"
-        and not list(inventory.get("connectivity_mismatches") or [])
-        and all(
-            inventory_counts.get(kind, 0) == counts.get(kind, 0)
-            for kind in ("hex", "tet", "pyramid")
-        )
-        and inventory_counts.get("wedge", 0) == counts.get("wedge", 0),
     }
     issues = [name for name, ok in checks.items() if not ok]
     return {
@@ -162,12 +137,10 @@ def cubit_region_owned_mixed_mesh_gate(
         "interface_count": len(interface_rows),
         "interface_count_by_conductor": interface_by_conductor,
         "volume_relative_error": volume_error,
-        "parsed_gmsh_volume_family_counts": inventory_counts,
         "notes": [
             "Judge mixed topology by region ownership, not by requiring the global hex count to exceed the air tet count.",
             "Mesh sweepable conductors first; tetmesh may then insert pyramids against their quad interfaces.",
             "A nonempty export is insufficient without per-region topology, quality, interface, and CAD-volume closure.",
-            "Parse the Gmsh 4.2 element blocks independently and require their volume-family counts to match Cubit's in-memory inventory.",
         ],
     }
 

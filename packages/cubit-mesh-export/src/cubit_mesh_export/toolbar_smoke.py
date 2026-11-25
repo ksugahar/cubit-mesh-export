@@ -25,8 +25,7 @@ from cubit_mesh_export._layout import is_supported_cubit_root
 SCHEMA = "cubit-mesh-export.toolbar-smoke.v1"
 PROBE_SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
-    "Netgen (.vol)",
-    "Gmsh (.msh)",
+    "Export Netgen (.vol)...",
 ]
 
 

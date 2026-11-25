@@ -1035,7 +1035,7 @@ With `export netgen`, ALL of this is eliminated. The ACIS kernel handles
 surface projection for any geometry directly, regardless of complexity.
 """
 
-WORKFLOW_GMSH_2ND_ORDER = """
+WORKFLOW_VOL_2ND_ORDER = """
 # Alternative: Netgen .vol 2nd Order Workflow (Simplest)
 
 If you only need 2nd order elements and don't need 3rd order or higher,
@@ -1244,7 +1244,7 @@ Fix: cubit.cmd("block 2 add tri all")  # Add boundary elements
 **Cause**: 1st order mesh without curving
 ```
 Fix: Use export netgen(cubit, order=2) or higher
-     Or use Gmsh 2nd order alternative
+     Or follow the vol_2nd_order workflow
 ```
 
 ## Netgen Import Error: "No module named 'netgen'"
@@ -1544,7 +1544,7 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 		"field_solve": WORKFLOW_FIELD_SOLVE,
 		"capacitance": WORKFLOW_FIELD_SOLVE,
 		"kelvin_auto": KELVIN_AUTO,
-		"gmsh_2nd_order": WORKFLOW_GMSH_2ND_ORDER,
+		"vol_2nd_order": WORKFLOW_VOL_2ND_ORDER,
 		"troubleshooting": TROUBLESHOOTING,
 		"deleted_apis": DELETED_APIS,
 		# Legacy aliases that redirect to new content
@@ -1562,7 +1562,7 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 		main_topics = [
 			WORKFLOW_OVERVIEW, WORKFLOW_EXPORT_CURVED,
 			WORKFLOW_CYLINDER, WORKFLOW_SPHERE, WORKFLOW_TORUS,
-			WORKFLOW_COMPLEX, WORKFLOW_GMSH_2ND_ORDER,
+			WORKFLOW_COMPLEX, WORKFLOW_VOL_2ND_ORDER,
 			WORKFLOW_ACCURACY, WORKFLOW_FIELD_SOLVE, TROUBLESHOOTING, DELETED_APIS,
 		]
 		return "\n\n".join(main_topics)

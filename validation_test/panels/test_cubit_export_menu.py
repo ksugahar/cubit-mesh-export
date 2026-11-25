@@ -6,11 +6,10 @@ C++ Qt5 .ccl plugin in 2026-05.  Tests use Cubit 2026.8 embedded Python and its 
 Coverage:
     A. Module imports + symbol surface
     B. Export actions are registered through Cubit's Claro API
-    C. ExportDialog.cubit_command() round-trip for the two command formats
-       (default options yield the expected `export ...` APREPRO
-        commands so the .ccm side is unchanged)
+    C. ExportDialog.cubit_command() round-trip (default options yield the
+       expected `export netgen` APREPRO command)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
-    F. Exactly three Export actions, in order, each dispatched by launch_export
+    F. Exactly one flat Export action that opens the Netgen dialog
     H. install_menu() idempotency on a stub QMainWindow
     I. Current journal is an optional output-name hint, never a prerequisite
     J. Settings persistence round-trip
@@ -64,18 +63,16 @@ def _ensure_qapp():
 # ----------------------------------------------------------------------
 class TestModuleSurface(unittest.TestCase):
 
-    def test_format_constants(self):
-        self.assertEqual(rem.FMT_NETGEN, "netgen_vol")
-        self.assertEqual(rem.FMT_GMSH, "gmsh")
-        self.assertFalse(hasattr(rem, "FMT_COMSOL"))
-
-    def test_format_extensions(self):
-        self.assertEqual(rem._FORMAT_EXTS[rem.FMT_NETGEN], ".vol")
-        self.assertEqual(rem._FORMAT_EXTS[rem.FMT_GMSH], ".msh")
+    def test_no_format_dispatch_layer(self):
+        self.assertEqual(rem._SETTINGS_KEY, "netgen_vol")
+        for name in ("FMT_NETGEN", "FMT_GMSH", "FMT_COMSOL", "_FORMAT_EXTS",
+                     "_FORMAT_TITLES", "_MENU_SPECS", "launch_export",
+                     "_run_generic_export"):
+            self.assertFalse(hasattr(rem, name), name)
 
     def test_public_callables_present(self):
         for name in ("install_menu", "find_claro", "_current_journal_hint",
-                     "ExportDialog"):
+                     "ExportDialog", "launch_netgen_export"):
             self.assertTrue(hasattr(rem, name),
                             f"cubit_export_menu missing: {name}")
             self.assertTrue(callable(getattr(rem, name)))
@@ -124,17 +121,17 @@ class _DialogTestBase(unittest.TestCase):
         with open(cls._jou, "w") as f:
             f.write("# fake journal\n")
 
-    def _make_dialog(self, fmt, cubit_stub=None):
+    def _make_dialog(self, cubit_stub=None):
         stub = cubit_stub or MagicMock()
         stub.get_block_id_list = MagicMock(return_value=[])
-        d = rem.ExportDialog(fmt, self._jou, stub)
+        d = rem.ExportDialog(self._jou, stub)
         return d
 
 
 class TestNetgenCommand(_DialogTestBase):
 
     def test_default_command(self):
-        d = self._make_dialog(rem.FMT_NETGEN)
+        d = self._make_dialog()
         cmd = d.cubit_command()
         # Default order is 3 (combo index 2)
         self.assertRegex(
@@ -144,7 +141,7 @@ class TestNetgenCommand(_DialogTestBase):
         self.assertNotIn("add_kelvin", cmd)
 
     def test_order_variants(self):
-        d = self._make_dialog(rem.FMT_NETGEN)
+        d = self._make_dialog()
         for combo_idx, expected_order in [(0, 1), (1, 2), (2, 3),
                                           (3, 4), (4, 5)]:
             d._order.setCurrentIndex(combo_idx)
@@ -152,7 +149,7 @@ class TestNetgenCommand(_DialogTestBase):
             self.assertIn(f"order {expected_order} ", cmd + " ")
 
     def test_kelvin_enabled_default(self):
-        d = self._make_dialog(rem.FMT_NETGEN)
+        d = self._make_dialog()
         d._kelvin_enable.setChecked(True)
         cmd = d.cubit_command()
         self.assertIn("add_kelvin", cmd)
@@ -162,7 +159,7 @@ class TestNetgenCommand(_DialogTestBase):
         self.assertNotIn("kelvin_sym_z", cmd)
 
     def test_kelvin_with_mesh_size_and_symmetry(self):
-        d = self._make_dialog(rem.FMT_NETGEN)
+        d = self._make_dialog()
         d._kelvin_enable.setChecked(True)
         d._kelvin_mesh_size.setText("0.05")
         # Find "bn" / "ht" in the combo items (order may vary)
@@ -179,25 +176,6 @@ class TestNetgenCommand(_DialogTestBase):
         self.assertIn("kelvin_sym_x bn", cmd)
         self.assertIn("kelvin_sym_y ht", cmd)
         self.assertIn("kelvin_sym_z bn", cmd)
-
-
-class TestGmshCommand(_DialogTestBase):
-
-    def test_default_3d(self):
-        d = self._make_dialog(rem.FMT_GMSH)
-        cmd = d.cubit_command()
-        self.assertRegex(
-            cmd,
-            r'^export gmsh "[^"]+\.msh" order \d+ dimension 3 '
-            r'overwrite$')
-
-    def test_2d_dimension(self):
-        d = self._make_dialog(rem.FMT_GMSH)
-        for i in range(d._dimension.count()):
-            if d._dimension.itemText(i) == "2D":
-                d._dimension.setCurrentIndex(i)
-                break
-        self.assertIn("dimension 2", d.cubit_command())
 
 
 class _FakePyAction:
@@ -244,22 +222,18 @@ class TestInstallMenu(unittest.TestCase):
         sys.modules.pop("emclaro", None)
         rem._claro_keepalive.clear()
 
-    def test_install_creates_menu_with_3_export_actions(self):
+    def test_install_creates_one_flat_netgen_action(self):
         self.assertTrue(rem.install_menu())
         self.assertEqual(self.removed, [rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 1)
         menu_title, actions, component = self.added[0]
         self.assertEqual(menu_title, rem._CLARO_MENU_TITLE)
         self.assertEqual(component, rem._CLARO_COMPONENT)
-        self.assertEqual(len(actions), 2)
-        self.assertEqual(
-            [action.text for action in actions],
-            [
-                "Netgen (.vol)", "Gmsh (.msh)",
-            ],
-        )
-        self.assertTrue(all("launch_export" in action.activate_method
-                            for action in actions))
+        self.assertEqual(len(actions), 1)
+        (action,) = actions
+        self.assertEqual(action.text, "Export Netgen (.vol)...")
+        self.assertEqual(action.menu_text, "Export Netgen (.vol)...")
+        self.assertIn("launch_netgen_export()", action.activate_method)
 
     def test_install_is_idempotent(self):
         rem.install_menu()
@@ -267,7 +241,7 @@ class TestInstallMenu(unittest.TestCase):
         self.assertEqual(self.removed,
                          [rem._CLARO_COMPONENT, rem._CLARO_COMPONENT])
         self.assertEqual(len(self.added), 2)
-        self.assertEqual(len(rem._claro_keepalive), 4)
+        self.assertEqual(len(rem._claro_keepalive), 2)
 
 
 class TestFindClaro(unittest.TestCase):
@@ -317,7 +291,7 @@ class TestCurrentJournalHint(unittest.TestCase):
         _ensure_qapp()
         stub = MagicMock()
         stub.get_block_id_list = MagicMock(return_value=[])
-        dialog = rem.ExportDialog(rem.FMT_NETGEN, "", stub)
+        dialog = rem.ExportDialog("", stub)
         self.assertTrue(dialog.file_path().endswith("/ExportedMesh.vol"))
 
     def test_loaded_model_export_never_prompts_to_save_journal(self):
@@ -328,9 +302,9 @@ class TestCurrentJournalHint(unittest.TestCase):
         dialog.exec.return_value = rem.QDialog.Rejected
         with patch.object(rem, "ExportDialog", return_value=dialog) as factory, \
                 patch.object(rem.QFileDialog, "getSaveFileName") as save_dialog:
-            rem._run_generic_export(rem.FMT_GMSH, stub, parent=None)
+            rem._run_netgen_export(stub, parent=None)
         save_dialog.assert_not_called()
-        factory.assert_called_once_with(rem.FMT_GMSH, "", stub, parent=None)
+        factory.assert_called_once_with("", stub, parent=None)
 
 
 # ----------------------------------------------------------------------

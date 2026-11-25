@@ -4,8 +4,8 @@ Cubit Mesh Export menu — Claro-registered menu + PySide6 export dialogs.
 The menu itself is registered through Cubit's own Claro API
 (`emclaro.add_to_menu`), so Cubit owns the menu and it
 survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
-run inside Cubit's embedded Python interpreter.  Netgen and Gmsh
-run the .ccm APREPRO `export ...` commands after collecting user
+run inside Cubit's embedded Python interpreter.  The single Netgen action
+runs the .ccm APREPRO `export netgen` command after collecting user
 input through Qt dialogs parented to the Cubit main window.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
@@ -178,36 +178,22 @@ def _ensure_model(cubit_mod, parent):
 # the removed Qt5 component).
 # ----------------------------------------------------------------------
 
-# Stable format keys used by the exporter-owned settings file.
-FMT_NETGEN = "netgen_vol"
-FMT_GMSH = "gmsh"
-
-_FORMAT_TITLES = {
-    FMT_NETGEN: "Export Netgen Vol",
-    FMT_GMSH: "Gmsh MSH 4.2 post-processing support",
-}
-
-_FORMAT_EXTS = {
-    FMT_NETGEN: ".vol",
-    FMT_GMSH: ".msh",
-}
+# Key of the Netgen options in the exporter-owned settings file.
+_SETTINGS_KEY = "netgen_vol"
 
 
 class ExportDialog(QDialog):
-    """Format-aware export options dialog.
+    """Netgen .vol export options dialog.
 
-    Builds the same set of widgets as the legacy C++ ExportDialog so
-    the same `export` APREPRO command is emitted.  Per-format
-    settings are persisted to
-    ``%APPDATA%/cubit-mesh-export/export_settings.json``
-    under the format key (``netgen_vol`` / ``gmsh``).
+    Emits the `export netgen` APREPRO command.  Settings are persisted to
+    ``%APPDATA%/cubit-mesh-export/export_settings.json`` under
+    ``netgen_vol``.
     """
 
-    def __init__(self, fmt, source_path_hint, cubit_mod, parent=None):
+    def __init__(self, source_path_hint, cubit_mod, parent=None):
         super().__init__(parent)
-        self._fmt = fmt
         self._cubit = cubit_mod
-        self.setWindowTitle(_FORMAT_TITLES[fmt])
+        self.setWindowTitle("Export Netgen Vol")
         self.setMinimumWidth(500)
 
         layout = QVBoxLayout(self)
@@ -245,107 +231,81 @@ class ExportDialog(QDialog):
         row.addWidget(self._dir)
         row.addWidget(browse)
         form.addRow("Directory:", row)
-        self._filename = QLineEdit(base_name + _FORMAT_EXTS[fmt])
+        self._filename = QLineEdit(base_name + ".vol")
         self._filename.textChanged.connect(self._update_preview)
         form.addRow("Filename:", self._filename)
 
         # --- Order combo ---------------------------------------------
         self._order = QComboBox()
-        if fmt == FMT_NETGEN:
-            self._order.addItems(["1", "2", "3", "4", "5"])
-            self._order.setCurrentIndex(2)  # default 3
-            self._order.currentIndexChanged.connect(self._update_preview)
-            form.addRow("Order:", self._order)
-        elif fmt == FMT_GMSH:
-            # tet/hex up to order 3, wedge up to order 2.
-            # The Gmsh writer supports orders up to three.
-            self._order.addItems(
-                ["1", "2", "3 (tet/hex only, wedge stays 2)"])
-            self._order.setCurrentIndex(0)
-            self._order.currentIndexChanged.connect(self._update_preview)
-            form.addRow("Order:", self._order)
-        else:
-            self._order.addItems(["1 (linear)", "2 (quadratic)"])
-            self._order.currentIndexChanged.connect(self._update_preview)
-            form.addRow("Order:", self._order)
-
-        # --- Dimension ----------------------------------------------
-        self._dimension = QComboBox()
-        self._dimension.addItems(["3D", "2D"])
-        self._dimension.currentIndexChanged.connect(self._update_preview)
-        if fmt != FMT_NETGEN:
-            form.addRow("Dimension:", self._dimension)
+        self._order.addItems(["1", "2", "3", "4", "5"])
+        self._order.setCurrentIndex(2)  # default 3
+        self._order.currentIndexChanged.connect(self._update_preview)
+        form.addRow("Order:", self._order)
 
         layout.addLayout(form)
 
-        # --- Kelvin / symmetry (Netgen .vol only) -------------------
-        self._kelvin_enable = None
-        self._kelvin_mesh_size = None
-        self._kelvin_sym_x = None
-        self._kelvin_sym_y = None
-        self._kelvin_sym_z = None
-        if fmt == FMT_NETGEN:
-            box = QGroupBox(
-                "Kelvin open-boundary  (auto-add exterior sphere; "
-                "needs an 'air' block)")
-            kv = QVBoxLayout(box)
+        # --- Kelvin / symmetry --------------------------------------
+        box = QGroupBox(
+            "Kelvin open-boundary  (auto-add exterior sphere; "
+            "needs an 'air' block)")
+        kv = QVBoxLayout(box)
 
-            row1 = QHBoxLayout()
-            self._kelvin_enable = QCheckBox("Add Kelvin (idempotent)")
-            self._kelvin_enable.setToolTip(
-                "Idempotent: skipped if a 'kelvin' block already exists.\n"
-                "Uncheck for Dirichlet-truncation baselines.")
-            self._kelvin_enable.toggled.connect(self._update_preview)
-            row1.addWidget(self._kelvin_enable)
-            row1.addSpacing(20)
-            row1.addWidget(QLabel("Mesh size [m]:"))
-            self._kelvin_mesh_size = QLineEdit()
-            self._kelvin_mesh_size.setPlaceholderText(
-                "auto (blank) or e.g. 0.03")
-            self._kelvin_mesh_size.setMaximumWidth(140)
-            self._kelvin_mesh_size.setToolTip(
-                "Tet edge length on the Kelvin shell.  Blank inherits "
-                "the size from the air outer surface (copy-mesh).")
-            self._kelvin_mesh_size.textChanged.connect(self._update_preview)
-            row1.addWidget(self._kelvin_mesh_size)
-            row1.addStretch()
-            kv.addLayout(row1)
+        row1 = QHBoxLayout()
+        self._kelvin_enable = QCheckBox("Add Kelvin (idempotent)")
+        self._kelvin_enable.setToolTip(
+            "Idempotent: skipped if a 'kelvin' block already exists.\n"
+            "Uncheck for Dirichlet-truncation baselines.")
+        self._kelvin_enable.toggled.connect(self._update_preview)
+        row1.addWidget(self._kelvin_enable)
+        row1.addSpacing(20)
+        row1.addWidget(QLabel("Mesh size [m]:"))
+        self._kelvin_mesh_size = QLineEdit()
+        self._kelvin_mesh_size.setPlaceholderText(
+            "auto (blank) or e.g. 0.03")
+        self._kelvin_mesh_size.setMaximumWidth(140)
+        self._kelvin_mesh_size.setToolTip(
+            "Tet edge length on the Kelvin shell.  Blank inherits "
+            "the size from the air outer surface (copy-mesh).")
+        self._kelvin_mesh_size.textChanged.connect(self._update_preview)
+        row1.addWidget(self._kelvin_mesh_size)
+        row1.addStretch()
+        kv.addLayout(row1)
 
-            row2 = QHBoxLayout()
-            row2.addWidget(QLabel("Symmetry reduction:"))
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("Symmetry reduction:"))
 
-            def _make_sym(axis):
-                cb = QComboBox()
-                cb.addItem("off")
-                cb.addItem("bn")
-                cb.addItem("ht")
-                cb.setMaximumWidth(70)
-                cb.setToolTip(
-                    f"BC label on the {axis}=0 plane when the air block "
-                    f"is reduced to {axis}>=0.\n"
-                    "  bn = B.n=0   (flux parallel,   solver '+', "
-                    "A:Dirichlet, Omega:natural)\n"
-                    "  ht = HxN=0   (flux perp,       solver '-', "
-                    "A:natural,    Omega:Dirichlet)\n"
-                    "  off = no reduction on this axis")
-                cb.currentIndexChanged.connect(self._update_preview)
-                return cb
+        def _make_sym(axis):
+            cb = QComboBox()
+            cb.addItem("off")
+            cb.addItem("bn")
+            cb.addItem("ht")
+            cb.setMaximumWidth(70)
+            cb.setToolTip(
+                f"BC label on the {axis}=0 plane when the air block "
+                f"is reduced to {axis}>=0.\n"
+                "  bn = B.n=0   (flux parallel,   solver '+', "
+                "A:Dirichlet, Omega:natural)\n"
+                "  ht = HxN=0   (flux perp,       solver '-', "
+                "A:natural,    Omega:Dirichlet)\n"
+                "  off = no reduction on this axis")
+            cb.currentIndexChanged.connect(self._update_preview)
+            return cb
 
-            self._kelvin_sym_x = _make_sym("x")
-            self._kelvin_sym_y = _make_sym("y")
-            self._kelvin_sym_z = _make_sym("z")
-            row2.addWidget(QLabel("x:"))
-            row2.addWidget(self._kelvin_sym_x)
-            row2.addSpacing(8)
-            row2.addWidget(QLabel("y:"))
-            row2.addWidget(self._kelvin_sym_y)
-            row2.addSpacing(8)
-            row2.addWidget(QLabel("z:"))
-            row2.addWidget(self._kelvin_sym_z)
-            row2.addStretch()
-            kv.addLayout(row2)
+        self._kelvin_sym_x = _make_sym("x")
+        self._kelvin_sym_y = _make_sym("y")
+        self._kelvin_sym_z = _make_sym("z")
+        row2.addWidget(QLabel("x:"))
+        row2.addWidget(self._kelvin_sym_x)
+        row2.addSpacing(8)
+        row2.addWidget(QLabel("y:"))
+        row2.addWidget(self._kelvin_sym_y)
+        row2.addSpacing(8)
+        row2.addWidget(QLabel("z:"))
+        row2.addWidget(self._kelvin_sym_z)
+        row2.addStretch()
+        kv.addLayout(row2)
 
-            layout.addWidget(box)
+        layout.addWidget(box)
 
         # --- Command preview row ------------------------------------
         prev_form = QFormLayout()
@@ -364,24 +324,22 @@ class ExportDialog(QDialog):
 
         # --- Load saved settings ------------------------------------
         # A source-path hint wins for the initial directory. Otherwise reuse
-        # the user's previous output directory for this format.
+        # the user's previous output directory.
         all_settings = _load_settings()
-        s = all_settings.get(fmt, {})
+        s = all_settings.get(_SETTINGS_KEY, {})
         if not source_path_hint and "dir" in s:
             self._dir.setText(s["dir"])
         if "order" in s:
             self._order.setCurrentIndex(int(s["order"]))
-        if "dimension" in s:
-            self._dimension.setCurrentIndex(int(s["dimension"]))
-        if self._kelvin_enable and "kelvin_enable" in s:
+        if "kelvin_enable" in s:
             self._kelvin_enable.setChecked(bool(s["kelvin_enable"]))
-        if self._kelvin_mesh_size and "kelvin_mesh_size" in s:
+        if "kelvin_mesh_size" in s:
             self._kelvin_mesh_size.setText(s["kelvin_mesh_size"])
         for cb, key in (
                 (self._kelvin_sym_x, "kelvin_sym_x"),
                 (self._kelvin_sym_y, "kelvin_sym_y"),
                 (self._kelvin_sym_z, "kelvin_sym_z")):
-            if cb and key in s:
+            if key in s:
                 idx = cb.findText(s[key])
                 if idx >= 0:
                     cb.setCurrentIndex(idx)
@@ -408,43 +366,24 @@ class ExportDialog(QDialog):
 
     # ------------------------------------------------------------------
     def cubit_command(self):
-        """Build the `export ...` APREPRO command string."""
+        """Build the `export netgen` APREPRO command string."""
         f = self.file_path()
-        order = self.order()
-        fmt = self._fmt
-        cmd = ""
-
-        if fmt == FMT_NETGEN:
-            cmd = f'export netgen "{f}" order {order}'
-            if self._kelvin_enable and self._kelvin_enable.isChecked():
-                cmd += " add_kelvin"
-                if self._kelvin_mesh_size:
-                    ms = self._kelvin_mesh_size.text().strip()
-                    if ms:
-                        try:
-                            v = float(ms)
-                            if v > 0.0:
-                                cmd += f" kelvin_mesh {v:g}"
-                        except ValueError:
-                            pass
-
-                def _emit_sym(cb, flag):
-                    if not cb:
-                        return ""
-                    s = cb.currentText()
-                    if s in ("bn", "ht"):
-                        return f" {flag} {s}"
-                    return ""
-
-                cmd += _emit_sym(self._kelvin_sym_x, "kelvin_sym_x")
-                cmd += _emit_sym(self._kelvin_sym_y, "kelvin_sym_y")
-                cmd += _emit_sym(self._kelvin_sym_z, "kelvin_sym_z")
-
-        elif fmt == FMT_GMSH:
-            dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'export gmsh "{f}" order {order} '
-                   f'dimension {dim}')
-
+        cmd = f'export netgen "{f}" order {self.order()}'
+        if self._kelvin_enable.isChecked():
+            cmd += " add_kelvin"
+            ms = self._kelvin_mesh_size.text().strip()
+            if ms:
+                try:
+                    v = float(ms)
+                    if v > 0.0:
+                        cmd += f" kelvin_mesh {v:g}"
+                except ValueError:
+                    pass
+            for cb, flag in ((self._kelvin_sym_x, "kelvin_sym_x"),
+                             (self._kelvin_sym_y, "kelvin_sym_y"),
+                             (self._kelvin_sym_z, "kelvin_sym_z")):
+                if cb.currentText() in ("bn", "ht"):
+                    cmd += f" {flag} {cb.currentText()}"
         return cmd + " overwrite"
 
     # ------------------------------------------------------------------
@@ -456,65 +395,17 @@ class ExportDialog(QDialog):
     def _on_accept(self):
         # Persist settings before accepting
         all_settings = _load_settings()
-        s = {
+        all_settings[_SETTINGS_KEY] = {
             "dir": self._dir.text(),
             "order": self._order.currentIndex(),
-            "dimension": self._dimension.currentIndex(),
+            "kelvin_enable": self._kelvin_enable.isChecked(),
+            "kelvin_mesh_size": self._kelvin_mesh_size.text(),
+            "kelvin_sym_x": self._kelvin_sym_x.currentText(),
+            "kelvin_sym_y": self._kelvin_sym_y.currentText(),
+            "kelvin_sym_z": self._kelvin_sym_z.currentText(),
         }
-        if self._kelvin_enable:
-            s["kelvin_enable"] = self._kelvin_enable.isChecked()
-        if self._kelvin_mesh_size:
-            s["kelvin_mesh_size"] = self._kelvin_mesh_size.text()
-        if self._kelvin_sym_x:
-            s["kelvin_sym_x"] = self._kelvin_sym_x.currentText()
-        if self._kelvin_sym_y:
-            s["kelvin_sym_y"] = self._kelvin_sym_y.currentText()
-        if self._kelvin_sym_z:
-            s["kelvin_sym_z"] = self._kelvin_sym_z.currentText()
-        all_settings[self._fmt] = s
         _save_settings(all_settings)
         self.accept()
-
-
-# ----------------------------------------------------------------------
-# Generic export runner — applies to GMSH
-# (Netgen Vol has its own runner with subprocess verification, see below.)
-# ----------------------------------------------------------------------
-
-def _run_generic_export(fmt, cubit_mod, parent):
-    """Show ExportDialog and execute the chosen `export` command."""
-    source_path_hint = ""
-    if cubit_mod.get_volume_count() == 0:
-        source_path_hint = _ensure_model(cubit_mod, parent)
-        if cubit_mod.get_volume_count() == 0:
-            return
-    if not source_path_hint:
-        source_path_hint = _current_journal_hint(cubit_mod)
-
-    dlg = ExportDialog(fmt, source_path_hint, cubit_mod, parent=parent)
-    if dlg.exec() != QDialog.Accepted:
-        return
-
-    out_dir = os.path.dirname(dlg.file_path()).replace("\\", "/")
-    cubit_mod.cmd(f'cd "{out_dir}"')
-
-    cmd = dlg.cubit_command()
-    if not cmd:
-        QMessageBox.warning(parent, "Export", "No export command.")
-        return
-
-    cubit_mod.cmd(cmd)
-
-    out = dlg.file_path()
-    if not os.path.isfile(out):
-        QMessageBox.warning(
-            parent, "Export failed",
-            f"Export did not produce expected output:\n{out}")
-        return
-    print(f"Export complete: {out}")
-
-    # Open exported file with OS-associated application
-    _open_in_os(out)
 
 
 def _open_in_os(path):
@@ -596,7 +487,7 @@ def _run_netgen_export(cubit_mod, parent):
     if not source_path_hint:
         source_path_hint = _current_journal_hint(cubit_mod)
 
-    dlg = ExportDialog(FMT_NETGEN, source_path_hint, cubit_mod, parent=parent)
+    dlg = ExportDialog(source_path_hint, cubit_mod, parent=parent)
     if dlg.exec() != QDialog.Accepted:
         return
 
@@ -774,22 +665,17 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
-def launch_export(fmt):
-    """Launch one export dialog from Cubit's official custom toolbar.
+def launch_netgen_export():
+    """Open the Netgen .vol export dialog from the menu or the toolbar.
 
     ``WorkflowToolbar`` buttons execute small Python scripts.  Those scripts
-    call this stable dispatcher instead of modifying Cubit's QMenuBar.
+    call this entry point instead of modifying Cubit's QMenuBar.
     """
-    labels = {spec[1]: spec[0] for spec in _MENU_SPECS}
-    if fmt not in labels:
-        raise ValueError(f"unsupported Cubit export format: {fmt!r}")
     parent = find_claro()
     if parent is None:
         raise RuntimeError("Cubit main window is not available")
     import cubit as cubit_mod
-    if fmt == FMT_NETGEN:
-        return _run_netgen_export(cubit_mod, parent)
-    return _run_generic_export(fmt, cubit_mod, parent)
+    return _run_netgen_export(cubit_mod, parent)
 
 
 # ----------------------------------------------------------------------
@@ -810,18 +696,14 @@ _CLARO_MENU_TITLE = "&Export"
 _claro_keepalive = []
 _shutdown_connected = False
 
-# (menu label, export format, status tip).  The toolbar template, its
-# scripts and the toolbar checks carry the same labels in the same order.
-_MENU_SPECS = (
-    ("Netgen (.vol)", FMT_NETGEN,
-     "Export curved mesh with labels (.vol, order 1-5)"),
-    ("Gmsh (.msh)", FMT_GMSH,
-     "Gmsh MSH 4.2 export for post-processing and visualization; solver meshes are checked .vol"),
-)
+# The single menu action.  The toolbar template, its script and the
+# toolbar checks carry the same label.
+_MENU_LABEL = "Export Netgen (.vol)..."
+_MENU_STATUS_TIP = "Export curved mesh with labels (.vol, order 1-5)"
 
 
-def _activate_code(fmt):
-    """Return the Python snippet Cubit runs when a menu item is chosen.
+def _activate_code():
+    """Return the Python snippet Cubit runs when the menu action is chosen.
 
     ``PyAction.setActivateMethod`` takes a C string, NOT a callable
     (measured: passing a function raises ``TypeError ... argument 2 of
@@ -839,10 +721,10 @@ def _activate_code(fmt):
         "(_d in sys.path) or sys.path.insert(0, _d)\n"
         "try:\n"
         "    import cubit_export_menu as _rem\n"
-        "    _rem.launch_export({fmt!r})\n"
+        "    _rem.launch_netgen_export()\n"
         "except Exception:\n"
         "    traceback.print_exc()\n"
-    ).format(dir=module_dir, fmt=fmt)
+    ).format(dir=module_dir)
 
 
 def install_menu():
@@ -886,14 +768,13 @@ def install_menu():
     del _claro_keepalive[:]
 
     actions = emclaro.PyActionVector()
-    for label, fmt, status_tip in _MENU_SPECS:
-        act = emclaro.PyAction()
-        act.setText(label)
-        act.setMenuText(label)
-        act.setStatusTip(status_tip)
-        act.setActivateMethod(_activate_code(fmt))
-        actions.push_back(act)
-        _claro_keepalive.append(act)
+    act = emclaro.PyAction()
+    act.setText(_MENU_LABEL)
+    act.setMenuText(_MENU_LABEL)
+    act.setStatusTip(_MENU_STATUS_TIP)
+    act.setActivateMethod(_activate_code())
+    actions.push_back(act)
+    _claro_keepalive.append(act)
     _claro_keepalive.append(actions)
 
     emclaro.add_to_menu(_CLARO_MENU_TITLE, actions, _CLARO_COMPONENT)
@@ -904,7 +785,7 @@ def install_menu():
         app.aboutToQuit.connect(remove_menu)
         _shutdown_connected = True
     print("[cubit-mesh-export] Export menu installed "
-          "(%d actions, Claro add_to_menu)" % len(_MENU_SPECS))
+          "(1 action, Claro add_to_menu)")
     return True
 
 

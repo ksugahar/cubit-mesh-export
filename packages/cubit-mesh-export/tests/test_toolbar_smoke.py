@@ -54,12 +54,12 @@ def test_display_contract_accepts_one_visible_complete_toolbar():
             "no visible screen region",
         ),
         (
-            lambda data: data["action_visible"].update({"Gmsh (.msh)": False}),
-            "action is not visible: Gmsh",
+            lambda data: data["action_visible"].update({"Export Netgen (.vol)...": False}),
+            "action is not visible: Export Netgen",
         ),
         (
-            lambda data: data["action_enabled"].update({"Netgen (.vol)": False}),
-            "action is not enabled: Netgen",
+            lambda data: data["action_enabled"].update({"Export Netgen (.vol)...": False}),
+            "action is not enabled: Export Netgen",
         ),
         (
             lambda data: data.update(toolbar_menu_has_cubit_mesh_export=False),
@@ -82,9 +82,14 @@ def test_display_contract_rejects_missing_hidden_or_duplicate_ui(
     assert any(expected_issue in issue for issue in issues), issues
 
 
-def test_display_contract_rejects_missing_or_reordered_actions():
+def test_display_contract_rejects_missing_or_extra_actions():
     payload = _healthy_payload()
-    payload["toolbar_actions"] = list(reversed(payload["toolbar_actions"]))
+    payload["toolbar_actions"] = payload["toolbar_actions"] + ["Gmsh (.msh)"]
+
+    assert any("toolbar actions differ" in issue for issue in SMOKE.validate_probe_result(payload))
+
+    payload = _healthy_payload()
+    payload["toolbar_actions"] = []
 
     issues = SMOKE.validate_probe_result(payload)
 
@@ -182,24 +187,15 @@ def test_shipped_toolbar_identifiers_match_both_probe_consumers():
                         isinstance(target, ast.Name) and target.id == "EXPECTED_ACTIONS"
                         for target in node.targets))
     assert actions == expected, (actions, expected)
-    description = next(node.findtext("description") for node in ET.parse(template).iter("WAction")
-                       if node.attrib["name"] == "Gmsh (.msh)")
-    assert "post-processing" in description and ".vol" in description, description
-    # The Export menu offers the same actions in the same order, and every toolbar script
-    # dispatches the format its menu item dispatches.
+    # The Export menu offers the same single action, and the toolbar script opens it.
     menu = ast.parse((source / "cubit_export_menu.py").read_text(encoding="utf-8"))
     names = {t.id: n.value.value for n in menu.body if isinstance(n, ast.Assign)
              for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
-    specs = next(n.value for n in menu.body if isinstance(n, ast.Assign)
-                 and any(isinstance(t, ast.Name) and t.id == "_MENU_SPECS" for t in n.targets))
-    menu_items = [(spec.elts[0].value, names[spec.elts[1].id]) for spec in specs.elts]
-    assert [label for label, _ in menu_items] == actions, (menu_items, actions)
+    assert [names["_MENU_LABEL"]] == actions, (names.get("_MENU_LABEL"), actions)
     scripts = [Path(node.text.split("/")[-1]) for node in ET.parse(template).iter("filename")]
-    dispatched = []
-    for script in scripts:
-        tree = ast.parse((source / "cubit_toolbar/scripts" / script).read_text(encoding="utf-8"))
-        dispatched += [c.args[0].value for c in ast.walk(tree) if isinstance(c, ast.Call)
-                       and getattr(c.func, "id", "") == "launch_export"]
-    assert dispatched == [fmt for _, fmt in menu_items], (dispatched, menu_items)
+    assert scripts == [Path("export_netgen.py")], scripts
+    tree = ast.parse((source / "cubit_toolbar/scripts" / scripts[0]).read_text(encoding="utf-8"))
+    calls = [getattr(c.func, "id", "") for c in ast.walk(tree) if isinstance(c, ast.Call)]
+    assert "launch_netgen_export" in calls, calls
     installed = sorted(p.name for p in (source / "cubit_toolbar/scripts").glob("*.py"))
     assert installed == sorted(s.name for s in scripts), (installed, scripts)

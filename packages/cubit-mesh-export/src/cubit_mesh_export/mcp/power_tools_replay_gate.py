@@ -89,7 +89,6 @@ def cubit_partial_volume_hex_diagnosis_gate(
     quality = _mapping(summary.get("quality", {}), "quality")
     scaled = _mapping(quality.get("scaled_jacobian", {}), "scaled_jacobian")
     scaled_min = float(scaled.get("minimum", scaled.get("min", math.nan)))
-    gmsh = _mapping(summary.get("gmsh_export", {}), "gmsh_export")
     block_ids = _ids(
         summary.get("exported_block_volume_ids", []), "exported_block_volume_ids"
     )
@@ -113,11 +112,6 @@ def cubit_partial_volume_hex_diagnosis_gate(
         "block_membership_does_not_hide_missing_mesh": set(block_ids)
         == set(prepared_ids)
         and bool(set(block_ids).intersection(actual_unmeshed)),
-        "gmsh_ascii_v42_matches_produced_mesh": str(gmsh.get("mesh_format", ""))
-        == "4.2"
-        and gmsh.get("binary") is False
-        and int(gmsh.get("hex_count", -1)) == totals.get("hex", 0)
-        and int(gmsh.get("other_volume_count", -1)) == 0,
         "solver_handoff_is_suppressed": not reported_solver_ready
         and disposition == "reject_partial_or_low_quality",
     }
@@ -139,7 +133,6 @@ def cubit_partial_volume_hex_diagnosis_gate(
         "notes": [
             "A successful command return or block assignment does not prove that every CAD volume owns 3-D elements.",
             "Accepting the diagnostic does not promote the mesh: partial ownership or sub-threshold quality keeps solver_ready false.",
-            "Compare per-volume ownership with the independent Gmsh inventory before solver handoff.",
         ],
     }
 

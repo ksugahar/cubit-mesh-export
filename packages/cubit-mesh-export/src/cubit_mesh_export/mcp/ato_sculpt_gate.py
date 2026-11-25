@@ -38,21 +38,15 @@ def cubit_levelset_sculpt_hex_validation_gate(
     summary: Mapping[str, object],
     *,
     quality_floor: float = 0.2,
-    volume_relative_tolerance: float = 0.03,
 ) -> dict[str, object]:
     """Gate a coarse-to-fine Sculpt all-hex package.
 
-    The source Cubit quality and independent Gmsh quality are deliberately not
-    compared numerically: they use different definitions.  The source metric
-    owns the configured quality floor; Gmsh independently owns topology,
-    positive element volume, and reconstructed total-volume checks.
+    The source Cubit quality metric owns the configured quality floor.
     """
 
     summary = _mapping(summary, "summary")
     if quality_floor <= 0.0:
         raise ValueError("quality_floor must be positive")
-    if volume_relative_tolerance <= 0.0:
-        raise ValueError("volume_relative_tolerance must be positive")
 
     mbg_volume = float(summary.get("mbg_volume", math.nan))
     rows = []
@@ -60,13 +54,6 @@ def cubit_levelset_sculpt_hex_validation_gate(
         _sequence(summary.get("mesh_series", []), "mesh_series")
     ):
         row = _mapping(raw, f"mesh_series[{index}]")
-        gmsh = _mapping(row.get("gmsh", {}), f"mesh_series[{index}].gmsh")
-        total_volume = float(gmsh.get("total_volume", math.nan))
-        relative_error = (
-            abs(total_volume - mbg_volume) / mbg_volume
-            if math.isfinite(mbg_volume) and mbg_volume > 0.0
-            else math.inf
-        )
         rows.append(
             {
                 "label": str(row.get("label", "")).strip().lower(),
@@ -76,17 +63,6 @@ def cubit_levelset_sculpt_hex_validation_gate(
                 "source_minimum_quality": float(
                     row.get("source_minimum_quality", math.nan)
                 ),
-                "gmsh_mesh_format": str(gmsh.get("mesh_format", "")),
-                "gmsh_binary": gmsh.get("binary"),
-                "gmsh_hex_count": int(gmsh.get("hex_count", 0)),
-                "gmsh_minimum_scaled_jacobian": float(
-                    gmsh.get("minimum_scaled_jacobian", math.nan)
-                ),
-                "gmsh_all_element_volumes_positive": gmsh.get(
-                    "all_element_volumes_positive"
-                )
-                is True,
-                "gmsh_relative_volume_error": relative_error,
             }
         )
 
@@ -117,25 +93,6 @@ def cubit_levelset_sculpt_hex_validation_gate(
         and coarse["source_minimum_quality"] < quality_floor
         and fine["source_minimum_quality"] >= quality_floor
         and fine["source_minimum_quality"] > coarse["source_minimum_quality"],
-        "gmsh_ascii_v42_counts_match": len(rows) == 2
-        and all(
-            row["gmsh_mesh_format"] == "4.2"
-            and row["gmsh_binary"] is False
-            and row["gmsh_hex_count"] == row["hex_count"]
-            for row in rows
-        ),
-        "independent_gmsh_elements_are_positive": len(rows) == 2
-        and all(
-            row["gmsh_all_element_volumes_positive"]
-            and math.isfinite(row["gmsh_minimum_scaled_jacobian"])
-            and row["gmsh_minimum_scaled_jacobian"] > 0.0
-            for row in rows
-        ),
-        "independent_gmsh_volume_closes_to_mbg": len(rows) == 2
-        and all(
-            row["gmsh_relative_volume_error"] <= volume_relative_tolerance
-            for row in rows
-        ),
         "mesh_ready_without_solver_ready_overclaim": summary.get("mesh_ready")
         is True
         and summary.get("solver_ready") is False
@@ -155,13 +112,11 @@ def cubit_levelset_sculpt_hex_validation_gate(
             "iso_triangle_count": int(summary.get("iso_triangle_count", 0)),
             "mbg_volume": mbg_volume,
             "quality_floor": quality_floor,
-            "volume_relative_tolerance": volume_relative_tolerance,
             "mesh_series": rows,
         },
         "notes": [
             "A level-set tet mesh is source data; the promoted solver mesh is the Sculpt all-hex result.",
             "A coarse mesh below the quality floor is diagnostic evidence, not a solver handoff.",
-            "Cubit and Gmsh quality values use different definitions; compare signs and invariants, not identical thresholds.",
             "Mesh readiness does not imply solver readiness until material and boundary labels are attached.",
         ],
     }
@@ -205,10 +160,8 @@ def cubit_ato_levelset_sculpt_source_replay_gate(
         "save cub5",
         "open",
         "size 0.5",
-        "export gmsh",
         "open",
         "size 0.125",
-        "export gmsh",
     ]
     source_digest = str(summary.get("source_sha256", "")).strip().lower()
     doc_digest = str(summary.get("source_doc_sha256", "")).strip().lower()

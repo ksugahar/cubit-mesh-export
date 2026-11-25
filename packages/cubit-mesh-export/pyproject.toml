@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cubit-mesh-export"
 version = "2.6.1"
-description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol and Gmsh .msh, Kelvin transformation, Dirichlet/symmetry label conventions"
+description = "Solver-neutral mesh export from Coreform Cubit: high-order curved Netgen .vol, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
 license = "Apache-2.0 AND LGPL-2.1-only AND BSD-3-Clause AND MIT"
 license-files = ["LICENSE", "LICENSE-MCP", "LICENSE-NETGEN.txt", "NETGEN-AUTHORS.txt", "LICENSE-PYBIND11.txt", "NOTICE", "THIRD_PARTY_NOTICES.md"]
@@ -35,8 +35,6 @@ dependencies = [
 Homepage = "https://github.com/ksugahar/cubit-mesh-export"
 
 [project.optional-dependencies]
-mesh-quality = ["gmsh>=5.0.0.dev0"]
-sculpt = ["netCDF4"]
 youtube = ["youtube-transcript-api"]
 
 [project.scripts]

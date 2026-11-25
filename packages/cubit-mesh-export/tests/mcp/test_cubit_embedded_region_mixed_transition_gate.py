@@ -24,7 +24,6 @@ def live_summary() -> dict:
         "positive_scaled_jacobian": True,
         "brick_union_volume_conserved": True,
         "swept_pipe_volume_matches_path_area": True,
-        "gmsh_v42_export_created": True,
     }
     quad_interface = {
         "surface_id": 10,
@@ -74,21 +73,10 @@ def live_summary() -> dict:
             "pipe_volume": 0.210358990434947,
             "analytic_pipe_volume": 0.210358990434947,
         },
-        "gmsh_export": {
-            "bytes": 43209355,
-            "sha256": "b" * 64,
-            "header": {
-                "version": "4.2",
-                "file_type": 0,
-                "has_entities_section": True,
-                "has_nodes_section": True,
-                "has_elements_section": True,
-            },
-        },
         "timing": {
             "source_hex_journal_s": 5.5,
             "tet_pyramid_recovery_s": 1.5,
-            "gmsh_export_and_parse_s": 3.5,
+            "export_s": 3.5,
             "total_s": 11.3,
         },
         "process": {
@@ -111,7 +99,6 @@ def test_public_gate_accepts_verified_hex_tet_pyramid_transition():
     result = json.loads(cubit_embedded_region_mixed_transition_gate(live_summary()))
     assert result["status"] == "ok"
     assert result["quality_minima"]["tet"] == 0.1545
-    assert result["checks"]["gmsh_ascii_v42_handoff_complete"] is True
     assert result["checks"]["hex_tet_transition_is_conformal_quad_mesh"] is True
 
 
@@ -125,15 +112,12 @@ def test_public_gate_rejects_missing_transition_and_quality_count_drift():
     assert result["checks"]["quality_count_matches_topology"] is False
 
 
-def test_public_gate_rejects_unmeshed_volume_and_binary_or_old_gmsh():
+def test_public_gate_rejects_unmeshed_volume():
     row = live_summary()
     row["unmeshed_volumes_after"] = [31]
-    row["gmsh_export"]["header"]["version"] = "2.2"
-    row["gmsh_export"]["header"]["file_type"] = 1
     result = json.loads(cubit_embedded_region_mixed_transition_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["all_cad_volumes_meshed"] is False
-    assert result["checks"]["gmsh_ascii_v42_handoff_complete"] is False
 
 
 def test_source_gate_accepts_semantically_explained_nonzero_exit():

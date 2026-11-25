@@ -11,8 +11,8 @@ def test_native_plugin_registers_only_maintained_commands_and_product_owned_iden
     registry = (PLUGIN / "CubitMeshExportPlugin.cpp").read_text(encoding="utf-8")
 
     keys = re.findall(r'keys\.push_back\("(\w+)"\)', registry)
-    assert keys == ["ExportNetgenCommand", "ExportGmshCommand"], keys
-    for retired in ("Nastran", "Vtk", "Femeem", "Meg", "ModelCapture"):
+    assert keys == ["ExportNetgenCommand"], keys
+    for retired in ("Gmsh", "Nastran", "Vtk", "Femeem", "Meg", "ModelCapture"):
         assert not (PLUGIN / f"Export{retired}Command.cpp").exists(), retired
         assert not (PLUGIN / f"Export{retired}Command.hpp").exists(), retired
     assert "CubitMeshExportPlugin" in registry

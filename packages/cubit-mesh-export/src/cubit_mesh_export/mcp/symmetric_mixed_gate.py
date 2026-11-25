@@ -20,16 +20,12 @@ def cubit_symmetric_swept_mixed_mesh_gate(summary: Mapping[str, object]) -> dict
     counts = _mapping(summary.get("element_counts"), "element_counts")
     connectivity = _mapping(summary.get("connectivity_sizes"), "connectivity_sizes")
     quality = _mapping(summary.get("quality"), "quality")
-    gmsh = _mapping(summary.get("gmsh"), "gmsh")
-    gmsh_counts = _mapping(gmsh.get("element_counts"), "gmsh.element_counts")
-    gmsh_volumes = _mapping(gmsh.get("volume_by_type"), "gmsh.volume_by_type")
 
     hex_count = int(counts.get("hex", 0))
     tet_count = int(counts.get("tet", 0))
     pyramid_count = int(counts.get("pyramid", 0))
     wedge_count = int(counts.get("wedge", 0))
     symmetry_error = float(geometry.get("left_right_aggregate_relative_error", math.inf))
-    volume_error = float(gmsh.get("cad_volume_relative_error", math.inf))
     hex_quality = float(_mapping(quality.get("hex_scaled_jacobian"), "quality.hex_scaled_jacobian").get("min", math.nan))
     tet_quality = float(_mapping(quality.get("tet_scaled_jacobian"), "quality.tet_scaled_jacobian").get("min", math.nan))
     checks = {
@@ -48,17 +44,6 @@ def cubit_symmetric_swept_mixed_mesh_gate(summary: Mapping[str, object]) -> dict
         and hex_quality > 0.0
         and math.isfinite(tet_quality)
         and tet_quality > 0.0,
-        "gmsh_ascii_v42_complete": gmsh.get("mesh_format") == "4.2"
-        and gmsh.get("binary") is False,
-        "gmsh_topology_matches_cubit": int(gmsh_counts.get("hex", -1)) == hex_count
-        and int(gmsh_counts.get("pyramid", -1)) == pyramid_count
-        and int(gmsh_counts.get("tet", -1)) == tet_count
-        and int(gmsh_counts.get("other_3d", -1)) == 0,
-        "every_exported_volume_family_has_positive_volume": all(
-            float(gmsh_volumes.get(kind, 0.0)) > 0.0 for kind in ("hex", "pyramid", "tet")
-        ),
-        "gmsh_integrated_volume_matches_cad": math.isfinite(volume_error)
-        and volume_error <= 1.0e-3,
     }
     return {
         "policy": "cubit_symmetric_swept_mixed_mesh_gate_v1",
@@ -72,13 +57,11 @@ def cubit_symmetric_swept_mixed_mesh_gate(summary: Mapping[str, object]) -> dict
             "left_right_aggregate_relative_error": symmetry_error,
             "minimum_hex_scaled_jacobian": hex_quality,
             "minimum_tet_scaled_jacobian": tet_quality,
-            "gmsh_cad_volume_relative_error": volume_error,
         },
         "lesson": (
             "For a symmetric swept profile, compare aggregate half-model CAD volumes before "
             "judging the mesh. Mesh sweepable regions with hexes, then allow the complex region "
-            "to use explicit pyramids between quad faces and tet interiors. Validate all three "
-            "families again from the exported Gmsh connectivity and integrated volume."
+            "to use explicit pyramids between quad faces and tet interiors."
         ),
     }
 

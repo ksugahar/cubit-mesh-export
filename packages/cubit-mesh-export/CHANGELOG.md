@@ -7,10 +7,17 @@
 - Remove the ELF/MAGIC (.meg) export: the `export meg` command, the menu and toolbar action.
 - Remove the COMSOL (.mphtxt), Nastran BDF (`export nastran_bdf`), VTK/VTU (`export vtk`,
   `cubit_mesh_export.vtu`) and FEMEEM (`export femeem`) exports, the
-  `cubit_nastran_consumer_gate` MCP tool and their knowledge. The only mesh formats are
-  Netgen (.vol) and Gmsh (.msh); the Export menu and toolbar list exactly these two.
-- Remove the `export model_capture` command: the native plugin registers only
-  `export netgen` and `export gmsh`.
+  `cubit_nastran_consumer_gate` MCP tool and their knowledge.
+- Remove the `export model_capture` command.
+- Remove the Gmsh (.msh) export: the `export gmsh` command, its menu and toolbar action,
+  the `cubit_gmsh_v42_inventory`, `cubit_gmsh_v42_mixed_order_gate`,
+  `cubit_pyramid_mixed_export_gate` and `cubit_pyramid_source_plugin_replay_gate` MCP tools,
+  the Gmsh export lint rule and knowledge. The only output is Netgen `.vol`.
+- The Export menu is flat: a single **Export Netgen (.vol)...** action opens the Netgen
+  dialog directly; the toolbar has the matching single button.
+- Remove the `cubit_stl_to_vol`, `cubit_vfrac_to_vol` and `cubit_netgen_quality_compare`
+  MCP tools, the Gmsh 5 quality referee runtime, the MSH 4.2 parser and the `mesh-quality`
+  and `sculpt` extras. Evidence gates no longer require Gmsh export or inventory fields.
 
 ## 2.6.1
 

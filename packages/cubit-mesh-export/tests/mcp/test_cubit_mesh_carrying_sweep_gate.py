@@ -28,13 +28,6 @@ def _public_summary():
         "cad_total_volume": 576.0,
         "expected_volume": 576.0,
         "quality": {"scaled_jacobian": {"min": 1.0}},
-        "gmsh_export": {
-            "mesh_format": "4.2",
-            "binary": False,
-            "node_count": 245,
-            "hex_count": 144,
-            "other_volume_count": 0,
-        },
     }
 
 
@@ -90,17 +83,16 @@ def test_rejects_missing_include_mesh_even_when_counts_look_valid():
     assert result["checks"]["command_carries_existing_mesh"] is False
 
 
-def test_rejects_topology_quality_volume_and_export_drift():
+def test_rejects_topology_quality_and_volume_drift():
     bad = copy.deepcopy(_public_summary())
     bad["element_counts"]["hex"] = 143
     bad["node_count"] = 244
     bad["xy_column_depths"] = [6, 7]
     bad["quality"]["scaled_jacobian"]["min"] = 0.1
     bad["cad_total_volume"] = 500.0
-    bad["gmsh_export"]["mesh_format"] = "2.2"
     result = cubit_mesh_carrying_straight_sweep_gate(bad)
     assert result["status"] == "needs_attention"
-    assert len(result["issues"]) >= 6
+    assert len(result["issues"]) >= 5
 
 
 def test_accepts_source_replay_and_no_mesh_control():

@@ -24,12 +24,6 @@ def _public_summary():
         "element_counts": {"hex": 1014, "tet": 0, "pyramid": 0, "wedge": 0},
         "quality": {"scaled_jacobian": {"minimum": 0.179}},
         "exported_block_volume_ids": [1, 2, 3],
-        "gmsh_export": {
-            "mesh_format": "4.2",
-            "binary": False,
-            "hex_count": 1014,
-            "other_volume_count": 0,
-        },
         "solver_ready": False,
         "disposition": "reject_partial_or_low_quality",
     }
@@ -117,16 +111,14 @@ def test_rejects_solver_ready_overclaim_and_hidden_unmeshed_volume():
     assert result["checks"]["solver_handoff_is_suppressed"] is False
 
 
-def test_rejects_count_quality_and_export_inconsistency():
+def test_rejects_count_and_quality_inconsistency():
     bad = copy.deepcopy(_public_summary())
     bad["volume_element_counts"]["2"]["hex"] = 508
     bad["quality"]["scaled_jacobian"]["minimum"] = 0.3
-    bad["gmsh_export"]["hex_count"] = 999
     result = cubit_partial_volume_hex_diagnosis_gate(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["owned_counts_match_global_counts"] is False
     assert result["checks"]["quality_rejection_is_measured"] is False
-    assert result["checks"]["gmsh_ascii_v42_matches_produced_mesh"] is False
 
 
 def test_accepts_official_cleanup_trace_and_observed_failure():

@@ -1,8 +1,6 @@
 import copy
 import json
 
-import pytest
-
 from cubit_mesh_export.mcp.server import (
     cubit_conformal_hex_pyramid_tet_interface_gate,
     cubit_mixed_transition_source_gate,
@@ -63,24 +61,6 @@ def summary() -> dict:
         "geometry": {
             "cad_total_volume_m3": 2.0e-9,
             "analytic_total_volume_m3": 2.0e-9,
-            "element_volume_source": "independent_gmsh_v42_coordinate_reconstruction",
-        },
-        "gmsh_export": {"bytes": 1233, "sha256": "b" * 64},
-        "gmsh_inventory": {
-            "status": "ok",
-            "mesh_format": "4.2",
-            "binary": False,
-            "connectivity_mismatches": [],
-            "volume_family_counts": {"hex": 1, "pyramid": 1, "tet": 10},
-        },
-        "gmsh_volume_inventory": {
-            "family_counts": {"hex": 1, "pyramid": 1, "tet": 10},
-            "family_volumes_m3": {
-                "hex": 1.0e-9,
-                "pyramid": 2.3570233333333336e-10,
-                "tet": 7.642976666666667e-10,
-            },
-            "total_volume_m3": 2.0e-9,
         },
         "quality_probe": {
             "command_supported": False,
@@ -99,7 +79,7 @@ def summary() -> dict:
         "timing_breakdown_s": {
             "source_replay": 0.2,
             "mesh_inventory": 0.3,
-            "gmsh_export": 0.2,
+            "vol_export": 0.2,
             "independent_validation": 0.1,
         },
     }
@@ -111,7 +91,6 @@ def test_interface_gate_accepts_minimal_conformal_transition_without_hex_dominan
     assert result["element_counts"]["tet"] > result["element_counts"]["hex"]
     assert result["checks"]["each_interface_quad_has_one_hex_and_one_pyramid_owner"]
     assert result["checks"]["interface_quads_are_two_sided_manifold"]
-    assert result["gmsh_reconstructed_volume_relative_error"] == 0.0
 
 
 def test_interface_gate_rejects_count_only_false_positive_without_dual_ownership():
@@ -119,7 +98,6 @@ def test_interface_gate_rejects_count_only_false_positive_without_dual_ownership
     row["interface_face_ownership"][0]["pyramid_owners"] = []
     result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
     assert result["status"] == "needs_attention"
-    assert result["checks"]["gmsh_volume_families_match_live_inventory"]
     assert not result["checks"]["each_interface_quad_has_one_hex_and_one_pyramid_owner"]
 
 
@@ -129,14 +107,6 @@ def test_interface_gate_rejects_nonmanifold_transition():
     result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
     assert result["status"] == "needs_attention"
     assert not result["checks"]["interface_quads_are_two_sided_manifold"]
-
-
-def test_interface_gate_rejects_reconstructed_volume_drift_at_small_si_scale():
-    row = copy.deepcopy(summary())
-    row["gmsh_volume_inventory"]["total_volume_m3"] = 1.8e-9
-    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
-    assert result["status"] == "needs_attention"
-    assert result["gmsh_reconstructed_volume_relative_error"] == pytest.approx(0.1)
 
 
 def test_source_gate_accepts_classified_headless_exit_and_quality_fallback():
@@ -161,11 +131,3 @@ def test_source_gate_rejects_unsupported_quality_query_misread_as_zero_quality()
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert not result["checks"]["unsupported_aggregate_quality_probe_is_diagnosed"]
-
-
-def test_server_rejects_missing_independent_gmsh_volume_inventory():
-    row = copy.deepcopy(summary())
-    del row["gmsh_volume_inventory"]
-    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
-    assert result["status"] == "invalid_input"
-    assert "gmsh_volume_inventory" in result["error"]

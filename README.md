@@ -1,8 +1,7 @@
 # cubit-mesh-export
 
 Export high-order curved meshes from Coreform Cubit directly to Netgen/NGSolve
-`.vol`. The standalone exporter also writes Gmsh MSH 4.2 for visualization
-and post-processing.
+`.vol`, the only output format.
 See the [package documentation](packages/cubit-mesh-export/README.md).
 
 Build the Python wheel with `python -m build --wheel packages/cubit-mesh-export`.

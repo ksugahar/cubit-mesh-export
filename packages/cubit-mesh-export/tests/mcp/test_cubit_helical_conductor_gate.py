@@ -43,27 +43,11 @@ def summary() -> dict:
         },
         "conductor_air_interfaces": interfaces,
         "geometry": {"volume_relative_error": 1.5e-8},
-        "gmsh_export": {
-            "bytes": 1024,
-            "sha256": "b" * 64,
-            "header": {
-                "version": "4.2",
-                "file_type": 0,
-                "has_entities_section": True,
-                "has_nodes_section": True,
-                "has_elements_section": True,
-            },
-        },
-        "gmsh_inventory": {
-            "status": "ok",
-            "volume_family_counts": {"hex": 120, "tet": 900, "pyramid": 40},
-            "connectivity_mismatches": [],
-        },
         "timing": {
             "geometry_boolean_s": 1.0,
             "conductor_sweep_hex_s": 4.0,
             "air_tet_pyramid_s": 2.0,
-            "gmsh_export_inventory_s": 1.0,
+            "inventory_s": 1.0,
         },
         "process": {
             "exit_code": 4,
@@ -101,16 +85,12 @@ def test_region_gate_rejects_missing_pyramids_and_interface_owner_drift():
     assert result["checks"]["one_conformal_quad_interface_per_conductor_region"] is False
 
 
-def test_region_gate_rejects_quality_count_drift_and_old_gmsh():
+def test_region_gate_rejects_quality_count_drift():
     row = summary()
     row["quality"]["tet"]["scaled_jacobian"]["count"] -= 1
-    row["gmsh_export"]["header"]["version"] = "2.2"
-    row["gmsh_inventory"]["volume_family_counts"]["tet"] -= 1
     result = json.loads(cubit_region_owned_mixed_mesh_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["quality_count_matches_topology"] is False
-    assert result["checks"]["gmsh_ascii_v42_handoff_complete"] is False
-    assert result["checks"]["parsed_gmsh_topology_matches_cubit"] is False
 
 
 def test_source_gate_accepts_classified_hpc_fallback_with_independent_gate():

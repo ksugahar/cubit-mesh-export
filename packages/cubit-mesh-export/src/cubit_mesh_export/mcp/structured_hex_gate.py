@@ -16,7 +16,7 @@ def cubit_structured_hex_lattice_gate(
 	min_scaled_jacobian: float = 0.2,
 	max_volume_relative_error: float = 1.0e-10,
 ) -> dict[str, object]:
-	"""Gate interval-product counts, quality, and independent Gmsh closure."""
+	"""Gate interval-product counts, quality, and CAD volume closure."""
 
 	if not isinstance(summary, Mapping):
 		raise TypeError("summary must be a mapping")
@@ -37,10 +37,8 @@ def cubit_structured_hex_lattice_gate(
 	counts = summary.get("element_counts")
 	quality = summary.get("quality")
 	geometry = summary.get("geometry")
-	header = summary.get("gmsh_header")
-	independent = summary.get("gmsh_independent")
-	if not all(isinstance(value, Mapping) for value in (counts, quality, geometry, header, independent)):
-		raise ValueError("element_counts, quality, geometry, gmsh_header, and gmsh_independent must be mappings")
+	if not all(isinstance(value, Mapping) for value in (counts, quality, geometry)):
+		raise ValueError("element_counts, quality, and geometry must be mappings")
 
 	expected_hexes = math.prod(intervals)
 	expected_nodes = math.prod(value + 1 for value in intervals)
@@ -53,7 +51,6 @@ def cubit_structured_hex_lattice_gate(
 		raise ValueError("quality rows must be mappings")
 	cad_volume = float(geometry.get("cad_volume", math.nan))
 	analytic_volume = math.prod(dimensions)
-	independent_volume = float(independent.get("integrated_volume", math.nan))
 	checks = {
 		"hex_count_is_interval_product": hex_count == expected_hexes,
 		"node_count_is_structured_lattice": node_count == expected_nodes,
@@ -65,14 +62,6 @@ def cubit_structured_hex_lattice_gate(
 		and float(shape.get("min", -math.inf)) > 0.0,
 		"cad_volume_matches_brick": math.isfinite(cad_volume)
 		and _relative(cad_volume, analytic_volume) <= volume_tolerance,
-		"gmsh_ascii_v42_inventory_valid": header.get("status") == "ok"
-		and header.get("mesh_format") == "4.2"
-		and header.get("binary") is False,
-		"gmsh_counts_match_live_inventory": int(independent.get("hex_count", -1)) == hex_count
-		and int(independent.get("node_count", -1)) == node_count
-		and int(independent.get("non_hex_volume_count", -1)) == 0,
-		"gmsh_integrated_volume_matches_cad": math.isfinite(independent_volume)
-		and _relative(independent_volume, cad_volume) <= volume_tolerance,
 	}
 	issues = [name for name, ok in checks.items() if not ok]
 	return {
@@ -87,12 +76,11 @@ def cubit_structured_hex_lattice_gate(
 			"observed_node_count": node_count,
 			"minimum_scaled_jacobian": float(scaled.get("min", math.nan)),
 			"cad_volume_relative_error": _relative(cad_volume, analytic_volume),
-			"gmsh_volume_relative_error": _relative(independent_volume, cad_volume),
 		},
 		"lesson": (
 			"A structured all-hex mesh is reproducible when element and node counts close "
-			"against the interval lattice, quality covers every cell, and an independently "
-			"parsed export closes geometry volume. A large element count alone is insufficient."
+			"against the interval lattice, quality covers every cell, and the CAD volume "
+			"closes against the brick. A large element count alone is insufficient."
 		),
 	}
 

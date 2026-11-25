@@ -243,11 +243,10 @@ def _run_smoke() -> int:
             raise RuntimeError(f"Unexpected Qt platform: {app.platformName()}")
         import cubit_export_menu as rem
         stub = _StubCubit()
-        for fmt in (rem.FMT_NETGEN, rem.FMT_GMSH):
-            dlg = rem.ExportDialog(fmt, "C:/temp/model.jou", stub, parent=None)
-            cmd = dlg.cubit_command()
-            if not (cmd.startswith("export ") and cmd.endswith(" overwrite")):
-                fails.append(f"ExportDialog[{fmt}]: bad cmd {cmd!r}")
+        dlg = rem.ExportDialog("C:/temp/model.jou", stub, parent=None)
+        cmd = dlg.cubit_command()
+        if not (cmd.startswith("export netgen ") and cmd.endswith(" overwrite")):
+            fails.append(f"ExportDialog: bad cmd {cmd!r}")
     except Exception as e:  # noqa: BLE001
         fails.append(f"ExportDialog: {type(e).__name__}: {e}")
 

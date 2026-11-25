@@ -13,7 +13,7 @@ def test_exporter_owns_mcp_without_radia_dependency():
     assert not {"radia", "radia-mcp", "cae-mcp-core"}.intersection(requires)
     entry = next(e for e in distribution.entry_points if e.name == "cubit-mcp")
     assert entry.value == "cubit_mesh_export.mcp.server:main"
-    assert {'mesh-quality', 'sculpt', 'youtube'} <= set(distribution.metadata.get_all('Provides-Extra', []))
+    assert {'youtube'} == set(distribution.metadata.get_all('Provides-Extra', []))
     from cubit_mesh_export.mcp.api_reference import get_api_reference
     assert get_api_reference("all")
 

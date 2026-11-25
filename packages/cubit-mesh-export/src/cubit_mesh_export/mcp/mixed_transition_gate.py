@@ -119,48 +119,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
     analytic_total = _finite(
         geometry.get("analytic_total_volume_m3"), "geometry.analytic_total_volume_m3"
     )
-    gmsh_inventory = _mapping(summary.get("gmsh_inventory"), "gmsh_inventory")
-    gmsh_counts = _counts(
-        gmsh_inventory.get("volume_family_counts"),
-        "gmsh_inventory.volume_family_counts",
-    )
-    gmsh_volume = _mapping(
-        summary.get("gmsh_volume_inventory"), "gmsh_volume_inventory"
-    )
-    reconstructed_counts = _counts(
-        gmsh_volume.get("family_counts"), "gmsh_volume_inventory.family_counts"
-    )
-    reconstructed_total = _finite(
-        gmsh_volume.get("total_volume_m3"), "gmsh_volume_inventory.total_volume_m3"
-    )
-    family_volumes = _mapping(
-        gmsh_volume.get("family_volumes_m3"),
-        "gmsh_volume_inventory.family_volumes_m3",
-    )
-    reconstructed_family_sum = sum(
-        _finite(
-            family_volumes.get(family),
-            f"gmsh_volume_inventory.family_volumes_m3.{family}",
-        )
-        for family in ("hex", "pyramid", "tet")
-    )
 
     analytic_error = abs(cad_total - analytic_total) / max(
         abs(analytic_total), 1.0e-300
     )
-    reconstructed_error = abs(reconstructed_total - cad_total) / max(
-        abs(cad_total), 1.0e-300
-    )
-    reconstructed_sum_error = abs(
-        reconstructed_family_sum - reconstructed_total
-    ) / max(abs(reconstructed_total), 1.0e-300)
     per_volume_sum = {
         family: sum(row[family] for row in per_volume.values())
         for family in _VOLUME_FAMILIES
     }
     mapped = per_volume[mapped_id]
     transition = per_volume[transition_id]
-    export = _mapping(summary.get("gmsh_export"), "gmsh_export")
 
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume)
@@ -206,20 +174,7 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             summary.get("matched_pyramid_count", -1)
         )
         == totals["pyramid"],
-        "gmsh_export_is_fresh_nonempty_digest": int(export.get("bytes", 0)) > 0
-        and len(str(export.get("sha256", ""))) == 64,
-        "gmsh_is_ascii_v42_with_valid_connectivity": gmsh_inventory.get("status")
-        == "ok"
-        and str(gmsh_inventory.get("mesh_format", "")) == "4.2"
-        and gmsh_inventory.get("binary") is False
-        and not list(gmsh_inventory.get("connectivity_mismatches") or []),
-        "gmsh_volume_families_match_live_inventory": gmsh_counts == totals
-        and reconstructed_counts == totals,
         "cad_volume_matches_analytic": analytic_error <= tolerance,
-        "independent_gmsh_volume_sum_matches_cad": reconstructed_error <= tolerance
-        and reconstructed_sum_error <= tolerance
-        and geometry.get("element_volume_source")
-        == "independent_gmsh_v42_coordinate_reconstruction",
     }
     issues = [name for name, accepted in checks.items() if not accepted]
     return {
@@ -232,11 +187,9 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "interface_face_count": len(interface_face_ids),
         "matched_pyramid_count": int(summary.get("matched_pyramid_count", -1)),
         "cad_volume_relative_error": analytic_error,
-        "gmsh_reconstructed_volume_relative_error": reconstructed_error,
         "notes": [
             "Do not require hex dominance: a valid minimal transition may contain more tetrahedra than hexes.",
             "A conformal transition is proven by quad ownership on both sides, not by family counts alone.",
-            "Reconstruct volume from Gmsh 4.2 coordinates so CAD closure is independent of Cubit's quality API.",
         ],
     }
 

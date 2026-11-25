@@ -42,7 +42,7 @@ class TestMissingBlockRegistration:
     def test_detects_export_without_block(self):
         code = (
             'import cubit\n'
-            'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+            'cme.export_exodus(cubit, "output.exo")\n'
         )
         findings = _run(check_missing_block_registration, code)
         assert len(findings) == 1
@@ -52,7 +52,7 @@ class TestMissingBlockRegistration:
         code = (
             'import cubit\n'
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+            'cme.export_exodus(cubit, "output.exo")\n'
         )
         assert _run(check_missing_block_registration, code) == []
 
@@ -68,7 +68,7 @@ class TestMissingMeshCommand:
     def test_detects_export_without_mesh(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+            'cme.export_exodus(cubit, "output.exo")\n'
         )
         findings = _run(check_missing_mesh_command, code)
         assert len(findings) == 1
@@ -78,7 +78,7 @@ class TestMissingMeshCommand:
         code = (
             'cubit.cmd("mesh volume all")\n'
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+            'cme.export_exodus(cubit, "output.exo")\n'
         )
         assert _run(check_missing_mesh_command, code) == []
 
@@ -162,7 +162,7 @@ class TestNodesetSidesetUsage:
     def test_detects_nodeset_with_non_exodus(self):
         code = (
             'cubit.cmd("nodeset 1 add node all")\n'
-            'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+            'cme.export_netgen(cubit, "output.vol")\n'
         )
         findings = _run(check_nodeset_sideset_usage, code)
         assert len(findings) == 1
@@ -249,13 +249,13 @@ class TestAmbiguousFaceBlock:
 
 class TestExportFileExtension:
     def test_detects_wrong_extension(self):
-        code = 'cme.export_Gmsh_ver4(cubit, "output.txt")\n'
+        code = 'cme.export_exodus(cubit, "output.txt")\n'
         findings = _run(check_export_file_extension, code)
         assert len(findings) == 1
         assert '.txt' in findings[0]['message']
 
     def test_allows_correct_extension(self):
-        code = 'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+        code = 'cme.export_exodus(cubit, "output.exo")\n'
         assert _run(check_export_file_extension, code) == []
 
 
@@ -286,7 +286,7 @@ class TestMissingBlockNames:
     def test_detects_unnamed_blocks(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+            'cme.export_exodus(cubit, "output.exo")\n'
         )
         findings = _run(check_missing_block_names, code)
         assert len(findings) == 1
@@ -296,7 +296,7 @@ class TestMissingBlockNames:
         code = (
             'cubit.cmd("block 1 add tet all")\n'
             'cubit.cmd("block 1 name \\"domain\\"")\n'
-            'cme.export_Gmsh_ver4(cubit, "output.msh")\n'
+            'cme.export_exodus(cubit, "output.exo")\n'
         )
         assert _run(check_missing_block_names, code) == []
 
@@ -325,8 +325,8 @@ class TestNoPyQt5Imports:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        # Retired three no-op compatibility placeholders; 21 active rules remain.
-        assert len(ALL_RULES) == 21
+        # The Gmsh export rule is retired with the Gmsh export; 20 active rules remain.
+        assert len(ALL_RULES) == 20
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:

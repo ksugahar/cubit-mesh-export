@@ -1283,7 +1283,7 @@ def cubit_live_mixed_mesh_python_gate(
         "notes": [
             "Cubit owns the hex-led mixed route; a tet-only case belongs to the Netgen route.",
             "Use the documented Python entity families for inventory queries; unsupported aliases must not be treated as empty mesh sets.",
-            "This gate validates execution evidence, while exported .vol/Gmsh gates validate downstream topology and labels.",
+            "This gate validates execution evidence, while exported .vol gates validate downstream topology and labels.",
         ],
     }
 
@@ -4900,7 +4900,7 @@ def cubit_embedded_region_mixed_transition_gate(
 
     The gate consumes archived LIVE evidence rather than opening a local file.
     It binds topology, interface conformity, per-family quality, analytic CAD
-    closure, and an ASCII Gmsh 4.2 handoff in one decision.
+    closure in one decision.
     """
 
     if not isinstance(summary, Mapping):
@@ -4920,14 +4920,12 @@ def cubit_embedded_region_mixed_transition_gate(
     counts_raw = summary.get("element_counts") or {}
     quality_raw = summary.get("quality") or {}
     geometry = summary.get("geometry") or {}
-    export = summary.get("gmsh_export") or {}
-    header = export.get("header") or {}
     upstream_checks = summary.get("checks") or {}
     if not all(
         isinstance(row, Mapping)
-        for row in (counts_raw, quality_raw, geometry, export, header, upstream_checks)
+        for row in (counts_raw, quality_raw, geometry, upstream_checks)
     ):
-        raise ValueError("counts, quality, geometry, export, header, and checks must be mappings")
+        raise ValueError("counts, quality, geometry, and checks must be mappings")
 
     counts = {str(key).lower(): int(value) for key, value in counts_raw.items()}
     if any(value < 0 for value in counts.values()):
@@ -4996,14 +4994,6 @@ def cubit_embedded_region_mixed_transition_gate(
         and volume_error <= float(max_volume_relative_error),
         "swept_embedded_volume_matches_path_area": isfinite(swept_error)
         and swept_error <= float(max_swept_volume_relative_error),
-        "gmsh_ascii_v42_handoff_complete": int(export.get("bytes", 0)) > 0
-        and len(str(export.get("sha256", ""))) == 64
-        and str(header.get("version", "")) == "4.2"
-        and int(header.get("file_type", -1)) == 0
-        and all(
-            header.get(name) is True
-            for name in ("has_entities_section", "has_nodes_section", "has_elements_section")
-        ),
     }
     issues = [name for name, ok in checks.items() if not ok]
     return {
@@ -5018,7 +5008,6 @@ def cubit_embedded_region_mixed_transition_gate(
         "swept_volume_relative_error": swept_error,
         "pipe_interface_count": len(pipe_interfaces),
         "transition_interface_count": len(transition_interfaces),
-        "gmsh_version": str(header.get("version", "")),
         "notes": [
             "Keep Cubit as the hex-led route; recover only unsweepable partitions with tetmesh.",
             "Mesh the hex regions first so Cubit can insert pyramids against their quad interfaces.",

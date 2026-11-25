@@ -12,7 +12,7 @@ EXPORT_OVERVIEW = """
 
 | Path | Method | Speed | Use Case |
 |------|--------|-------|----------|
-| **Path A** (C++) | `cubit.cmd('export netgen/gmsh/...')` | Fast | APREPRO journal, GUI menu |
+| **Path A** (C++) | `cubit.cmd('export netgen ...')` | Fast | APREPRO journal, GUI menu |
 
 Path A is the recommended export path. Use `export netgen "mesh.vol" order N` for all workflows.
 
@@ -32,7 +32,6 @@ readiness claim.
 | Command | Format | Max Order | Notes |
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
-| `export gmsh "f.msh" order N` | Gmsh v4.2 (.msh + .geo/.opt) | 1-3 | Raw data plus launch companion; open `.geo` |
 
 Order 2+ uses NetgenCurver (compact_netgen BuildCurvedElements + ACIS projection).
 No fallback to HighOrderMesh (removed).
@@ -43,10 +42,6 @@ No fallback to HighOrderMesh (removed).
 # Netgen .vol (recommended for NGSolve FEM computation)
 cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 # -> produces mesh.vol + mesh.vol.json (CAD reference values)
-
-# Gmsh v4.2 raw display data (Radia post launches the .geo companion)
-cubit.cmd('export gmsh "mesh.msh" order 3 overwrite')
-# -> mesh.msh + mesh.geo + mesh.geo.opt + mesh.msh.opt
 
 # Netgen .vol supports order 1-5
 cubit.cmd('export netgen "mesh.vol" order 5 overwrite')
@@ -120,87 +115,6 @@ cubit.cmd('export netgen "coil.vol" order 2 overwrite')
 
 **Important**: Both volume .vol and surface-only .vol work for IH (BEM).
 The BEM solver uses BND elements only. Volume elements are ignored.
-"""
-
-EXPORT_GMSH_V42 = """
-# Gmsh MSH 4.2 post-processing support (order 1-3)
-
-```
-export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
-```
-
-v4.2 is the only supported GMSH format. No block assignment required.
-Current geometric order limits: hex/tet/triangle/quad 1-3; wedge/pyramid 1-2.
-Pyramid order 3 is unqualified with the current Gmsh 5 native consumer.
-Unsupported orders fail explicitly; no lower-order substitution.
-For Radia post-processing, treat this `.msh` as raw mesh/data and open the
-generated `.geo` launch recipe. The command should attach `case.geo`,
-`case.geo.opt`, and `case.msh.opt`; a plain `case.opt` is not an Explorer
-auto-load contract. Do not make `.msh` double-click the primary user-facing
-post-processing contract.
-
-## Supported Elements
-
-| Order 1 | Order 2 | Order 3 | Gmsh Type |
-|---------|---------|---------|-----------|
-| TET4 | TET10 (11) | TET20 (29) | 4/11/29 |
-| HEX8 | HEX20 (17) | HEX32 (99) | 5/17/99 |
-| WEDGE6 | WEDGE15 (18) | not supported | 6/18 |
-| PYRAMID5 | PYR13 (19) | PYR21 (125) | 7/19/125 |
-| TRI3 | TRI6 (9) | TRI10 (21) | 2/9/21 |
-| QUAD4 | QUAD8 (16) | QUAD12 (39) | 3/16/39 |
-
-Order 4-5 not supported in Gmsh export (use `export netgen`).
-Wedge/Prism limited to order 2 (Gmsh limitation).
-
-## Use Cases
-
-- **GMSH raw display data**: View mesh in GMSH GUI, preferably through `.geo`
-- **NGSolve**: Use `export netgen` instead (order 1-5)
-
-```python
-# Gmsh visualization (order 1-3)
-cubit.cmd('export gmsh "mesh.msh" order 2 overwrite')
-
-# NGSolve FEM (recommended: .vol)
-cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
-```
-"""
-
-EXPORT_GMSH_V4 = """
-# Gmsh v4.2 Format Policy
-
-v4.2 is the only supported GMSH format (v2.2 removed, lab-wide standard).
-
-## Data Flow
-
-| Direction | Format | Purpose | Tool |
-|-----------|--------|---------|------|
-| **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
-| **Output** (Cubit ->) | **.msh v4.2 + .geo/.opt** | Mesh visualization/post launch | `export gmsh "mesh.msh" order N` + `.geo` recipe |
-| **Output** (NGSolve ->) | **.msh v4.2 + .geo/.opt** | Field visualization/post launch | `GmshPostExport.write()` + `.geo` recipe |
-
-The ONLY input format for NGSolve is `.vol`. `.msh` is output-only (Cubit mesh export or NGSolve field visualization).
-The standard file to open for Radia post-processing is `.geo`; `.msh` association is optional raw mesh/data inspection.
-
-### GmshPostExport Methods
-
-| Method | Format | High-order | Use case |
-|--------|--------|-----------|----------|
-| `write(filename)` | v4.2 | Yes (any order) | Field visualization in GMSH GUI |
-| `write_mesh(filename)` | v4.2 | Yes (any order) | Mesh only (no field data) |
-
-## When to Use Which
-
-- **`export netgen "mesh.vol"`**: For NGSolve FEM computation (any order, recommended)
-- **`export gmsh "mesh.msh"`**: For Cubit mesh visualization data in GMSH (order 1-3)
-- **`GmshPostExport.write()`**: For NGSolve field result data in GMSH
-- **`.geo` companion**: Standard Radia post-processing launch artifact
-  with exact `case.geo.opt` sidecar
-- **`case.msh.opt` companion**: Raw mesh/data inspection sidecar when a
-  user intentionally opens the `.msh` directly
-- A plain `case.opt` is not auto-loaded when either `case.geo` or
-  `case.msh` is opened
 """
 
 EXPORT_CURVED = """
@@ -350,33 +264,14 @@ All Cubit element types, including:
 EXPORT_COMPARISON = """
 # Export Format Comparison
 
-## Decision Matrix: Which Format to Use
+Netgen `.vol` is the only mesh output of cubit-mesh-export.
 
-| Use Case | Recommended Format | Why |
-|----------|-------------------|-----|
+| Use Case | Command | Why |
+|----------|---------|-----|
 | NGSolve FEM (any order) | `export netgen "f.vol" order N` | Order 1-5 via ACIS CallbackGeometry |
-| GMSH visualization | `export gmsh "f.msh" order N` | v4.2, order 1-3 |
+| Cubit-native archival | `export mesh "f.exo"` (Cubit built-in) | Exodus II, not a cubit-mesh-export command |
 
-## Feature Comparison
-
-| Feature | netgen | gmsh |
-|---------|--------|------|
-| Max order | 5 | 3 |
-| Tet | Yes | Yes |
-| Hex | Yes | Yes |
-| Wedge | Yes | Yes (o2) |
-| Pyramid | Yes | Yes |
-| Labels | block+sideset | block+sideset |
-| 2D mode | No | Yes |
-| Companion | .vol.json | .geo + .geo.opt launch recipe |
-
-## Checked .vol solver input vs Gmsh post-processing support
-
-| Aspect | export netgen | export gmsh |
-|--------|---------------------|-------------------|
-| Max order | 5 | 3 (wedge: 2) |
-| NGSolve input | Yes (.vol is the ONLY input) | No (.msh not supported) |
-| Best for | NGSolve FEM/BEM | GMSH visualization raw data; open `.geo` for Radia post |
+The checked `.vol` is the only solver input; run `check-vol` before analysis.
 """
 
 
@@ -396,13 +291,6 @@ EXPORT_DECISION_GUIDE = """
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
-- **Post-processing support (order 1-3)** -> Use `export gmsh` for GMSH visualization:
-  ```python
-  cubit.cmd('export gmsh "mesh.msh" order 3 overwrite')
-  # Supports order 1-3 (wedge limited to order 2). Order 4-5: error.
-  # For NGSolve use export netgen instead
-  ```
-
 ## "I need multi-physics (MOOSE, Sierra)"
 
 -> Use `export_exodus()`
@@ -411,20 +299,11 @@ EXPORT_DECISION_GUIDE = """
 - Large model support: `export_exodus(cubit, "mesh.exo", large_model=True)`
 - Cubit-native format with highest fidelity
 
-## "I want Gmsh visualization"
-
--> Use `export gmsh` for GMSH GUI viewing (v4.2, order 1-3):
-  ```python
-  cubit.cmd('export gmsh "mesh.msh" order 2 overwrite')
-  ```
-- **Note**: For NGSolve FEM, use `export netgen "mesh.vol"` instead
-
 ## Performance & Feature Summary
 
 | Format | Max Order | 2D | 3D | HO Method |
 |--------|-----------|----|----|-----------|
 | netgen (.vol) | 5 | No | Yes | NetgenCurver + ACIS |
-| gmsh (.msh) | 3 | Yes | Yes | NetgenCurver + ACIS |
 
 ## Troubleshooting: High-Order Export
 
@@ -439,33 +318,16 @@ is loaded from the plugins/ directory.
 cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
 ```
 
-### HEX20/TET10 has wrong node count in .msh (order 2)
-
-**Symptom**: GMSH crashes opening .msh, or HEX20 element has 8 nodes instead of 20.
-
-**Cause** (fixed 2026-04-05): Volume element internal edges were not registered
-in `edge_ho_nodes_`. Only surface element edges were registered, so internal
-edges (not shared with any surface) had no HO nodes in the .msh connectivity.
-The .vol export was unaffected (uses Netgen internal mesh, not edge_ho_nodes_).
-
-**Verification**: Check HEX20 node count in .msh file:
-```python
-# In exported .msh, HEX20 (type 17) must have 20 nodes per element
-# Fields: elem_id type_id n_tags tag1 tag2 node1..node20
-# If only 8 nodes -> bug (edge_ho_nodes_ not registered for volume edges)
-```
-
 ## Cubit GUI Menu Structure
 
 ```
 Menu bar: File Edit View Display Tools Export Help
                                        (Claro menu, PySide6 dialogs)
 Export:
-  Netgen (.vol)
-  Gmsh (.msh)
+  Export Netgen (.vol)...
 ```
 
-- **Export**: Netgen and Gmsh run the C++ APREPRO export commands.
+- **Export**: the single action opens the Netgen dialog and runs `export netgen`.
 - Solver orchestration is outside the Cubit plugin. Downstream applications
   consume exported meshes through their own process boundary.
 - **Mesh p-convergence demo**: `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`
@@ -537,7 +399,6 @@ with boundary layers on curved surfaces can produce elements that
 NetgenCurver cannot process.
 
 **Workaround**: Use tet meshing with BL (creates wedge prisms instead).
-Or use `export gmsh` which does not require NetgenCurver for order 1.
 
 ## BND Integrate Area Mismatch
 
@@ -574,7 +435,6 @@ Use for:
   sibling sidecar is auto-discovered when present)
 - Strict application label checks (`check-vol model.vol --contract labels.json
   --strict-labels --report-json run/vol_check.json`)
-- Cross-format verification (export -> GMSH reload -> compare vs .vol.json)
 
 Run the checker after export and before solver/Simulink initialization.
 Material constants are validated by the application DesignSpec/configuration,
@@ -582,15 +442,10 @@ not inferred from `.vol` label names.
 """
 
 
-GMSH_POSTPROCESSING_SUPPORT = 'Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.'
-
-
 def get_export_documentation(format: str = "all") -> str:
 	"""Return export documentation by format name."""
 	topics = {
 		"overview": EXPORT_OVERVIEW,
-		"gmsh_v42": EXPORT_GMSH_V42,
-		"gmsh_v4": EXPORT_GMSH_V4,
 		"curved": EXPORT_CURVED,
 		"netgen": EXPORT_CURVED,  # Alias: old name redirects to export netgen
 		"exodus": EXPORT_EXODUS,
@@ -601,9 +456,9 @@ def get_export_documentation(format: str = "all") -> str:
 
 	format = format.lower().strip()
 	if format == "all":
-		return GMSH_POSTPROCESSING_SUPPORT + "\n\n" + EXPORT_OVERVIEW + "\n\n" + EXPORT_COMPARISON
+		return EXPORT_OVERVIEW + "\n\n" + EXPORT_COMPARISON
 	elif format in topics:
-		return GMSH_POSTPROCESSING_SUPPORT + "\n\n" + topics[format]
+		return topics[format]
 	else:
 		return (
 			f"Unknown format: '{format}'. "

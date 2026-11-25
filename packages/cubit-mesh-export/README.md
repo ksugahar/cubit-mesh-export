@@ -4,8 +4,7 @@ Export high-order curved meshes from Coreform Cubit directly to Netgen/NGSolve
 `.vol`. Use `check-vol` to verify the exported mesh and its named regions and
 boundaries before analysis. The standalone tools run without Radia.
 
-The only mesh formats are Netgen `.vol` (`export netgen`) and Gmsh MSH 4.2
-(`export gmsh`) for visualization and post-processing.
+The only mesh output is Netgen `.vol` (`export netgen`).
 
 ## Explicit named periodic export
 
@@ -62,20 +61,6 @@ Consumers verify the saved group without adding or repairing identifications.
 Without an explicit periodic request, ordinary mesh export does not infer a
 periodic contract. Curved geometry and field accuracy are separate checks.
 
-Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-
-Mesh-only Gmsh quality APIs accept direct ASCII MSH 4.2 files only, not GEO
-programs or indirect Merge/Include inputs. Before any native initialization,
-NodeData/ElementData/ElementNodeData field tags above 2147483647 are rejected
-explicitly without remapping. Mesh-only size_t tags and pure-Python inventory
-reading have no such upper bound; field tag 2^28 remains supported.
-Any other input, including GEO, is rejected.
-The independent Gmsh Jacobian/volume calculations are unchanged.
-
-Order-3 pyramid export to Gmsh is refused with an explicit element/order error:
-the native Gmsh 5 consumer cannot construct that type. No lower-order or fake
-element is substituted; pyramid orders 1 and 2 are unchanged.
-
 `cubit-plugin-install` automatically registers the official Coreform
 WorkflowToolbar for each selected profile. No manual toolbar package import is
 required. Existing user toolbars and unrelated preferences are preserved;
@@ -117,7 +102,7 @@ Combined Radia installations must also pass Radia's declared exporter
 compatibility check; standalone operation does not import Radia.
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2026.8 only):
-  - `export {netgen|gmsh}` APREPRO commands
+  - `export netgen` APREPRO command
   - Cubit-owned **Export** menu plus the Cubit Mesh Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
@@ -145,9 +130,8 @@ cubit-mcp
 ```
 
 Optional features have independent installation extras:
-`pip install "cubit-mesh-export[sculpt]"` adds Exodus/volume-fraction support;
-`pip install "cubit-mesh-export[mesh-quality]"` adds the Gmsh quality referee.
-These install Python dependencies, not Coreform Cubit or a Sculpt license.
+`pip install "cubit-mesh-export[youtube]"` adds webinar transcript lookup.
+It installs Python dependencies, not Coreform Cubit or a Sculpt license.
 The included MCP manual owns the operating workflow.
 
 Cubit MCP uses `CUBIT_MCP_*` settings, not `RADIA_MCP_*`. Historical Radia
@@ -184,7 +168,8 @@ The no-argument `cubit-smoke-test` uses the package-owned
 The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
 bundled PySide6.
 
-The menu lists, in order: Netgen (.vol) and Gmsh (.msh).
+The Export menu holds a single action, **Export Netgen (.vol)...**, which opens
+the Netgen export dialog directly; the toolbar has the same single button.
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
 > machine-wide `CUBIT_PLUGIN_DIR` environment variable. A stale setting can cause Cubit
@@ -249,22 +234,10 @@ retains its temporary work directory together with `vol-check.json` (or
 
 ```
 export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
-export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.2 raw data + .geo launch
 ```
 
-For Radia post-processing, `.geo` is the standard launch artifact. The Gmsh
-export writes:
-
-- `model.msh`: raw GMSH v4.2 mesh/data container
-- `model.geo`: normal review entry point; it merges `model.msh`
-- `model.geo.opt`: exact Gmsh sidecar auto-loaded when `model.geo` opens
-- `model.msh.opt`: raw mesh/data inspection sidecar when `model.msh` opens
-
-Associate/open `.geo` for normal review; treat `.msh` as optional raw
-mesh/data inspection.
-
 The `export netgen` command additionally accepts Kelvin / symmetry
-options (see below). Gmsh export does not consume Kelvin.
+options (see below).
 
 ### Free Sculpt meshes
 
@@ -589,39 +562,3 @@ The project license is Apache-2.0 for owner-authored exporter code. See
 [third-party notices](https://github.com/ksugahar/cubit-mesh-export/blob/HEAD/packages/cubit-mesh-export/THIRD_PARTY_NOTICES.md)
 for the native components and their licenses.
 
-### Gmsh output boundary
-
-The exported MSH 4.2 file is **post-processing and visualization only**.
-It must never be loaded as a solver mesh or converted to `.vol`.
-Solver input remains a checked `.vol` produced by Cubit or Netgen; that `.vol`
-and its versioned contract remain the authority for labels and topology.
-Gmsh inspection results do not certify a solver input or replace `check-vol`.
-
-### Gmsh 5 development runtime
-
-Install Gmsh **alone** from its official development index in an isolated Python
-3.12 environment, then install the exporter and its other dependencies from PyPI:
-
-```powershell
-python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh --report gmsh-install.json
-python -m pip install "cubit-mesh-export[mesh-quality]"
-$env:CUBIT_GMSH_INSTALL_REPORT = (Resolve-Path gmsh-install.json).Path
-$gmsh = (Get-Content -Raw gmsh-install.json | ConvertFrom-Json).install | Where-Object { $_.metadata.name -eq 'gmsh' }
-python -m pip download --no-index --no-deps --dest gmsh-wheel $gmsh.download_info.url
-$env:CUBIT_GMSH_WHEEL = (Get-ChildItem gmsh-wheel/*.whl).FullName
-```
-
-The extra declares `gmsh>=5.0.0.dev0`; there is no dated or upper metadata pin.
-The quality runtime requires native major 5 and proves MSH 4.2 write/read support
-in its isolated child before invoking Gmsh. Non-4.2 mesh input is rejected.
-Retain the original wheel selected by the installer report; the runtime verifies
-its full hash and compares the actual wrapper/native payloads against its ZIP
-bytes. Neither installed RECORD nor a reconstructed wheel is the integrity oracle. Qualification
-uses a hash-verified archived official wheel, not an unrecorded index resolution.
-
-The exporter supports geometric orders 1-3 for hex/tet/triangle/quad, and 1-2
-for wedge/pyramid. Unsupported requests fail before creating a partial `.msh`;
-they never substitute a lower-order mesh. Pyramid 3 export remains unqualified:
-the current official reference runtime advertises type 125 but cannot construct
-it. This restriction is a pending adoption disposition, not a physics criterion
-change.

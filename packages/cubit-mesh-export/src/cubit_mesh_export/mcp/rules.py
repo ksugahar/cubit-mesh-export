@@ -15,9 +15,8 @@ def check_missing_block_registration(filepath: str, lines: List[str]) -> List[Di
 	findings = []
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
-		r'curved|exodus)\s*\('
-		r'|export\s+(?:netgen|gmsh)\s'
+		r'(?:curved|exodus)\s*\('
+		r'|export\s+netgen\s'
 	)
 	block_pattern = re.compile(r'cubit\.cmd\s*\(\s*["\'].*\bblock\b', re.IGNORECASE)
 
@@ -341,8 +340,7 @@ def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	findings = []
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
-		r'curved|exodus)\s*\('
+		r'(?:curved|exodus)\s*\('
 	)
 	mesh_pattern = re.compile(
 		r'cubit\.cmd\s*\(\s*["\'].*\b(?:mesh\s+(?:volume|surface|curve)|tetmesh|trimesh)\b',
@@ -379,7 +377,6 @@ def check_export_file_extension(filepath: str, lines: List[str]) -> List[Dict]:
 	findings = []
 	# Map export functions to expected extensions
 	extension_map = {
-		r'export_(?:Gmsh_ver[24]|gmsh_v[24])': ['.msh'],
 				r'export_exodus': ['.exo', '.e', '.ex2'],
 	}
 
@@ -454,8 +451,7 @@ def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
 	)
 	non_exodus_export = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
-		r'NetgenMesh|netgen|netgen_with_names)\s*\('
+		r'(?:NetgenMesh|netgen|netgen_with_names)\s*\('
 	)
 
 	nodeset_lines = []
@@ -492,8 +488,7 @@ def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
 	# Only check files that have export calls
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|'
-		r'curved|exodus)\s*\('
+		r'(?:curved|exodus)\s*\('
 	)
 	has_export = any(
 		export_pattern.search(line) for line in lines
@@ -643,37 +638,6 @@ def check_no_pyqt5_imports(filepath: str, lines: List[str]) -> List[Dict]:
 					"Cubit 2026.8 and must use PySide6 only."
 				),
 			})
-	return findings
-
-
-def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: plain `export mesh` bypasses the checked post-export contract.
-
-	Use the cubit-mesh-export `export gmsh "file.msh" order N overwrite`
-	command, which emits the required MSH 4.2 post-processing format.
-	"""
-	findings = []
-	for i, line in enumerate(lines, 1):
-		stripped = line.strip()
-		if stripped.startswith('#'):
-			continue
-		# `export mesh "…"` without mesh_version (case-insensitive)
-		m = re.search(
-			r'(?i)\bexport\s+mesh\s+["\']([^"\']+\.msh)["\']([^#\n]*)',
-			stripped,
-		)
-		if not m:
-			continue
-		findings.append({
-			'line': i,
-			'severity': 'HIGH',
-			'rule': 'gmsh-post-export-required',
-			'message': (
-				f'`export mesh "{m.group(1)}"` bypasses the required post-export contract. '
-				f'Use `export gmsh '
-				f'"{m.group(1)}" order N overwrite` (MSH 4.2).'
-			),
-		})
 	return findings
 
 
@@ -861,7 +825,6 @@ ALL_RULES = [
 	check_non_ascii_bytes,
 	check_no_pyqt5_imports,
 	check_qt_imports,
-	check_plain_gmsh_export,
 	check_cubit_toolbar_import_parens,
 	check_cubit_toolbar_missing_shebang,
 	check_cubit_toolbar_missing_claro_parent,

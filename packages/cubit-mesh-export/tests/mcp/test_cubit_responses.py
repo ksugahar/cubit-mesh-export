@@ -118,7 +118,6 @@ class TestCubitScriptingKnowledge:
 class TestExportKnowledge:
     FORMATS = {
         "overview":       ["export", "format"],
-        "gmsh_v4":        ["msh", "4.2", "gmsh"],
         "curved":         ["curved", "order", "netgen"],
         "netgen":         ["vol", "netgen"],
         "exodus":         ["exodus", "genesis", "block", "sideset"],
@@ -128,7 +127,7 @@ class TestExportKnowledge:
     def test_all_format(self):
         body = get_export_documentation("all")
         _assert_substantial(body, min_chars=500)
-        _assert_contains_any(body, ["export", "gmsh", "netgen"],
+        _assert_contains_any(body, ["export", "netgen"],
                               label="export all")
 
     @pytest.mark.parametrize("fmt,markers", list(FORMATS.items()))
@@ -139,18 +138,6 @@ class TestExportKnowledge:
 
     def test_unknown_format(self):
         _assert_unknown_topic_graceful(get_export_documentation)
-
-    def test_gmsh_v4_documents_geo_as_radia_post_launch_artifact(self):
-        body = get_export_documentation("gmsh_v4")
-
-        assert ".msh v4.2 + .geo" in body
-        assert "standard file to open for Radia post-processing is `.geo`" in body
-        assert "`.msh` association is optional raw mesh/data inspection" in body
-        assert ".geo` companion" in body
-        assert "case.geo.opt" in body
-        assert "case.msh.opt" in body
-        assert "plain `case.opt` is not" in body
-
 
 # ---------------------------------------------------------------------------
 # mesh_diagnostics_knowledge

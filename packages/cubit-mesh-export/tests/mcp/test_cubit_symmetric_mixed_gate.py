@@ -19,13 +19,6 @@ def _public() -> dict:
         "element_counts": {"hex": 390, "pyramid": 39, "tet": 3518, "wedge": 0},
         "connectivity_sizes": {"hex": [8], "pyramid": [5], "tet": [4]},
         "quality": {"hex_scaled_jacobian": {"min": 0.469}, "tet_scaled_jacobian": {"min": 0.246}},
-        "gmsh": {
-            "mesh_format": "4.2",
-            "binary": False,
-            "element_counts": {"hex": 390, "pyramid": 39, "tet": 3518, "other_3d": 0},
-            "volume_by_type": {"hex": 1359.0, "pyramid": 10.0, "tet": 1349.0},
-            "cad_volume_relative_error": 9.9e-5,
-        },
     }
 
 

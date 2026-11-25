@@ -190,15 +190,15 @@ def test_find_claro_matches_capital_c_object_name():
 
 
 def test_menu_offers_only_the_maintained_formats():
-    """Only Netgen and Gmsh are menu actions; retired formats are absent."""
+    """The menu is one flat Netgen action; retired formats are absent."""
     source = EXPORT_MENU.read_text(encoding="utf-8")
 
-    for retired in ("export nastran_bdf", "export meg", "export vtk", "export femeem",
-                    "FMT_VTU", "FMT_JCF", "FMT_MEG", "FMT_COMSOL", "COMSOL", "mphtxt",
-                    "nastran", "femeem"):
+    for retired in ("export nastran_bdf", "export meg", "export vtk", "export femeem", "export gmsh",
+                    "FMT_VTU", "FMT_JCF", "FMT_MEG", "FMT_COMSOL", "FMT_GMSH", "FMT_NETGEN", "COMSOL", "mphtxt",
+                    "nastran", "femeem", "gmsh", "Gmsh", "_MENU_SPECS", "launch_export(", "_run_generic_export"):
         assert retired not in source, retired
-    labels = re.findall(r'^\s+\("([^"]+)", FMT_\w+,$', source, flags=re.MULTILINE)
-    assert labels == ["Netgen (.vol)", "Gmsh (.msh)"], labels
+    assert re.findall(r'^_MENU_LABEL = "([^"]+)"$', source, flags=re.MULTILINE) == ["Export Netgen (.vol)..."]
+    assert source.count("emclaro.PyAction()") == 1
 
 
 def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
@@ -219,14 +219,13 @@ def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
                  str(EXPORT_MENU), "exec"), namespace)
 
     calls = []
-    fake_menu = types.SimpleNamespace(launch_export=calls.append)
+    fake_menu = types.SimpleNamespace(launch_netgen_export=lambda: calls.append("netgen"))
     monkeypatch.setitem(sys.modules, "cubit_export_menu", fake_menu)
     original_path = list(sys.path)
     try:
-        for fmt in ("netgen_vol", "gmsh"):
-            exec(namespace["_activate_code"](fmt), {})
+        exec(namespace["_activate_code"](), {})
     finally:
         sys.path[:] = original_path
 
-    assert calls == ["netgen_vol", "gmsh"]
+    assert calls == ["netgen"]
 

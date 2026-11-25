@@ -210,7 +210,7 @@ Abaqus, Ansys, OpenFOAM, or the validation runtime Radia + NGSolve stack.
 A block is the coarsest grouping - a set of elements that share a
 material or element formulation. In Abaqus, blocks map to `*SOLID
 SECTION`. In Ansys, they map to MAT / TYPE. In Radia's mesh export,
-blocks are the ONLY entity translated to the `.vol` / `.msh` file.
+blocks are the ONLY entity translated to the `.vol` file.
 
 ```python
 cubit.cmd("block 1 add volume 1 2 3")
@@ -278,8 +278,8 @@ cubit.cmd('nodeset 2 name "corners"')
 
 ## validation runtime policy: `export` uses blocks only
 
-The `export netgen` / `export gmsh`
-commands (from the `cubit_mesh_export` validation runtime plugin) read from blocks
+The `export netgen`
+command (from the `cubit_mesh_export` validation runtime plugin) reads from blocks
 only. Sidesets and nodesets are ignored by this plugin.
 
 If you need boundary conditions in the downstream solver:

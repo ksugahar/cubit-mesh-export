@@ -2,7 +2,7 @@
 Cubit Mesh Export MCP Server
 
 Provides tools for:
-- Export function documentation (Netgen, Gmsh, Exodus)
+- Export function documentation (Netgen .vol, Exodus)
 - Netgen/NGSolve high-order curving workflows (SetGeomInfo, name-based)
 - Cubit scripting patterns and best practices
 - Cubit Python API reference (600+ functions, entity classes)
@@ -30,7 +30,6 @@ import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
-from mcp.types import ToolAnnotations
 
 # Import knowledge bases and rules (relative imports for pip package)
 from cubit_mesh_export.mcp.rules import ALL_RULES
@@ -47,20 +46,16 @@ from cubit_mesh_export.mcp.knowledge.license import get_license_documentation
 from cubit_mesh_export.mcp.knowledge.format_routing import get_format_routing_documentation
 from cubit_mesh_export.mcp.knowledge.coreform_webinars import get_coreform_webinar_documentation
 from cubit_mesh_export.mcp.vol_inventory import cubit_hex_geometry_refinement_gate, cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate, cubit_mapped_boundary_layer_shell_gate as _cubit_mapped_boundary_layer_shell_gate, cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate, cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate, cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate, cubit_webcut_conformal_hex_gate as _cubit_webcut_conformal_hex_gate, cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate, cubit_helical_partition_mesh_gate as _cubit_helical_partition_mesh_gate, cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate, cubit_boundary_layer_candidate_gate as _cubit_boundary_layer_candidate_gate, cubit_boundary_layer_journal_recovery_gate as _cubit_boundary_layer_journal_recovery_gate, cubit_embedded_region_mixed_transition_gate as _cubit_embedded_region_mixed_transition_gate, cubit_embedded_pipe_source_recovery_gate as _cubit_embedded_pipe_source_recovery_gate, cubit_mixed_order_series_inventory_gate, summarize_netgen_vol_inventory
-from cubit_mesh_export.mcp.gmsh_v42 import gmsh_v42_mixed_order_series_gate, summarize_gmsh_v42_ascii
 from cubit_mesh_export.mcp._support.lazy_call import lazy_callable
 _cubit_loft_high_order_vol_series_gate = lazy_callable(".high_order_export_gate", "cubit_loft_high_order_vol_series_gate", __package__)
 _cubit_helical_conductor_source_gate = lazy_callable(".helical_conductor_gate", "cubit_helical_conductor_source_gate", __package__)
 _cubit_region_owned_mixed_mesh_gate = lazy_callable(".helical_conductor_gate", "cubit_region_owned_mixed_mesh_gate", __package__)
 _cubit_conformal_hex_pyramid_tet_interface_gate = lazy_callable(".mixed_transition_gate", "cubit_conformal_hex_pyramid_tet_interface_gate", __package__)
 _cubit_mixed_transition_source_gate = lazy_callable(".mixed_transition_gate", "cubit_mixed_transition_source_gate", __package__)
-from cubit_mesh_export.mcp.stl_inspect import inspect_stl as _inspect_stl
 _cubit_structured_hex_lattice_gate = lazy_callable(".structured_hex_gate", "cubit_structured_hex_lattice_gate", __package__)
 _cubit_structured_hex_source_replay_gate = lazy_callable(".structured_hex_gate", "cubit_structured_hex_source_replay_gate", __package__)
 _cubit_symmetric_swept_mixed_mesh_gate = lazy_callable(".symmetric_mixed_gate", "cubit_symmetric_swept_mixed_mesh_gate", __package__)
 _cubit_symmetric_swept_source_replay_gate = lazy_callable(".symmetric_mixed_gate", "cubit_symmetric_swept_source_replay_gate", __package__)
-_cubit_pyramid_mixed_export_gate = lazy_callable(".pyramid_export_replay_gate", "cubit_pyramid_mixed_export_gate", __package__)
-_cubit_pyramid_source_plugin_replay_gate = lazy_callable(".pyramid_export_replay_gate", "cubit_pyramid_source_plugin_replay_gate", __package__)
 _cubit_mesh_carrying_straight_sweep_gate = lazy_callable(".mesh_carrying_sweep_gate", "cubit_mesh_carrying_straight_sweep_gate", __package__)
 _cubit_mesh_carrying_straight_sweep_source_replay_gate = lazy_callable(".mesh_carrying_sweep_gate", "cubit_mesh_carrying_straight_sweep_source_replay_gate", __package__)
 _cubit_partial_volume_hex_diagnosis_gate = lazy_callable(".power_tools_replay_gate", "cubit_partial_volume_hex_diagnosis_gate", __package__)
@@ -90,8 +85,7 @@ Driving model (lab policy): APREPRO commands + Python on the
 HEADLESS/batch route are the PRIMARY way agents drive Cubit --
 `cubit_batch_try` / `cubit_mesh_auto` / `.jou` playback for mesh
 generation, exports, and validation. Every LLM/MCP Cubit operation is
-batch/nographics. Never launch or attach to the Cubit GUI. For visualization,
-render exported Gmsh artifacts outside the Cubit session.
+batch/nographics. Never launch or attach to the Cubit GUI.
 
 Human handoff: cubit_import_journal reads a human-saved .jou without
 execution or GUI attachment; cubit_session_journal exports Cubit's native
@@ -122,67 +116,6 @@ Operating rules (lab doctrine -- follow these):
    kind="internal" means a server bug -- do not retry with new inputs.
 Always inspect tool outputs before acting on them; on repeated failure ask
 the user rather than looping.
-
-Topology-optimization shape regeneration (the topopt<->CAD loop): a
-per-element density design becomes a watertight STL via the radia wheel
-(`radia.topopt_cad`: `nodal_from_element_density` -> `iso_stl_from_grid`,
-or `write_levelset_exodus` for the Cubit-native `create tri iso` route);
-`cubit_stl_to_vol` then meshes that STL into a gated solver `.vol`
-(scheme="hex" Sculpt all-hex, scheme="tet" tetmesh).  Sculpt is the tool
-for these bodies BECAUSE they have no sweepable topology.  Do NOT route
-such STL through netgen's STLGeometry (rejects marching-cubes facets as
-degenerate -- recorded negative).  The hex route generates a direct/free
-sideset and also binds mesh geometry; the exporter preserves and deduplicates
-both boundary representations, recovers adjacent block domains, and splits a
-multi-material sideset into domain-aware descriptors.  Gate on closure +
-inverted elements +
-boundary faces (older exporters could write ZERO `.vol` surface elements,
-making a charge-based solve silently demag-free); treat min-quality as a
-report, and rank meshes by
-`dof_estimate`, not element count.  Prefer scheme="hex" for downstream
-charge-Gram / VIM re-evaluation: the facet-conforming tet mesh of a
-decimated marching-cubes surface can carry slivers that stall CG at any
-tolerance, while the Sculpt hex mesh of the same surface solves in tens
-of iterations.
-
-PREFERRED regeneration route -- volume fractions, no STL at all: Sculpt
-is natively a volume-fraction mesher.  `radia.topopt_cad
-.write_vfrac_exodus` rasterizes the SAME thresholded body into per-cell
-volume fractions (Exodus), and `cubit_vfrac_to_vol` runs standalone
-`sculpt.exe --input_vfrac` on it: the interface reconstruction places
-the boundary sub-cell, so the meshed volume tracks the fraction
-integral to ~1e-3 where the STL route's marching-cubes body can lose
-percent-level (measured on a real sector design: STL route closure
-12.5 % = gate FAILED, vfrac route 0.2 % ok, faster, higher mean
-quality).  Both mesh tools accept the vetted Sculpt quality knobs
-(`gq_iters`/`gq_threshold` guaranteed-quality smoothing,
-`pillow_surfaces`, `defeature`/`min_vol_cells` debris removal).  The
-solver half of the combination lives on the radia-ngsolve server:
-`hdiv_vim_demag_eval` runs the air-mesh-free charge-Gram demag solve on
-the body-only `.vol` (sphere reads ~1/3; the vfrac-route lane locks the
-whole chain against that closed form).
-
-MULTI-MATERIAL is the vfrac route's own capability: a partitioned
-`write_vfrac_exodus({name: field, ...})` yields `MAT_1..MAT_N`, Sculpt
-meshes them with a CONFORMAL interface (shared nodes), and
-`cubit_vfrac_to_vol(material_names="core,shell")` labels the `.vol`
-regions for per-region `hdiv_vim_demag_eval(mu_r="core=1000,shell=50")`.
-A multi-material `.vol` carries interface faces in ADDITION to the outer
-skin, so the boundary gate compares the OUTER faces against the
-topological skin rather than the raw total.
-
-PERIODIC cells: `cubit_vfrac_to_vol(periodic=True)` (with the writer's
-`bounds=` spanning exactly one period) builds an RVE whose node set is
-invariant under the period, so one cell TILES conformally.  The gate is
-the SEAM FILL RATE, not a raw match count -- a non-periodic mesh keeps a
-few untouched lattice corners that match by accident (measured fill rate
-1.000 periodic vs 0.061 plain on the same input).  On this Cartesian
-route the periodicity is translational in all three axes; rotational
-periodicity is Sculpt's unstructured `--input_mesh` route.  A periodic
-mesh is NOT what the HDiv-VIM image method (IMA) consumes -- IMA applies
-analytic MIRROR reflections and needs no node matching; periodic node
-pairs are for FEM periodic boundary conditions and for assembling an
-array without re-meshing.
 """
 
 # Create MCP server
@@ -617,8 +550,6 @@ def cubit_docs(topic: str = "all") -> str:
 	        "all"                    - Overview of all categories
 	        --- Export formats ---
 	        "export_overview"        - All export commands overview
-	        "gmsh_v42"               - Gmsh v4.2 format (export gmsh)
-	        "gmsh_v4"               - Gmsh v4.2 format policy
 	        "netgen"                - Netgen .vol export (export netgen)
 	        "exodus"                - Exodus II (Cubit built-in)
 	        "export_comparison"     - Format comparison and decision matrix
@@ -674,8 +605,6 @@ def cubit_docs(topic: str = "all") -> str:
 	        --- Coreform public release/tutorial knowledge ---
 	        "coreform"               - Topic index for public Coreform tutorial/release knowledge
 	        "coreform_release_2026_6" - Cubit 2026.6 highlights and validation actions
-
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	topic = topic.lower().strip()
 
@@ -683,7 +612,7 @@ def cubit_docs(topic: str = "all") -> str:
 		return (
 			"# Cubit Documentation\n\n"
 			"Use topic prefixes to navigate:\n"
-			"- `export_*` - Export format documentation (gmsh_v42, netgen, etc.)\n"
+			"- `export_*` - Export format documentation (netgen, exodus, etc.)\n"
 			"- `scripting_*` - Python scripting guide (blocks, mesh_schemes, etc.)\n"
 			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n"
 			"- `panel_*` - optional Radia solver handoff conventions\n\n"
@@ -755,46 +684,6 @@ def cubit_docs(topic: str = "all") -> str:
 		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*. "
 		f"Examples: export_overview, scripting_blocks, api_core"
 	)
-
-
-@mcp.tool()
-def cubit_gmsh_v42_inventory(text: str) -> str:
-	"""Parse inline ASCII Gmsh 4.2 by entity blocks and validate connectivity.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-	"""
-
-	try:
-		result = summarize_gmsh_v42_ascii(text)
-	except (TypeError, ValueError) as exc:
-		result = {
-			"policy": "gmsh_v42_ascii_inventory_v1",
-			"status": "invalid_input",
-			"error": str(exc),
-		}
-	return json.dumps(result, ensure_ascii=False, indent=2)
-
-
-@_validation.tool()
-def cubit_gmsh_v42_mixed_order_gate(
-	rows: list[dict],
-	authoritative_vol_inventory: dict | None = None,
-) -> str:
-	"""Gate Gmsh 4.2 mixed topology/order while retaining .vol label authority.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-	"""
-
-	try:
-		result = gmsh_v42_mixed_order_series_gate(
-			rows,
-			authoritative_vol_inventory=authoritative_vol_inventory,
-		)
-	except (TypeError, ValueError) as exc:
-		result = {
-			"policy": "gmsh_v42_mixed_order_series_gate_v1",
-			"status": "invalid_input",
-			"error": str(exc),
-		}
-	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -1005,8 +894,7 @@ def cubit_mesh_carrying_straight_sweep_gate(
 	min_scaled_jacobian: float = 0.2,
 	volume_relative_tolerance: float = 1.0e-12,
 ) -> str:
-	"""Gate a straight include_mesh sweep, topology lattice, and Gmsh export.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""Gate a straight include_mesh sweep and its topology lattice.
 	"""
 	try:
 		result = _cubit_mesh_carrying_straight_sweep_gate(
@@ -1075,16 +963,12 @@ def cubit_power_tools_cleanup_source_replay_gate(summary: dict) -> str:
 def cubit_levelset_sculpt_hex_validation_gate(
 	summary: dict,
 	quality_floor: float = 0.2,
-	volume_relative_tolerance: float = 0.03,
 ) -> str:
-	"""Gate coarse/fine Sculpt all-hex quality and Gmsh volume closure.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-	"""
+	"""Gate coarse/fine Sculpt all-hex refinement and source quality."""
 	try:
 		result = _cubit_levelset_sculpt_hex_validation_gate(
 			summary,
 			quality_floor=quality_floor,
-			volume_relative_tolerance=volume_relative_tolerance,
 		)
 	except (TypeError, ValueError) as exc:
 		result = {
@@ -1254,8 +1138,7 @@ def cubit_embedded_region_mixed_transition_gate(
 	max_volume_relative_error: float = 1.0e-5,
 	max_swept_volume_relative_error: float = 5.0e-4,
 ) -> str:
-	"""Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.2.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""Gate hex-led tet/pyramid recovery, quality, interfaces, and CAD closure.
 	"""
 	try:
 		result = _cubit_embedded_region_mixed_transition_gate(
@@ -1331,8 +1214,7 @@ def cubit_helical_conductor_source_gate(summary: dict) -> str:
 
 @_validation.tool()
 def cubit_symmetric_swept_mixed_mesh_gate(summary: dict) -> str:
-	"""Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""Gate symmetric CAD, hex/pyramid/tet topology, and quality.
 	"""
 	try:
 		result = _cubit_symmetric_swept_mixed_mesh_gate(summary)
@@ -1408,43 +1290,12 @@ def cubit_mixed_transition_source_gate(
 
 
 @_validation.tool()
-def cubit_pyramid_mixed_export_gate(summary: dict) -> str:
-	"""Gate explicit hex/pyramid/tet preservation in the Gmsh export.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-	"""
-	try:
-		result = _cubit_pyramid_mixed_export_gate(summary)
-	except (TypeError, ValueError) as exc:
-		result = {
-			"policy": "cubit_pyramid_mixed_export_gate_v1",
-			"status": "invalid_input",
-			"error": str(exc),
-		}
-	return json.dumps(result, ensure_ascii=False, indent=2)
-
-
-@_validation.tool()
-def cubit_pyramid_source_plugin_replay_gate(summary: dict) -> str:
-	"""Gate legacy source migration through executable-owned plugin startup."""
-	try:
-		result = _cubit_pyramid_source_plugin_replay_gate(summary)
-	except (TypeError, ValueError) as exc:
-		result = {
-			"policy": "cubit_pyramid_source_plugin_replay_gate_v1",
-			"status": "invalid_input",
-			"error": str(exc),
-		}
-	return json.dumps(result, ensure_ascii=False, indent=2)
-
-
-@_validation.tool()
 def cubit_structured_hex_lattice_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.2,
 	max_volume_relative_error: float = 1.0e-10,
 ) -> str:
-	"""Gate structured all-hex counts, quality, and Gmsh volume closure.
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""Gate structured all-hex counts, quality, and CAD volume closure.
 	"""
 	try:
 		result = _cubit_structured_hex_lattice_gate(
@@ -1627,11 +1478,9 @@ def netgen_workflow_guide(workflow: str = "overview") -> str:
 	        "complex"           - Complex geometry (Boolean operations, any shape)
 	        "accuracy"          - Accuracy guide: order selection and verification
 	        "kelvin_auto"       - Kelvin auto-add (auto R, symmetry, mesh copy)
-	        "gmsh_2nd_order"    - Alternative: Gmsh 2nd order (simplest)
+	        "vol_2nd_order"     - Simplest 2nd order .vol workflow
 	        "troubleshooting"   - Common errors and fixes
 	        "deleted_apis"      - Migration guide from old APIs
-
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	return get_netgen_documentation(workflow)
 
@@ -1652,10 +1501,7 @@ def netgen_code_example(shape: str = "cylinder") -> str:
 	        "cone"           - Cone with export netgen
 	        "hex_cylinder"   - Hex-meshed cylinder with export netgen
 	        "complex_named"  - Boolean geometry with export netgen
-	        "gmsh_2nd_order" - Gmsh 2nd order alternative (simplest)
 	        "poisson_sphere" - Complete FEM: Poisson equation on sphere
-
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	shape = shape.lower().strip()
 	if shape in EXAMPLES:
@@ -2093,7 +1939,7 @@ def get_lint_rules() -> str:
 			'rule': 'missing-block-registration',
 			'severity': 'CRITICAL',
 			'description': 'Export function called but no block registration found.',
-			'trigger': 'export gmsh without any block/mesh',
+			'trigger': 'export netgen without any block/mesh',
 			'fix': 'cubit.cmd("block 1 add tet all")',
 		},
 		{
@@ -2191,8 +2037,8 @@ def get_lint_rules() -> str:
 			'rule': 'wrong-file-extension',
 			'severity': 'MODERATE',
 			'description': 'Export file extension does not match the format.',
-			'trigger': 'export gmsh "mesh.vtk" (wrong extension)',
-			'fix': 'Use correct extension: .msh, .exo, .vol',
+			'trigger': 'export_exodus(cubit, "mesh.vtk") (wrong extension)',
+			'fix': 'Use correct extension: .exo, .vol',
 		},
 		{
 			'rule': 'curve-without-export-curved',
@@ -2282,8 +2128,6 @@ _ENVIRONMENT_ERROR_NEEDLES = (
 )
 
 
-
-
 def _error_payload(stage: str, message: str, *, kind: str | None = None,
                    hint: str | None = None) -> dict:
     """Cubit-flavored wrapper over the shared error contract."""
@@ -2331,7 +2175,7 @@ def _cubit_path_dispatch(path: Path) -> str:
     if suffix in (".brep", ".brp"):
         return f'import acis "{abs_path}"'
     if suffix == ".msh" or path.name.lower().endswith(".msh.gz"):
-        raise ValueError("Gmsh MSH is post-processing only; solver meshes must be checked .vol files, never converted from .msh")
+        raise ValueError("Gmsh MSH is not a supported input; solver meshes must be checked .vol files")
     if suffix in (".vol", ".g", ".e", ".exo"):
         return f'import mesh "{abs_path}"'
     raise ValueError(f"Unsupported extension for Cubit viewer: {suffix}")
@@ -2346,8 +2190,8 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 
 	Supported inputs: .jou (playback), .py (play — Cubit-side Python),
 	.step/.stp (import step), .brep (import acis),
-	.vol/.g/.e/.exo (import mesh). Gmsh .msh is post-processing-only output,
-	never staged as an input that could be converted to solver .vol.
+	.vol/.g/.e/.exo (import mesh). Gmsh .msh is rejected: solver meshes
+	are checked .vol files.
 
 	Args:
 	    path: file to load. Leave empty to run only `extra_commands`.
@@ -2381,7 +2225,7 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 		                   "error": "Either `path` or `extra_commands` is required."})
 
 	if any(re.search(r"(?i)\bimport\s+(?:mesh|gmsh)\b.*\.msh\b", command) for command in cmds):
-		return json.dumps(_error_payload("input", "Gmsh .msh is post-processing only; solver meshes are checked .vol", kind="input"))
+		return json.dumps(_error_payload("input", "Gmsh .msh is not a supported input; solver meshes are checked .vol", kind="input"))
 	sess, err = _cubit_session_or_error()
 	if err is not None:
 		return err
@@ -2642,8 +2486,6 @@ def cubit_probe(query: str = "summary") -> str:
 	except _cs.CubitSessionError as e:
 		return json.dumps(_error_payload("rpc", str(e)))
 	return json.dumps(r, indent=2)
-
-
 
 
 @mcp.tool()
@@ -3205,7 +3047,7 @@ def cubit_suggest_next(goal: str = "mesh") -> str:
 	if g == "import" or state["volumes"] == 0:
 		add('import step "<path>"', "Load geometry from STEP (build123d output, CAD exchange).")
 		add('import acis "<path>"', "Load ACIS .sat / .brep (native Cubit precision).")
-		add('import mesh "<path>"', "Load existing mesh (.exo / .g / .msh / .vol).")
+		add('import mesh "<path>"', "Load existing mesh (.exo / .g / .vol).")
 	elif g in ("mesh", "hex"):
 		if unmeshed:
 			# Most common next step after import
@@ -3225,7 +3067,7 @@ def cubit_suggest_next(goal: str = "mesh") -> str:
 	elif g == "export":
 		if not any_mesh:
 			add("mesh volume all", "No mesh yet — create one before export.")
-		add('export gmsh "<path>.msh" order 2 overwrite', "Gmsh MSH 4.2 post-processing and visualization support; solver meshes are checked .vol.")
+		add('export netgen "<path>.vol" order 2 overwrite', "Checked curved Netgen .vol (the only cubit-mesh-export output).")
 		add('export abaqus "<path>.inp" overwrite', "Abaqus .inp for FEM.")
 		add('export genesis "<path>.g" overwrite', "Exodus .g for Sierra / Netgen pipelines.")
 		add('export step "<path>.step" overwrite', "Geometry-only STEP (for round-trip CAD).")
@@ -3696,1421 +3538,6 @@ def _run_batch(step_path: str | None, commands: list[str],
 			sess.shutdown()
 		except Exception:
 			pass
-
-
-def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path,
-                        order: int = 1) -> dict:
-	"""STEP -> Netgen curved tetrahedra -> Gmsh 4.2, without Radia."""
-	from ._support.netgen_compare import step_to_msh
-	return step_to_msh(step_path, maxh, out_msh, order)
-
-
-def _quality_row(route: str, mesher: str, q: dict) -> dict:
-	"""Flatten one referee report into a comparison row."""
-	by_type = q.get("by_type", [])
-	completed = bool(q.get("ran")) and bool(by_type)
-	row = {
-		"route": route,
-		"mesher": mesher,
-		"status": "ok" if completed else "error",
-		"metric": q.get("metric"),
-		"ok": q.get("ok"),
-		"total_negative": q.get("total_negative"),
-		"total_below_threshold": q.get("total_below_threshold"),
-		"by_type": [
-			{
-				"element": bt.get("name"),
-				"n": bt.get("n_elements"),
-				"min": bt.get("min_quality"),
-				"mean": bt.get("mean_quality"),
-				"negative": bt.get("negative"),
-				"below_threshold": bt.get("below_threshold"),
-				"worst_tag": (bt.get("worst") or [{}])[0].get("tag"),
-				# stretching -- minSICN is a shape number and misses it
-				"aspect_p95": (bt.get("aspect_ratio") or {}).get("p95"),
-				"aspect_max": (bt.get("aspect_ratio") or {}).get("max"),
-				"aspect_above_10": (bt.get("aspect_ratio") or {}).get("n_above_10"),
-			}
-			for bt in by_type
-		],
-	}
-	stats = q.get("mesh_stats") or {}
-	if stats:
-		# THE COST AXIS. Ranking meshes by element count inverts the
-		# verdict (measured: netgen looks ~2x cheaper per element and is
-		# never cheaper per dof); ranking by dof does not.
-		row["dof_estimate"] = stats.get("dof_estimate")
-		row["interior_node_fraction"] = stats.get("interior_node_fraction")
-		row["n_nodes"] = stats.get("n_nodes")
-	if not completed:
-		row["kind"] = "referee"
-		row["error"] = q.get("error") or q.get("note") \
-			or "quality referee returned no 3D element data"
-	return row
-
-
-@mcp.tool()
-def cubit_netgen_quality_compare(step_path: str,
-                                 netgen_maxh: float = 0.0,
-                                 cubit_size: float = 0.0,
-                                 schemes: list = None,
-                                 threshold: float = 0.1,
-                                 order: int = 1,
-                                 out_dir: str = "",
-                                 timeout_s: int = 600) -> str:
-	"""
-	Mesh ONE STEP with both meshers and compare element quality with a
-	NEUTRAL referee.
-
-	Routes (headless throughout, per the driving policy):
-	  * netgen     — STEP -> Netgen tet mesh (maxh) -> .msh v4.2
-	  * cubit_tet  — batch Cubit, `volume all scheme tetmesh`, size
-	  * cubit_hex  — batch Cubit, default scheme ladder (sweep/map where
-	                 possible), size
-
-	Referee: GMSH minSICN via the radia-gmsh quality engine
-	(`cubit_mesh_export.mcp._support.mesh_quality.mesh_quality`) evaluated on each
-	exported `.msh v4.2` -- ONE metric implementation for every mesher,
-	so numbers are directly comparable. minSICN is defined for tets AND
-	hexes, but comparing across element FAMILIES is still
-	apples-to-oranges for meshing-difficulty reasons; the honest
-	comparison is netgen vs cubit_tet (same family), with cubit_hex as
-	the structured-mesh reference.
-
-	When `netgen_maxh`/`cubit_size` are 0, a common size is derived from
-	the geometry bbox (~1/8 of the max extent) so both meshers get the
-	SAME target length.
-
-	Writes `<base>_netgen.msh` / `<base>_cubit_tet.msh` /
-	`<base>_cubit_hex.msh` next to the STEP (or into `out_dir`).
-	Per-route failures are reported as rows with status/kind -- a
-	missing optional stack (netgen/radia/gmsh) fails that ROW as
-	environment, not the whole comparison.
-
-	INTERPRETING min_quality -- one call is ONE SAMPLE, not a verdict.
-	Both meshers are bit-exactly reproducible at a FIXED size target, but
-	the worst element is a chaotic function of that target: measured on
-	c_core, a 0.125 % change of the size target moved min by 0.118
-	(netgen) and 0.086 (cubit_tet) -- bigger than most mesher differences
-	(validation_test/radia_mcp/mesh_quality_study). So compare BANDS over
-	several sizes, never two single numbers; and note that at these levels
-	min does NOT predict solver behaviour (order-1 Poisson CG counts and
-	L2/H1 error barely respond). Treat min_quality as a floor/safety
-	indicator -- `negative > 0` is the signal that actually matters.
-
-	RANK BY dof, NOT BY ELEMENT COUNT. Each row carries `dof_estimate`
-	(H1-p1 / lowest HCurl / lowest HDiv dof on that mesh) and
-	`interior_node_fraction`. The linear system is sized by dof, and the
-	two axes disagree: netgen produces ~2x fewer ELEMENTS at equal h yet
-	is never cheaper per dof, because more of its nodes sit on the
-	boundary (interior fraction 2-49 % vs cubit_tet 19-77 %). Measured at
-	matched dof, netgen's error is 1.14-1.89x cubit_tet's on scalar H1
-	and 1.02-1.27x on HCurl/HDiv. An element-count comparison reverses
-	this and is the single easiest way to reach a wrong conclusion here.
-
-	`aspect_p95` / `aspect_max` report stretching, which minSICN does not
-	express and which is what thin-gap and lamination meshes actually
-	exhibit.
-
-	Args:
-	    step_path: the geometry both meshers consume.
-	    netgen_maxh: Netgen max element size (0 = derive from bbox).
-	    cubit_size: Cubit `volume all size` (0 = derive from bbox).
-	    schemes: subset of ["netgen", "cubit_tet", "cubit_hex"]
-	        (default: all three).
-	    threshold: minSICN acceptance threshold for the referee.
-	    order: element order 1-3 for BOTH routes (netgen `mesh.Curve`,
-	        cubit `export gmsh ... order N`). At order>=2 on curved
-	        geometry the referee's min_jacobian_ratio becomes a real
-	        curvature-distortion diagnostic (1.0 for straight elements).
-	    out_dir: where to write the .msh files (default: beside STEP).
-
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-	"""
-	p = Path(step_path)
-	if not p.is_absolute():
-		p = PROJECT_ROOT / p
-	if not p.is_file():
-		return json.dumps(_error_payload("input", f"STEP not found: {p}"))
-	try:
-		order = int(order)
-		netgen_maxh = float(netgen_maxh)
-		cubit_size = float(cubit_size)
-		threshold = float(threshold)
-		timeout_s = int(timeout_s)
-	except (TypeError, ValueError) as exc:
-		return json.dumps(_error_payload(
-			"input", f"invalid numeric option: {exc}"))
-	if not 1 <= order <= 3:
-		return json.dumps(_error_payload(
-			"input", f"order must be 1..3 (gmsh export limit), got {order}"))
-	if not _math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
-		return json.dumps(_error_payload(
-			"input", f"threshold must be finite and in [0, 1], got {threshold}"))
-	if timeout_s <= 0:
-		return json.dumps(_error_payload(
-			"input", f"timeout_s must be positive, got {timeout_s}"))
-	for name, value in (("netgen_maxh", netgen_maxh),
-	                    ("cubit_size", cubit_size)):
-		if not _math.isfinite(value) or value < 0.0:
-			return json.dumps(_error_payload(
-				"input", f"{name} must be finite and non-negative, got {value}"))
-	if schemes is None:
-		schemes = ["netgen", "cubit_tet", "cubit_hex"]
-	elif not isinstance(schemes, (list, tuple)) or not schemes:
-		return json.dumps(_error_payload(
-			"input", "schemes must be a non-empty list"))
-	schemes = [str(s) for s in schemes]
-	unknown = [s for s in schemes if s not in
-	           ("netgen", "cubit_tet", "cubit_hex")]
-	if unknown:
-		return json.dumps(_error_payload(
-			"input", f"unknown schemes: {unknown}; "
-			         "valid: netgen / cubit_tet / cubit_hex"))
-	if len(set(schemes)) != len(schemes):
-		return json.dumps(_error_payload(
-			"input", f"schemes contains duplicates: {schemes}"))
-	out_base = Path(out_dir) if out_dir else p.parent
-	if not out_base.is_absolute():
-		out_base = PROJECT_ROOT / out_base
-	try:
-		out_base.mkdir(parents=True, exist_ok=True)
-	except OSError as exc:
-		return json.dumps(_error_payload(
-			"input", f"cannot create out_dir {out_base}: {exc}"))
-	base = p.stem
-
-	# Common target size from the CAD bbox (same length for BOTH meshers)
-	if netgen_maxh == 0.0 or cubit_size == 0.0:
-		try:
-			from netgen.occ import OCCGeometry as _OCC
-			bb = _OCC(str(p)).shape.bounding_box
-			ext = max(bb[1][i] - bb[0][i] for i in range(3))
-			derived = ext / 8.0
-		except Exception:
-			derived = 0.0
-		if netgen_maxh == 0.0:
-			netgen_maxh = derived
-		if cubit_size == 0.0:
-			cubit_size = derived
-	if (not _math.isfinite(netgen_maxh) or netgen_maxh <= 0.0
-			or not _math.isfinite(cubit_size) or cubit_size <= 0.0):
-		return json.dumps(_error_payload(
-			"input", "could not derive a mesh size from the geometry; "
-			         "pass netgen_maxh and cubit_size explicitly"))
-
-	try:
-		from cubit_mesh_export.mcp._support.mesh_quality import mesh_quality
-	except ImportError as exc:
-		return json.dumps(_error_payload(
-			"referee", f"gmsh referee unavailable: {exc}",
-			kind="environment"))
-
-	rows = []
-
-	if "netgen" in schemes:
-		msh = out_base / f"{base}_netgen.msh"
-		try:
-			info = _netgen_mesh_to_msh(p, float(netgen_maxh), msh,
-			                           order=order)
-			q = mesh_quality(msh, threshold=threshold)
-			row = _quality_row("netgen", "netgen", q)
-			row["maxh"] = float(netgen_maxh)
-			row["order"] = order
-			row["msh"] = str(msh)
-			row.update(info)
-		except ImportError as exc:
-			row = {"route": "netgen", "status": "error",
-			       "kind": "environment",
-			       "error": f"netgen/ngsolve unavailable: {exc}"}
-		except Exception as exc:
-			row = {"route": "netgen", "status": "error", "kind": "input",
-			       "error": f"{type(exc).__name__}: {exc}"}
-		rows.append(row)
-
-	cubit_routes = [s for s in schemes if s.startswith("cubit_")]
-	for route in cubit_routes:
-		msh = out_base / f"{base}_{route}.msh"
-		msh_fwd = str(msh).replace("\\", "/")
-		cmds = []
-		if route == "cubit_tet":
-			cmds.append("volume all scheme tetmesh")
-		cmds += [f"volume all size {float(cubit_size)}",
-		         "mesh volume all",
-		         # export gmsh emits only BLOCK members -- an unblocked
-		         # mesh exports 0 elements (measured 2025.12).
-		         "block 1 add volume all",
-		         'block 1 name "mesh"',
-		         f'export gmsh "{msh_fwd}"'
-		         + (f" order {order}" if order > 1 else "")
-		         + " overwrite"]
-		r = _run_batch(str(p), cmds, timeout_s=timeout_s)
-		if r.get("status") != "ok":
-			rows.append({"route": route, "status": "error",
-			             "kind": r.get("kind", "input"),
-			             "error": r.get("error"),
-			             "failed_at": r.get("failed_at")})
-			continue
-		try:
-			q = mesh_quality(msh, threshold=threshold)
-			row = _quality_row(route, "cubit", q)
-			row["size"] = float(cubit_size)
-			row["order"] = order
-			row["msh"] = str(msh)
-			row["summary"] = r.get("summary")
-		except Exception as exc:
-			row = {"route": route, "status": "error",
-			       "kind": "referee",
-			       "error": f"{type(exc).__name__}: {exc}",
-			       "msh": str(msh)}
-		rows.append(row)
-
-	# Verdict: same-family comparison where possible
-	notes = []
-	def _min_of(route):
-		for row in rows:
-			if row.get("route") == route and row.get("by_type"):
-				values = [bt.get("min") for bt in row["by_type"]
-				          if isinstance(bt.get("min"), (int, float))]
-				return min(values) if values else None
-		return None
-	ng, ct = _min_of("netgen"), _min_of("cubit_tet")
-	if ng is not None and ct is not None:
-		better = "cubit_tet" if ct > ng else "netgen"
-		notes.append(
-			f"tet-vs-tet (same family, directly comparable): min minSICN "
-			f"netgen={ng:.3f} vs cubit_tet={ct:.3f} -> {better} has the "
-			"better worst element at this size")
-	if _min_of("cubit_hex") is not None:
-		notes.append(
-			"cubit_hex is a different element family -- report it as the "
-			"structured-mesh reference, not as a same-metric winner")
-
-	return json.dumps({
-		"status": "ok",
-		"all_routes_completed": bool(rows) and all(
-			row.get("status") == "ok" for row in rows),
-		"step": str(p),
-		"referee": "gmsh minSICN (cubit_mesh_export.mcp._support.mesh_quality.mesh_quality)",
-		"threshold": threshold,
-		"rows": rows,
-		"notes": notes,
-	}, ensure_ascii=False, indent=2, default=str)
-
-
-def _vol_surface_element_count(vol_path: Path) -> int:
-	"""Count boundary surface elements recorded in a Netgen `.vol` file.
-
-	The section header is `surfaceelements` (`...gi` / `...uv` variants for
-	geometry-informed exports) followed by the element count on its own
-	line.  Returns -1 when no section is present (a malformed export).
-	"""
-	tokens = ("surfaceelements", "surfaceelementsgi", "surfaceelementsuv")
-	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
-		for line in f:
-			if line.strip() in tokens:
-				try:
-					return int(next(f).strip())
-				except (StopIteration, ValueError):
-					return -1
-	return -1
-
-
-def _vol_surface_element_stats(vol_path: Path) -> dict:
-	"""Split a Netgen `.vol` surface section into OUTER and INTERFACE faces.
-
-	Each `surfaceelements` row is `surfnr bcnr domin domout np p1 ...`.
-	A face with one zero domain bounds the model (outer skin); a face with
-	two nonzero domains is a MATERIAL INTERFACE, which a multi-material
-	Sculpt mesh legitimately carries in addition to the skin.  Comparing
-	the raw total against the topological skin therefore only works for a
-	single material -- the outer count is the portable quantity.
-
-	When the rows cannot be classified (an unexpected layout), the result
-	falls back to ``outer == total`` with ``classified=False``, which
-	reproduces the historical single-material comparison rather than
-	inventing a split.  ``total`` is -1 when the section is missing.
-	"""
-	total = _vol_surface_element_count(vol_path)
-	fallback = {"total": total, "outer": total, "interface": 0,
-	            "classified": False}
-	if total <= 0:
-		return fallback
-	tokens = ("surfaceelements", "surfaceelementsgi", "surfaceelementsuv")
-	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
-		for line in f:
-			if line.strip() not in tokens:
-				continue
-			next(f)                      # the count line
-			outer = interface = 0
-			for _ in range(total):
-				try:
-					parts = next(f).split()
-				except StopIteration:
-					return fallback
-				if len(parts) < 4:
-					return fallback
-				try:
-					domin, domout = int(parts[2]), int(parts[3])
-				except ValueError:
-					return fallback
-				if domin and domout:
-					interface += 1
-				else:
-					outer += 1
-			return {"total": total, "outer": outer,
-			        "interface": interface, "classified": True}
-	return fallback
-
-
-def _vol_points(vol_path: Path):
-	"""Read the `points` section of a Netgen `.vol` as an (n, 3) array."""
-	import numpy as np
-
-	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
-		for line in f:
-			if line.strip() != "points":
-				continue
-			try:
-				count = int(next(f).strip())
-			except (StopIteration, ValueError):
-				return None
-			rows = []
-			for _ in range(count):
-				try:
-					parts = next(f).split()
-				except StopIteration:
-					return None
-				if len(parts) < 3:
-					return None
-				try:
-					rows.append([float(parts[0]), float(parts[1]),
-					             float(parts[2])])
-				except ValueError:
-					return None
-			return np.asarray(rows, dtype=float)
-	return None
-
-
-def _periodic_node_match(vol_path: Path, period: list, cell: list) -> dict:
-	"""Measure whether a mesh's node set is invariant under the period.
-
-	The property that makes a periodic cell tile CONFORMALLY is not "the
-	boundary is flat" -- Sculpt deliberately leaves it ragged -- but that
-	the nodes on one period face are the nodes of the opposite face,
-	translated.  So for each axis, count the nodes whose image under
-	+period and under -period is again a node.  Those two counts are the
-	two sides of one bijection, so an exactly periodic mesh gives
-	`matched_plus == matched_minus`, and the matched set IS the seam that
-	two tiled copies share.
-
-	Returns ``ok=False`` with a reason when the measurement cannot run
-	(missing dependency / unreadable file) rather than guessing.
-	"""
-	try:
-		import numpy as np
-		from scipy.spatial import cKDTree
-	except ImportError as exc:
-		return {"ok": False, "reason": f"missing dependency: {exc}",
-		        "axes": []}
-	# Measure the SOLVER artifact (the exported `.vol`), not the Sculpt
-	# Exodus: the property has to survive the import/export round trip to
-	# be usable, and it does (verified 163/163 on both, 2026-08-10).
-	points = _vol_points(vol_path)
-	if points is None or points.size == 0:
-		return {"ok": False,
-		        "reason": f"cannot read points from {vol_path.name}",
-		        "axes": []}
-	# Tolerance RELATIVE TO THE PERIOD, so the measurement does not change
-	# meaning with the model's unit.  Measured 2026-08-10 on a 0.02 m RVE:
-	# the matched count is 163 on a plateau from 1e-9 to 1e-6 ABSOLUTE and
-	# collapses to 2 at 1e-11 -- the exodus -> Cubit -> `.vol` round trip
-	# perturbs coordinates by ~1e-10.  1e-6 of the period sits well inside
-	# that plateau and is still ~1e-4 of a cell, so it cannot fuse
-	# genuinely distinct nodes.
-	span = float(min(abs(float(length)) for length in period))
-	tol = 1e-6 * span if span > 0.0 else 1e-9
-	tree = cKDTree(points)
-	axes = []
-	consistent = True
-	for index, length in enumerate(period):
-		shift = np.zeros(3)
-		shift[index] = float(length)
-		plus, _ = tree.query(points + shift)
-		minus, _ = tree.query(points - shift)
-		matched = plus < tol
-		n_plus = int(matched.sum())
-		n_minus = int((minus < tol).sum())
-		# SEAM FILL RATE -- the discriminating statistic.  Equal +/- counts
-		# alone do not prove periodicity: a NON-periodic Sculpt mesh still
-		# has a few lattice corners that survive untouched on both faces
-		# (measured 9 of them).  What a periodic mesh has is a COMPLETE
-		# seam: essentially every node within half a cell of the period
-		# plane owns a partner (measured 125/125 = 1.000 periodic vs
-		# 9/147 = 0.061 plain, same input).
-		half = 0.5 * float(cell[index])
-		near = points[:, index] < points[:, index].min() + half
-		n_near = int(near.sum())
-		rate = float((near & matched).sum()) / n_near if n_near else 0.0
-		axes.append({"axis": "xyz"[index], "period": float(length),
-		             "matched_plus": n_plus, "matched_minus": n_minus,
-		             "seam_candidates": n_near, "seam_fill_rate": rate,
-		             "n_nodes": int(len(points))})
-		if n_plus != n_minus:
-			consistent = False
-	return {"ok": consistent, "tolerance": tol, "axes": axes,
-	        "reason": "" if consistent else
-	                  "matched node counts differ between +period and "
-	                  "-period: the seam is not a bijection"}
-
-
-def _classify_rve_sidesets(exodus_path: Path, lo: list, hi: list,
-                           cell: list) -> tuple[dict, str]:
-	"""Classify a Sculpt RVE Exodus' sidesets against the six period faces.
-
-	Returns ``(names_by_sideset_id, error)``.  Per the Probe-Don't-Guess
-	policy the face assignment is DERIVED from the data, never assumed
-	from the id order: each sideset's mean ELEMENT CENTROID is compared
-	against the six box-face planes -- the first hex layer hugs its plane
-	within ~1.5 cells while every other candidate is >= half the box away,
-	so the discrimination is unambiguous or loudly not.  Sidesets matching
-	no face (the material skin, and material interfaces under multi-
-	material RVE modes) are named ``skin``, ``skin_2``, ...  The caller
-	must still verify the FINAL ``.vol`` labels geometrically
-	(`_vol_bcname_face_stats`) -- the Exodus-side classification and the
-	.vol-side verification are independent, so a Cubit import re-numbering
-	or an Exodus side-map surprise cannot slip through silently.
-	"""
-	import numpy as np
-
-	try:
-		import netCDF4 as nc
-	except ImportError:
-		return {}, "netCDF4 is required to classify RVE sidesets"
-	try:
-		ds = nc.Dataset(str(exodus_path))
-	except OSError as exc:
-		return {}, f"cannot open Sculpt Exodus {exodus_path.name}: {exc}"
-	try:
-		coords = np.column_stack([
-			np.asarray(ds.variables[name][:], dtype=float)
-			for name in ("coordx", "coordy", "coordz")])
-		block_ids = [int(v) for v in np.asarray(ds.variables["eb_prop1"][:])]
-		conn = []
-		for index in range(len(block_ids)):
-			conn.append(np.asarray(
-				ds.variables[f"connect{index + 1}"][:], dtype=int))
-		# global element order = blocks concatenated in eb_prop1 order
-		centroids = np.concatenate([
-			coords[c - 1].mean(axis=1) for c in conn], axis=0)
-		sideset_ids = ([int(v) for v in
-		                np.asarray(ds.variables["ss_prop1"][:])]
-		               if "ss_prop1" in ds.variables else [])
-		per_sideset = {}
-		for index, sid in enumerate(sideset_ids):
-			elems = np.asarray(
-				ds.variables[f"elem_ss{index + 1}"][:], dtype=int)
-			if elems.size == 0:
-				return {}, f"sideset {sid} in the Sculpt Exodus is empty"
-			per_sideset[sid] = centroids[elems - 1].mean(axis=0)
-	except (KeyError, IndexError, ValueError) as exc:
-		return {}, f"cannot read sideset topology from the Sculpt " \
-		           f"Exodus: {exc}"
-	finally:
-		ds.close()
-	if len(per_sideset) < 6:
-		return {}, (f"periodic RVE expects at least the six period-face "
-		            f"sidesets, got {sorted(per_sideset)} -- Sculpt's "
-		            "rve sideset mode did not fire")
-	# nearest-plane score per (face, sideset); accept only a clear winner
-	faces = [("rve_xmin", 0, lo[0], +1), ("rve_xmax", 0, hi[0], -1),
-	         ("rve_ymin", 1, lo[1], +1), ("rve_ymax", 1, hi[1], -1),
-	         ("rve_zmin", 2, lo[2], +1), ("rve_zmax", 2, hi[2], -1)]
-	names = {}
-	for name, axis, plane, sign in faces:
-		best, second = None, None
-		for sid, c in per_sideset.items():
-			score = abs(c[axis] - (plane + sign * 0.5 * cell[axis]))
-			if best is None or score < best[1]:
-				best, second = (sid, score), best
-			elif second is None or score < second[1]:
-				second = (sid, score)
-		if best is None or best[1] > 2.0 * cell[axis]:
-			return {}, (f"no sideset lies on the {name} plane "
-			            f"(best distance {best[1] if best else 'n/a'})")
-		if best[0] in names:
-			return {}, (f"sideset {best[0]} classified as both "
-			            f"{names[best[0]]} and {name} -- ambiguous RVE "
-			            "face layout")
-		names[best[0]] = name
-	skin_index = 0
-	for sid in sorted(per_sideset):
-		if sid in names:
-			continue
-		skin_index += 1
-		names[sid] = "skin" if skin_index == 1 else f"skin_{skin_index}"
-	return names, ""
-
-
-def _closure_miss_diagnosis(nel: list, closure: float,
-                            tolerance: float) -> dict:
-	"""Explain a closure miss WITHOUT prescribing a fix.
-
-	The gate compares the mesh against the VOLUME-FRACTION INTEGRAL, so it
-	certifies the MESHER, not the geometry.  Measured 2026-08-11 on a
-	6-pole ring whose analytic volume is known (design mesh nz=10):
-
-	    cells=56  gate 1.27e-2 FAIL  mesh-vs-analytic 1.6e-3
-	    cells=92  gate 3.7e-3  pass  mesh-vs-analytic 1.8e-2
-
-	Refining the lattice made the gate pass while moving the mesh an order
-	of magnitude FURTHER from the true geometry -- the fraction field was
-	itself the inaccurate quantity (its own error vs analytic went
-	1.1e-2 -> 1.4e-2), because sampling an under-resolved design field on
-	a finer lattice aliases rather than resolves.  So this names both
-	candidate knobs and recommends neither.
-	"""
-	ratio = float(closure) / float(tolerance)
-	return {
-		"lattice_cells": [int(v) for v in nel],
-		"cells_if_mesher_limited": min(
-			512, int(_math.ceil(max(nel) * 1.2 * max(ratio, 1.0)))),
-		"note": (
-			"This gate compares the mesh against the volume-fraction "
-			"integral, so a miss means the MESHER did not reproduce the "
-			"fractions -- it does NOT mean the mesh is far from your "
-			"geometry, and a finer lattice is not automatically the fix. "
-			"Two knobs can be limiting: (1) the Sculpt lattice (raise "
-			"write_vfrac_exodus(cells=...) toward "
-			"cells_if_mesher_limited); (2) the DESIGN MESH the occupancy "
-			"field lives on -- if its element size is coarser than the "
-			"lattice cell, a finer lattice samples the same "
-			"under-resolved field and can make the mesh WORSE while "
-			"making this gate pass (measured on a thin-gap pole ring: "
-			"cells 56 -> 92 turned a 1.27 % failure into a 0.37 % pass "
-			"while the error against the ANALYTIC volume grew from "
-			"0.16 % to 1.8 %). Refine the design mesh first when the body "
-			"has features thinner than a few design elements, and confirm "
-			"a new geometry family against an independent reference "
-			"(analytic volume, or a converged run) rather than against "
-			"this gate alone."),
-	}
-
-
-def _vol_bcname_face_stats(vol_path: Path) -> dict:
-	"""Per-boundary-NAME face-node statistics of a Netgen ``.vol``.
-
-	Maps ``bcnames`` (surface nr -> name) onto the ``surfaceelements``
-	rows and aggregates the referenced node coordinates per NAME:
-	``{name: {n_faces, mean[3], lo[3], hi[3]}}``.  This is the
-	.vol-side verifier for RVE boundary labels -- a ``rve_xmin`` whose
-	faces do not hug the x-min plane means the naming went to the wrong
-	sideset, whatever the Exodus-side classification believed.
-	"""
-	import numpy as np
-
-	points = _vol_points(vol_path)
-	if points is None:
-		return {}
-	bcnames = {}
-	rows = []
-	tokens = ("surfaceelements", "surfaceelementsgi", "surfaceelementsuv")
-	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
-		lines = iter(f)
-		for line in lines:
-			stripped = line.strip()
-			if stripped == "bcnames":
-				try:
-					count = int(next(lines).strip())
-					for _ in range(count):
-						parts = next(lines).split()
-						if len(parts) >= 2:
-							bcnames[int(parts[0])] = parts[1]
-				except (StopIteration, ValueError):
-					return {}
-			elif stripped in tokens:
-				try:
-					count = int(next(lines).strip())
-					for _ in range(count):
-						parts = next(lines).split()
-						if len(parts) < 5:
-							return {}
-						np_nodes = int(parts[4])
-						rows.append((int(parts[1]),
-						             [int(v) for v in
-						              parts[5:5 + np_nodes]]))
-				except (StopIteration, ValueError, IndexError):
-					return {}
-	stats = {}
-	for bcnr, nodes in rows:
-		name = bcnames.get(bcnr, f"bc_{bcnr}")
-		entry = stats.setdefault(name, {"n_faces": 0, "node_ids": []})
-		entry["n_faces"] += 1
-		entry["node_ids"].extend(nodes)
-	for entry in stats.values():
-		ids = np.unique(np.asarray(entry.pop("node_ids"), dtype=int)) - 1
-		block = points[ids]
-		entry["mean"] = [float(v) for v in block.mean(axis=0)]
-		entry["lo"] = [float(v) for v in block.min(axis=0)]
-		entry["hi"] = [float(v) for v in block.max(axis=0)]
-	return stats
-
-
-def _per_material_closure(vol_path: Path, per_material: list,
-                          tolerance: float) -> tuple[dict, str]:
-	"""Gate each material block's meshed volume against its OWN vfrac
-	integral.  The total-volume closure cannot see a partition bias (core
-	over-meshed at the shell's expense conserves the sum), yet the
-	per-region ``mu_r`` solve is only as trustworthy as the per-region
-	geometry.  NGSolve is the authority (ordering-safe hex volumes);
-	it is a hard dependency of every consumer of this mesh anyway.
-	Returns ``({name: {...}}, error)``.
-	"""
-	try:
-		import ngsolve as ng
-	except ImportError:
-		return {}, ("ENVIRONMENT: ngsolve is required for the "
-		            "per-material closure gate of a multi-material mesh")
-	try:
-		with ng.TaskManager():
-			mesh = ng.Mesh(str(vol_path))
-			report = {}
-			for entry in per_material:
-				name = entry["name"]
-				v_mesh = float(ng.Integrate(
-					ng.CF(1.0), mesh,
-					definedon=mesh.Materials(name)))
-				v_ref = float(entry["v_vfrac"])
-				if v_ref <= 0.0:
-					return {}, (f"material {name!r} carries no vfrac "
-					            "volume; cannot gate its closure")
-				closure = abs(v_mesh - v_ref) / v_ref
-				report[name] = {
-					"mesh_volume": v_mesh, "vfrac_volume": v_ref,
-					"closure": closure,
-					"ok": bool(closure <= tolerance)}
-	except Exception as exc:                      # noqa: BLE001
-		return {}, f"per-material closure evaluation failed: {exc}"
-	return report, ""
-
-
-def _collect_mesh_gates(msh: Path, vol: Path, v_reference: float,
-                        closure_tolerance: float) -> tuple[dict, dict]:
-	"""Shared solver-mesh gates: closure vs a reference volume, inversion,
-	and the exported-skin match (guards the silent-no-surface-charge class).
-	Returns (verification_error_or_None, gates, metrics); min quality is
-	reported, never gated.  The verification guards (inspection actually
-	ran, mesh volume finite) are part of the bf8ab4c0b hardening."""
-	from cubit_mesh_export.mcp._support.mesh_quality import mesh_quality, mesh_total_volume
-	vol_report = mesh_total_volume(msh)
-	quality = mesh_quality(msh)
-	if not vol_report.get("ran") or not vol_report.get("ok"):
-		return ({**_error_payload(
-			"verification", "gmsh volume integration failed"),
-			"volume_report": vol_report}, {}, {})
-	if not quality.get("ran") or not quality.get("applicable"):
-		return ({**_error_payload(
-			"verification", "gmsh mesh-quality inspection failed"),
-			"quality_report": quality}, {}, {})
-	v_mesh = float(vol_report.get("total_volume") or 0.0)
-	if not _math.isfinite(v_mesh) or v_mesh <= 0.0:
-		return ({**_error_payload(
-			"verification", "mesh volume is non-finite or non-positive"),
-			"volume_report": vol_report}, {}, {})
-	closure = abs(v_mesh - v_reference) / v_reference
-	negative = int(quality.get("total_negative") or 0)
-	min_det = vol_report.get("min_jacobian_det")
-	surf = _vol_surface_element_stats(vol)
-	vol_boundary = surf["total"]
-	skin_faces = (quality.get("mesh_stats") or {}).get("n_boundary_faces")
-	gates = {
-		"closure_ok": bool(closure <= closure_tolerance),
-		"no_inverted_elements": negative == 0 and (min_det or 0.0) > 0.0,
-		# The OUTER faces must reproduce the topological skin exactly (this
-		# is the silent-no-surface-charge guard).  A multi-material mesh
-		# additionally carries its material-interface faces, so the raw
-		# total legitimately exceeds the skin -- compare the split, not the
-		# total (measured 2026-08-10: 894 skin + 190 interface on a
-		# two-material Sculpt sphere).
-		"boundary_faces_ok": bool(
-			surf["outer"] > 0 and skin_faces is not None
-			and surf["outer"] == int(skin_faces)),
-	}
-	metrics = {
-		"mesh_volume": v_mesh, "closure": closure,
-		"closure_tolerance": closure_tolerance,
-		"total_negative": negative, "min_jacobian_det": min_det,
-		"vol_boundary_faces": vol_boundary,
-		"vol_outer_faces": surf["outer"],
-		"vol_interface_faces": surf["interface"],
-		"vol_faces_classified": surf["classified"],
-		"msh_skin_faces": skin_faces,
-		"by_type": [
-			{"element": bt.get("name"), "n": bt.get("n_elements"),
-			 "min": bt.get("min_quality"), "mean": bt.get("mean_quality")}
-			for bt in quality.get("by_type", [])
-		],
-		"dof_estimate": (quality.get("mesh_stats") or {}).get(
-			"dof_estimate"),
-	}
-	return None, gates, metrics
-
-
-def _sculpt_quality_keywords(gq_iters: int, gq_threshold: float,
-                             pillow_surfaces: bool, defeature: int,
-                             min_vol_cells: int, *, cli: bool) -> list:
-	"""Vetted Sculpt quality knobs -> in-Cubit keywords or standalone CLI
-	args.  The names are IDENTICAL in both surfaces (verified against
-	`help sculpt parallel` and `sculpt.exe -h`, Coreform Cubit 2025.12);
-	only the spelling differs (keyword string vs --flag value)."""
-	out: list = []
-	if gq_iters:
-		out += (["--max_gq_iters", str(int(gq_iters)),
-		         "--gq_threshold", str(float(gq_threshold))] if cli else
-		        [f"max_gq_iters {int(gq_iters)}",
-		         f"gq_threshold {float(gq_threshold)}"])
-	if pillow_surfaces:
-		out += ["--pillow_surfaces"] if cli else ["pillow_surfaces"]
-	if defeature:
-		out += (["--defeature", str(int(defeature))] if cli else
-		        [f"defeature {int(defeature)}"])
-	if min_vol_cells:
-		out += (["--min_vol_cells", str(int(min_vol_cells))] if cli else
-		        [f"min_vol_cells {int(min_vol_cells)}"])
-	return out
-
-
-@mcp.tool()
-def cubit_stl_to_vol(stl_path: str,
-                     scheme: str = "tet",
-                     size: float = 0.0,
-                     out_vol: str = "",
-                     out_msh: str = "",
-                     closure_tolerance: float = 0.03,
-                     gq_iters: int = 0,
-                     gq_threshold: float = 0.2,
-                     pillow_surfaces: bool = False,
-                     defeature: int = 0,
-                     min_vol_cells: int = 0,
-                     timeout_s: int = 900) -> str:
-	"""
-	Mesh a watertight STL into a solver-ready Netgen `.vol` (all-hex via
-	Sculpt, or tet via tetmesh), with closure and quality gates.
-
-	This is the MESH-side half of the topology-optimization shape
-	regeneration loop.  The DESIGN-side half lives in the radia wheel
-	(`radia.topopt_cad`): a per-element density becomes a nodal level set
-	and then a watertight STL (grid marching-cubes route, or the Cubit
-	`create tri iso` route via `write_levelset_exodus`).  This tool closes
-	the loop: STL -> `import stl` -> mesh -> `export netgen` -> gates.
-
-	Routes (headless batch Cubit, per the driving policy):
-	  * scheme="hex" -- `sculpt volume all processors 1 size <s>
-	    gen_sidesets 2` followed
-	    by `create mesh geometry hex all feature_angle 135` and
-	    `delete volume with not is_meshed` (overlay-grid all-hex; works on
-	    faceted geometry with no sweepable topology, which is exactly what
-	    a topology-optimized body is).  `gen_sidesets 2` is the boundary
-	    contract; mesh-based geometry supplies additional ownership metadata.
-	    The exporter preserves direct/free tri/quad faces and deduplicates any
-	    equal geometry-owned faces.  It derives DomainIn/DomainOut from adjacent
-	    block elements, so one sideset spanning disconnected materials is split
-	    into valid domain-aware descriptors.  Free-mesh block labels are reported
-	    as `mesh_only_materials` instead of false zero CAD-volume references, and
-	    imported CAD curves with no exported BBND segment do not contribute stale
-	    edge-length references.  Older exporters ignored the free faces
-	    and could write a `.vol` with ZERO boundary elements, which a
-	    charge-based solver consumed silently as "no surface charge".
-	    Measured closure depends on Sculpt size and is reported by the gate.
-	  * scheme="tet" -- `volume all scheme tetmesh` + `size` (tets mesh the
-	    faceted STL surface directly, so boundary tris are exported
-	    naturally).  Measured closure: ~1-2 %.  NOTE netgen's own
-	    STLGeometry REJECTS marching-cubes STL ("STL Triangle degenerated",
-	    0 tets, even after weld + Taubin smoothing -- measured 2026-08-08);
-	    Cubit is the supported tet route for such surfaces, not netgen.
-
-	Gates (fail -> status="gate_failed", artifacts kept for inspection):
-	  * closure: |V_mesh - V_stl| / V_stl <= closure_tolerance, where
-	    V_mesh is the gmsh Jacobian-integrated volume of the exported
-	    `.msh` and V_stl the watertight STL volume (trimesh).
-	  * inversion: gmsh minSICN `negative == 0` and min Jacobian det > 0.
-	  * boundary faces: the exported `.vol` must carry the complete mesh
-	    skin as surface elements (count > 0 and equal to the `.msh`
-	    topological skin) -- guards the silent-no-surface-charge failure
-	    above.
-	  * min_quality is REPORTED, not gated (one number is one sample --
-	    see cubit_netgen_quality_compare's interpretation notes).
-
-	When `size` is 0 a size is derived as bbox_diagonal / 30.  `out_vol` /
-	`out_msh` default next to the STL.  The `.msh` is always produced (it
-	carries the referee's volume and quality numbers).
-
-	Args:
-	    stl_path: watertight STL (the tool re-checks watertightness).
-	    scheme: "hex" (Sculpt) or "tet" (tetmesh).
-	    size: element size (0 = derive from bbox).
-	    out_vol/out_msh: output paths (default: beside the STL).
-	    closure_tolerance: relative volume-closure gate (default 3 %,
-	        matching the levelset-sculpt validation gate).
-	    gq_iters/gq_threshold: Sculpt guaranteed-quality smoothing
-	        iterations / minimum scaled-Jacobian target (hex scheme only;
-	        0 iters = off).
-	    pillow_surfaces: Sculpt pillow layers at surfaces (hex only).
-	    defeature/min_vol_cells: Sculpt defeaturing stage / minimum cells
-	        per disconnected component (hex only; drops topopt debris).
-
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-	"""
-	p = Path(stl_path)
-	if not p.is_absolute():
-		p = PROJECT_ROOT / p
-	if not p.is_file():
-		return json.dumps(_error_payload("input", f"STL not found: {p}"))
-	if scheme not in ("hex", "tet"):
-		return json.dumps(_error_payload(
-			"input", f"scheme must be 'hex' or 'tet', got {scheme!r}"))
-	# Numeric contract BEFORE the (subprocess) STL inspection -- restored
-	# from the bf8ab4c0b hardening, which a rebase-rescue conflict
-	# resolution had clobbered (2026-08-10).
-	try:
-		size = float(size)
-		closure_tolerance = float(closure_tolerance)
-		timeout_s = float(timeout_s)
-	except (TypeError, ValueError) as exc:
-		return json.dumps(_error_payload(
-			"input", f"numeric argument is invalid: {exc}"))
-	if not _math.isfinite(size) or size < 0.0:
-		return json.dumps(_error_payload(
-			"input", f"size must be 0 (auto) or finite and positive, got {size}"))
-	if not _math.isfinite(closure_tolerance) or closure_tolerance < 0.0:
-		return json.dumps(_error_payload(
-			"input", "closure_tolerance must be finite and nonnegative"))
-	if not _math.isfinite(timeout_s) or timeout_s <= 0.0:
-		return json.dumps(_error_payload(
-			"input", "timeout_s must be finite and positive"))
-	inspection = _inspect_stl(p, timeout_s=min(float(timeout_s), 120.0))
-	if not inspection.get("ok"):
-		kind = str(inspection.get("kind") or "input")
-		stage = "environment" if kind in ("environment", "timeout") else "input"
-		return json.dumps(_error_payload(
-			stage, str(inspection.get("error") or "cannot inspect STL"),
-			kind=kind,
-			hint="pip install trimesh" if kind == "environment" else None))
-	if not inspection.get("watertight", False):
-		return json.dumps(_error_payload(
-			"input", "STL is not watertight; a closed surface is required "
-			"for a volume mesh (radia.topopt_cad.iso_stl_from_grid raises "
-			"on non-watertight output -- regenerate the surface)"))
-	if not inspection.get("winding_consistent", False):
-		return json.dumps(_error_payload(
-			"input", "STL winding is inconsistent; repair face orientation "
-			"before volume meshing"))
-	v_stl = float(inspection.get("volume") or 0.0)
-	if not _math.isfinite(v_stl) or v_stl <= 0.0:
-		return json.dumps(_error_payload(
-			"input", "STL volume is non-finite or zero"))
-
-	if not size or size <= 0.0:
-		bounds = inspection.get("bounds") or []
-		if len(bounds) != 2 or len(bounds[0]) != 3 or len(bounds[1]) != 3:
-			return json.dumps(_error_payload(
-				"input", "STL inspector did not return a 3D bounding box"))
-		ext = [float(hi) - float(lo)
-		       for lo, hi in zip(bounds[0], bounds[1])]
-		size = float(sum(value * value for value in ext) ** 0.5 / 30.0)
-		if not _math.isfinite(size) or size <= 0.0:
-			return json.dumps(_error_payload(
-				"input", "STL bounding box cannot define a positive mesh size"))
-
-	# absolutize AND resolve like stl_path: the journal embeds these paths
-	# while the Cubit process runs with cwd=vol.parent, so a RELATIVE out
-	# path would resolve against itself (nested dir for .vol, "Cannot open
-	# file" for .msh -- measured 2026-08-09 from a notebook kernel)
-	def _output_path(raw: str, default: Path) -> Path:
-		candidate = Path(raw) if raw else default
-		if not candidate.is_absolute():
-			candidate = PROJECT_ROOT / candidate
-		# no .resolve(): on this NAS-mapped tree it rewrites S: into the
-		# UNC form, breaking the journal-embedded path contract (the
-		# 2026-08-09 relative-out-path fix owns the absolutize semantics)
-		return candidate
-
-	vol = _output_path(out_vol, p.with_suffix(f".{scheme}.vol"))
-	msh = _output_path(out_msh, p.with_suffix(f".{scheme}.msh"))
-	path_keys = [os.path.normcase(str(path)) for path in (p, vol, msh)]
-	if len(set(path_keys)) != 3:
-		return json.dumps(_error_payload(
-			"input", "stl_path, out_vol, and out_msh must be distinct paths"))
-	stl_fwd = str(p).replace("\\", "/")
-	cmds = [f'import stl "{stl_fwd}" feature_angle 135 merge']
-	if scheme == "tet":
-		cmds += ["volume all scheme tetmesh",
-		         f"volume all size {size}", "mesh volume all"]
-	else:
-		# Keep both representations: gen_sidesets is the explicit free-skin
-		# contract, while mesh geometry supplies ownership metadata.  The
-		# exporter deduplicates equal faces.  Drop the unmeshed import volume
-		# by predicate, never by a hardcoded id.
-		extra = _sculpt_quality_keywords(gq_iters, gq_threshold,
-		                                 pillow_surfaces, defeature,
-		                                 min_vol_cells, cli=False)
-		sculpt_cmd = (f"sculpt volume all processors 1 size {size} "
-		              f"gen_sidesets 2")
-		if extra:
-			sculpt_cmd += " " + " ".join(extra)
-		cmds += [sculpt_cmd,
-		         "create mesh geometry hex all feature_angle 135",
-		         "delete volume with not is_meshed"]
-	cmds += ["block 1 add volume all", 'block 1 name "iron"',
-	         f'export netgen "{str(vol).replace(chr(92), "/")}" '
-	         f"order 1 overwrite",
-	         f'export gmsh "{str(msh).replace(chr(92), "/")}" '
-	         f"dimension 3 order 1 overwrite"]
-	for output in (vol, msh):
-		output.parent.mkdir(parents=True, exist_ok=True)
-		try:
-			output.unlink(missing_ok=True)
-		except OSError as exc:
-			return json.dumps(_error_payload(
-				"output", f"cannot replace stale output {output}: {exc}"))
-	r = _cs.run_headless_journal(
-		cmds, timeout_s=timeout_s, working_directory=vol.parent)
-	if r.get("status") == "error":
-		return json.dumps({**_error_payload("cubit", "batch meshing failed"),
-		                   "process": r,
-		                   "commands": cmds}, default=str)
-	if not vol.is_file() or not msh.is_file():
-		return json.dumps({**_error_payload(
-			"cubit", f"export did not produce {vol.name} / {msh.name} "
-			"(check process diagnostics)"),
-			"process": r}, default=str)
-
-	verification_error, gates, metrics = _collect_mesh_gates(
-		msh, vol, v_stl, closure_tolerance)
-	if verification_error is not None:
-		return json.dumps(verification_error, default=str)
-	return json.dumps({
-		"status": "ok" if all(gates.values()) else "gate_failed",
-		"gates": gates,
-		"scheme": scheme, "size": size,
-		"stl": str(p), "vol": str(vol), "msh": str(msh),
-		"stl_volume": v_stl,
-		**metrics,
-		"process": {
-			"exit_code": r.get("exit_code"),
-			"console": r.get("console"),
-			"headless_flags": r.get("headless_flags"),
-			"gui_started": r.get("gui_started"),
-		},
-		"note": ("min quality is reported, not gated; gate on inverted "
-		         "elements and closure (mesh-quality study finding)"),
-	}, ensure_ascii=False, indent=2, default=str)
-
-
-@mcp.tool()
-def cubit_vfrac_to_vol(vfrac_path: str,
-                       out_vol: str = "",
-                       out_msh: str = "",
-                       material_names: str = "",
-                       closure_tolerance: float = 0.01,
-                       periodic: bool = False,
-                       smooth_method: int = 0,
-                       gq_iters: int = 0,
-                       gq_threshold: float = 0.2,
-                       pillow_surfaces: bool = False,
-                       defeature: int = 0,
-                       min_vol_cells: int = 0,
-                       timeout_s: int = 900) -> str:
-	"""Mesh a volume-fraction Exodus (``radia.topopt_cad.write_vfrac_exodus``)
-	into a solver-ready all-hex Netgen `.vol` via standalone Sculpt.
-
-	Sculpt is natively a volume-fraction mesher; this route feeds the
-	design occupancy DIRECTLY (``sculpt.exe --input_vfrac``), skipping
-	marching cubes and STL entirely.  Sculpt's interface reconstruction
-	places the boundary sub-cell from the fractions: measured on a voxel
-	sphere, the meshed material volume tracked the input fractions to
-	~1e-4 relative (0/1 SPN input of the same body: -8 % smoothing
-	shrink; marching-cubes STL route: percent-level closure).  The
-	default closure gate is therefore 1 %, tighter than the STL route's
-	3 %.
-
-	Pipeline: read + validate the vfrac Exodus (single MAT_1 + VOID
-	contract; the closure reference is the fraction integral) ->
-	``sculpt.exe -ivf`` (exodus in PHYSICAL coordinates; ``-SS 2``
-	sidesets; optional quality knobs) -> ``import mesh geometry`` into
-	headless Cubit -> block named ``iron`` -> ``export netgen`` +
-	``export gmsh`` -> the same gates as ``cubit_stl_to_vol`` (closure
-	vs the vfrac integral, inversion, exported-skin match).
-
-	MULTI-MATERIAL: a vfrac Exodus carrying ``MAT_1..MAT_N`` produces one
-	Sculpt block per material with a CONFORMAL hex interface between them
-	(shared nodes -- an STL route would have to boolean two surfaces).
-	``material_names`` labels them in ``MAT_<id>`` order; the labels ride
-	through ``export netgen`` into the ``.vol`` material names, which is
-	what per-region ``vim.Solve(mesh, mu_r={name: value})`` and
-	``hdiv_vim_demag_eval(mu_r="core=1000,shell=50")`` consume.
-
-	Args:
-	    vfrac_path: the ``.e.1.0`` file or its base name.
-	    out_vol/out_msh: output paths (default: beside the input).
-	    material_names: comma-separated block labels in ``MAT_<id>`` order
-	        (default: "iron" for one material, ``mat_1..mat_N`` otherwise).
-	    closure_tolerance: relative volume gate vs the vfrac integral.
-	    periodic: build a PERIODIC RVE (`--periodic` plus the six RVE
-	        sideset/nodeset groups).  On the Cartesian route the period is
-	        the vfrac grid box itself -- `--periodic_axis` /
-	        `--periodic_nodesets` are for the unstructured `--input_mesh`
-	        route and are ignored here, so this is TRANSLATIONAL
-	        periodicity in all three directions.  The geometry must
-	        actually be periodic on that box (Sculpt's own
-	        `check_periodic` is ON by default and fails otherwise), and the
-	        writer must have been given `bounds=` so the grid spans exactly
-	        one period.  The mesh boundary comes out deliberately RAGGED --
-	        it is not projected onto the box planes, which is what lets
-	        opposite faces carry matching nodes.  The report then measures
-	        that matching (`periodic_node_match`).  The six period-face
-	        sidesets are additionally CLASSIFIED (probed against the grid
-	        box, never assumed from the id order) and NAMED, so the `.vol`
-	        arrives with contract-grade boundary labels ``rve_xmin`` ..
-	        ``rve_zmax`` plus ``skin`` for the interior surface -- the
-	        ragged faces are unidentifiable by coordinate filters, so this
-	        is the only reliable handle for periodic BCs and strict label
-	        contracts on an RVE mesh.  Gate ``rve_labels_ok`` re-verifies
-	        the final labels geometrically from the `.vol` itself.
-	    smooth_method: Sculpt ``--smooth`` override (0 = Sculpt default;
-	        8 projects to the interpolated interface surface per the
-	        Coreform docs -- try it when boundary fidelity matters more
-	        than smoothness).
-	    gq_iters/gq_threshold: guaranteed-quality smoothing iterations /
-	        minimum scaled-Jacobian target (0 iters = off).
-	    pillow_surfaces: insert pillow layers at material surfaces.
-	    defeature/min_vol_cells: automatic defeaturing stage / minimum
-	        cells per disconnected component (drops topopt debris).
-	    timeout_s: per-stage subprocess timeout.
-
-	Gates beyond the shared trio: a MULTI-material mesh additionally
-	gates EACH block against its own vfrac integral
-	(``per_material_closure_ok`` -- the total conserves a partition bias,
-	so a region-level regeneration error would otherwise be invisible to
-	the per-region ``mu_r`` solve); a PERIODIC mesh gates the seam
-	bijection/fill (``periodic_nodes_match``) and the boundary labels
-	(``rve_labels_ok``).
-
-	WHAT THE CLOSURE GATE MEANS: it compares the mesh against the
-	VOLUME-FRACTION INTEGRAL, i.e. it certifies the MESHER, not the
-	geometry.  A miss emits ``closure_miss_diagnosis`` naming BOTH
-	candidate knobs (the Sculpt lattice and the DESIGN MESH the occupancy
-	field lives on) precisely because raising ``cells`` is not
-	automatically the fix -- measured on a thin-gap pole ring, going
-	cells 56 -> 92 turned a 1.27 % gate failure into a 0.37 % pass while
-	moving the mesh from 0.16 % to 1.8 % away from the ANALYTIC volume.
-	When the design field is under-resolved, a finer lattice aliases it
-	rather than resolving it.  Validate a new geometry family against an
-	independent reference once, not against this gate alone.
-
-	Sculpt ADAPTIVITY is deliberately NOT exposed: measured on Cubit
-	2025.12 (2026-08-11, 6-pole ring), ``--adapt_type vfrac_average``
-	either exits "No elements created" (coarse base grids, all level/
-	threshold settings) or silently loses 97 % of the material volume
-	(fine grids), and ``vfrac_difference`` never triggers refinement --
-	resolution control on this route is the lattice ``cells`` plus the
-	``closure_miss_diagnosis`` feedback above.
-
-	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
-	"""
-	import subprocess as sp
-
-	p = Path(vfrac_path)
-	if not p.is_absolute():
-		p = PROJECT_ROOT / p
-	if not p.name.endswith(".e.1.0"):
-		p = p.with_name(p.name + ".e.1.0")
-	if not p.is_file():
-		return json.dumps(_error_payload(
-			"input", f"vfrac Exodus not found: {p} (write it with "
-			"radia.topopt_cad.write_vfrac_exodus)"))
-	# Numeric contract BEFORE any subprocess -- the same bf8ab4c0b
-	# hardening the STL sibling carries; without it a NaN timeout_s
-	# reaches subprocess.run (a comparison that is always False, i.e. a
-	# run that may never time out) and a non-numeric tolerance explodes
-	# deep inside the gate helper instead of failing as a clean input
-	# error.
-	try:
-		closure_tolerance = float(closure_tolerance)
-		timeout_s = float(timeout_s)
-		smooth_method = int(smooth_method)
-		gq_iters = int(gq_iters)
-		gq_threshold = float(gq_threshold)
-		defeature = int(defeature)
-		min_vol_cells = int(min_vol_cells)
-	except (TypeError, ValueError) as exc:
-		return json.dumps(_error_payload(
-			"input", f"numeric argument is invalid: {exc}"))
-	if not _math.isfinite(closure_tolerance) or closure_tolerance < 0.0:
-		return json.dumps(_error_payload(
-			"input", "closure_tolerance must be finite and nonnegative"))
-	if not _math.isfinite(timeout_s) or timeout_s <= 0.0:
-		return json.dumps(_error_payload(
-			"input", "timeout_s must be finite and positive"))
-	if not _math.isfinite(gq_threshold):
-		return json.dumps(_error_payload(
-			"input", "gq_threshold must be finite"))
-	try:
-		import netCDF4 as nc
-	except ImportError:
-		# kind= is explicit: the needle scan classifies on the MESSAGE, and
-		# "netCDF4 is required" hits no needle, so it would otherwise be
-		# reported as kind="input" -- telling an agent to fix its
-		# arguments and retry a MISSING INSTALL (the server instructions
-		# route on kind, not stage).
-		return json.dumps(_error_payload(
-			"environment", "netCDF4 is required to validate the vfrac "
-			"Exodus; install it with `pip install cubit-mesh-export[sculpt]`",
-			kind="environment"))
-	try:
-		ds = nc.Dataset(str(p))
-		try:
-			names = [str(s).strip() for s in
-			         nc.chartostring(ds.variables["name_elem_var"][:])]
-			expected = ["VOID"] + [f"MAT_{i + 1}"
-			                       for i in range(len(names) - 1)]
-			if len(names) < 2 or names != expected:
-				return json.dumps(_error_payload(
-					"input", f"vfrac Exodus element variables {names} != "
-					f"{expected} -- this tool speaks the "
-					"write_vfrac_exodus VOID + MAT_1..MAT_N contract"))
-			n_mat = len(names) - 1
-			gnames = [str(s).strip() for s in
-			          nc.chartostring(ds.variables["name_glo_var"][:])]
-			gvals = {k: float(v) for k, v in
-			         zip(gnames, ds.variables["vals_glo_var"][0])}
-			nx, ny, nz = (int(gvals["gxint"]), int(gvals["gyint"]),
-			              int(gvals["gzint"]))
-			hx = (gvals["xmax"] - gvals["xmin"]) / nx
-			hy = (gvals["ymax"] - gvals["ymin"]) / ny
-			hz = (gvals["zmax"] - gvals["zmin"]) / nz
-			cell = hx * hy * hz
-			per_material = [
-				{"id": index + 1,
-				 "v_vfrac": float(
-					 ds.variables[f"vals_elem_var{index + 2}eb1"][0].sum())
-				 * cell}
-				for index in range(n_mat)]
-			v_vfrac = float(sum(m["v_vfrac"] for m in per_material))
-		finally:
-			ds.close()
-	except (KeyError, OSError, ValueError) as exc:
-		return json.dumps(_error_payload(
-			"input", f"cannot validate vfrac Exodus {p.name}: {exc}"))
-	if v_vfrac <= 0.0:
-		return json.dumps(_error_payload(
-			"input", "vfrac Exodus carries zero material volume"))
-	labels = [s.strip() for s in str(material_names).split(",") if s.strip()]
-	if labels and len(labels) != n_mat:
-		return json.dumps(_error_payload(
-			"input", f"material_names has {len(labels)} entries but the "
-			f"vfrac Exodus carries {n_mat} material(s)"))
-	if not labels:
-		labels = ["iron"] if n_mat == 1 else [f"mat_{i + 1}"
-		                                      for i in range(n_mat)]
-	if len(set(labels)) != len(labels):
-		return json.dumps(_error_payload(
-			"input", f"material_names must be distinct, got {labels}"))
-	for index, name in enumerate(labels):
-		per_material[index]["name"] = name
-
-	base = p.with_name(p.name[:-len(".e.1.0")])
-	vol = Path(out_vol) if out_vol else base.with_suffix(".hex.vol")
-	msh = Path(out_msh) if out_msh else base.with_suffix(".hex.msh")
-	if not vol.is_absolute():
-		vol = PROJECT_ROOT / vol
-	if not msh.is_absolute():
-		msh = PROJECT_ROOT / msh
-	sculpt_out = vol.with_suffix("").with_name(vol.stem + "_sculpt")
-	sculpt_exo = sculpt_out.with_name(sculpt_out.name + ".e.1.0")
-	path_keys = [os.path.normcase(str(path))
-	             for path in (p, vol, msh, sculpt_exo)]
-	if len(set(path_keys)) != len(path_keys):
-		return json.dumps(_error_payload(
-			"input", "vfrac input, out_vol, out_msh, and the derived "
-			"Sculpt Exodus must all be distinct paths"))
-	from cubit_mesh_export.mcp.session import get_cubit_bin_dir
-	bin_dir = get_cubit_bin_dir()
-	sculpt_exe = (Path(bin_dir) / "sculpt.exe") if bin_dir else None
-	if sculpt_exe is None or not sculpt_exe.is_file():
-		return json.dumps(_error_payload(
-			"environment", "sculpt.exe not found in the Cubit bin "
-			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
-			"2026.8 on Windows", kind="environment"))
-	for output in (vol, msh, sculpt_exo):
-		output.parent.mkdir(parents=True, exist_ok=True)
-		try:
-			output.unlink(missing_ok=True)
-		except OSError as exc:
-			return json.dumps(_error_payload(
-				"output", f"cannot replace stale output {output}: {exc}"))
-
-	# gen_sidesets: 2 = variable (contiguous groups) for the plain route,
-	# 5 = rve (the six period faces) when a periodic RVE was requested
-	cli = [str(sculpt_exe), "-ivf", str(base), "-e", str(sculpt_out),
-	       "-SS", "5" if periodic else "2", "-cv"]
-	if periodic:
-		cli += ["--periodic"]
-	for entry in per_material:
-		cli += ["-mn", str(entry["id"]), str(entry["name"])]
-	if smooth_method:
-		cli += ["--smooth", str(int(smooth_method))]
-	cli += _sculpt_quality_keywords(gq_iters, gq_threshold,
-	                                pillow_surfaces, defeature,
-	                                min_vol_cells, cli=True)
-	try:
-		run = sp.run(cli, capture_output=True, text=True,
-		             timeout=timeout_s, cwd=str(vol.parent))
-	except sp.TimeoutExpired:
-		return json.dumps(_error_payload(
-			"cubit", f"sculpt.exe timed out after {timeout_s}s"))
-	sculpt_tail = "\n".join((run.stdout + run.stderr).splitlines()[-25:])
-	if run.returncode != 0 or not sculpt_exo.is_file():
-		return json.dumps({**_error_payload(
-			"cubit", "sculpt.exe failed or produced no Exodus mesh"),
-			"exit_code": run.returncode, "command": cli,
-			"console_tail": sculpt_tail}, default=str)
-
-	exo_fwd = str(sculpt_exo).replace("\\", "/")
-	# Sculpt's --material_name already labels the Exodus blocks, so the
-	# names arrive with the import; re-assert them by block id so the
-	# `.vol` materials are the requested ones even on an older Sculpt.
-	cmds = [f'import mesh geometry "{exo_fwd}" feature_angle 135 merge']
-	cmds += [f'block {entry["id"]} name "{entry["name"]}"'
-	         for entry in per_material]
-	sideset_names = {}
-	if periodic:
-		# RVE boundary labels: classify the six period-face sidesets from
-		# the Sculpt Exodus (probed, never assumed from the id order) and
-		# name them, so `export netgen` writes contract-grade bcnames
-		# (rve_xmin..rve_zmax + skin) instead of generated Surface_N.
-		# Without this the ragged period faces are UNIDENTIFIABLE
-		# downstream -- a coordinate filter cannot separate a ragged face
-		# from the interior, so carrying Sculpt's own sideset knowledge
-		# into the .vol is the only reliable route to periodic BCs and
-		# strict label contracts on an RVE mesh.
-		box_lo = [gvals["xmin"], gvals["ymin"], gvals["zmin"]]
-		box_hi = [gvals["xmax"], gvals["ymax"], gvals["zmax"]]
-		sideset_names, classify_error = _classify_rve_sidesets(
-			sculpt_exo, box_lo, box_hi, [hx, hy, hz])
-		if classify_error:
-			return json.dumps({**_error_payload(
-				"cubit", f"RVE sideset classification failed: "
-				f"{classify_error}"),
-				"sculpt_exodus": str(sculpt_exo)}, default=str)
-		cmds += [f'sideset {sid} name "{name}"'
-		         for sid, name in sorted(sideset_names.items())]
-	cmds += [f'export netgen "{str(vol).replace(chr(92), "/")}" '
-	         f"order 1 overwrite",
-	         f'export gmsh "{str(msh).replace(chr(92), "/")}" '
-	         f"dimension 3 order 1 overwrite"]
-	r = _cs.run_headless_journal(
-		cmds, timeout_s=timeout_s, working_directory=vol.parent)
-	if r.get("status") == "error":
-		return json.dumps({**_error_payload(
-			"cubit", "exodus import / export failed"),
-			"process": r, "commands": cmds}, default=str)
-	if not vol.is_file() or not msh.is_file():
-		return json.dumps({**_error_payload(
-			"cubit", f"export did not produce {vol.name} / {msh.name}"),
-			"process": r}, default=str)
-
-	verification_error, gates, metrics = _collect_mesh_gates(
-		msh, vol, v_vfrac, closure_tolerance)
-	if verification_error is not None:
-		return json.dumps(verification_error, default=str)
-	if not gates.get("closure_ok", True) and closure_tolerance > 0.0:
-		metrics["closure_miss_diagnosis"] = _closure_miss_diagnosis(
-			[nx, ny, nz], metrics["closure"], closure_tolerance)
-	per_material_report = None
-	if n_mat > 1:
-		# The total-volume closure conserves a partition bias (core
-		# over-meshed at the shell's expense sums to the same total), so a
-		# multi-material mesh gates EACH block against its own vfrac
-		# integral -- the per-region mu_r solve is only as trustworthy as
-		# the per-region geometry.
-		per_material_report, pm_error = _per_material_closure(
-			vol, per_material, closure_tolerance)
-		if pm_error:
-			env = pm_error.startswith("ENVIRONMENT: ")
-			return json.dumps({**_error_payload(
-				"environment" if env else "verification",
-				pm_error.removeprefix("ENVIRONMENT: "),
-				kind="environment" if env else None),
-				"vol": str(vol)}, default=str)
-		gates["per_material_closure_ok"] = bool(
-			all(entry["ok"] for entry in per_material_report.values()))
-	period_report = None
-	if periodic:
-		period = [(gvals["xmax"] - gvals["xmin"]),
-		          (gvals["ymax"] - gvals["ymin"]),
-		          (gvals["zmax"] - gvals["zmin"])]
-		period_report = _periodic_node_match(vol, period, [hx, hy, hz])
-		# A tileable cell is the one with a COMPLETE seam: the +period and
-		# -period matched counts agree (a bijection between the two period
-		# faces) AND essentially every node within half a cell of the
-		# period plane owns a partner.  Measured 2026-08-10 on an
-		# overlapping-sphere RVE, same input both ways: fill rate 1.000
-		# with --periodic, 0.061 without (equal counts alone do NOT
-		# discriminate -- a plain mesh keeps a few untouched corners).
-		gates["periodic_nodes_match"] = bool(
-			period_report.get("ok") and period_report["axes"] and all(
-				entry["seam_fill_rate"] >= 0.98
-				for entry in period_report["axes"]))
-	label_report = None
-	if periodic and sideset_names:
-		# .vol-side verification of the RVE labels, INDEPENDENT of the
-		# Exodus-side classification: each rve_* boundary's face nodes
-		# must hug its period plane (within ~1.5 cells of raggedness) and
-		# span the box in the in-plane directions.  A Cubit import
-		# re-numbering or an Exodus topology surprise fails here loudly
-		# instead of shipping silently mislabeled periodic faces.
-		label_report = _vol_bcname_face_stats(vol)
-		box_lo = [gvals["xmin"], gvals["ymin"], gvals["zmin"]]
-		box_hi = [gvals["xmax"], gvals["ymax"], gvals["zmax"]]
-		cell_by_axis = [hx, hy, hz]
-		labels_ok = True
-		expected = {"rve_xmin": (0, box_lo[0]), "rve_xmax": (0, box_hi[0]),
-		            "rve_ymin": (1, box_lo[1]), "rve_ymax": (1, box_hi[1]),
-		            "rve_zmin": (2, box_lo[2]), "rve_zmax": (2, box_hi[2])}
-		for name, (axis, plane) in expected.items():
-			entry = label_report.get(name)
-			if not entry or entry["n_faces"] == 0:
-				labels_ok = False
-				continue
-			span = max(abs(entry["lo"][axis] - plane),
-			           abs(entry["hi"][axis] - plane))
-			if span > 1.5 * cell_by_axis[axis]:
-				labels_ok = False
-		gates["rve_labels_ok"] = bool(labels_ok)
-	return json.dumps({
-		"status": "ok" if all(gates.values()) else "gate_failed",
-		"gates": gates,
-		"vfrac": str(p), "vol": str(vol), "msh": str(msh),
-		"gui_started": False,
-		"execution_mode": "headless_batch",
-		"sculpt_exodus": str(sculpt_exo),
-		"vfrac_volume": v_vfrac,
-		"materials": per_material,
-		"per_material_closure": per_material_report,
-		"periodic": bool(periodic),
-		"rve_sideset_names": ({str(k): v for k, v in
-		                       sorted(sideset_names.items())}
-		                      if sideset_names else None),
-		"rve_boundary_labels": label_report,
-		"periodic_node_match": period_report,
-		"grid": {"nel": [nx, ny, nz], "cell": [hx, hy, hz]},
-		**metrics,
-		"sculpt": {"exit_code": run.returncode, "command": cli,
-		           "console_tail": sculpt_tail},
-		"note": ("closure is gated against the volume-fraction integral; "
-		         "min quality is reported, not gated"),
-	}, ensure_ascii=False, indent=2, default=str)
 
 
 @mcp.tool()
@@ -6765,7 +5192,6 @@ def new_cubit_mesh(geometry: str, element_type: str = "tet") -> str:
 		"4. Use relative paths for imports\n"
 		"5. For curved mesh: cubit.cmd('export netgen \"mesh.vol\" order N overwrite')\n"
 		"6. Verify volume after curving\n"
-		"7. For Gmsh visualization: cubit.cmd('export gmsh \"mesh.msh\" order N overwrite')\n"
 	)
 
 
@@ -6793,7 +5219,6 @@ def cubit_export_decision_guide() -> str:
 		"| Need | Command | Max Order |\n"
 		"|------|---------|----------|\n"
 		"| NGSolve FEM (recommended) | export netgen \"f.vol\" order N | 1-5 |\n"
-		"| GMSH visualization | export gmsh \"f.msh\" order N | 1-3 |\n"
 		"| Cubit-native archival | export mesh \"f.exo\" | all |\n"
 	)
 
@@ -7147,8 +5572,6 @@ def _selftest(audit_repo: bool = False):
     print("PASSED")
 
 
-
-
 _validation.install()
 
 register_status_tool(
@@ -7184,8 +5607,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_smart_async", "cubit_mesh_race_review",
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
-	"cubit_session_journal", "cubit_netgen_quality_compare",
-	"cubit_stl_to_vol", "cubit_vfrac_to_vol", "cubit_validation_run",
+	"cubit_session_journal", "cubit_validation_run",
 	"cubit_probe", "cubit_mesh_diagnose", "cubit_suggest_next",
 }
 # Read-only tools that may reach the network.
@@ -7227,8 +5649,6 @@ _LONG_TOOL_NAMES = {
 	"cubit_batch_try", "cubit_mesh_auto", "cubit_mesh_race",
 	"cubit_mesh_race_smart", "cubit_mesh_race_smart_async",
 	"cubit_mesh_race_review", "cubit_mesh_race_review_async",
-	"cubit_netgen_quality_compare", "cubit_stl_to_vol",
-	"cubit_vfrac_to_vol",
 }
 
 

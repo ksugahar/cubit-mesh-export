@@ -90,14 +90,13 @@ def test_radia_contains_no_legacy_gui_bridges_or_test_implementation():
     assert not (ROOT / 'src/radia/panels/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl').exists()
 
 
-@pytest.mark.parametrize('name,fmt', [('netgen', 'netgen_vol'), ('gmsh', 'gmsh')])
 @pytest.mark.parametrize('has_file', [False, True, 'stale'])
-def test_official_toolbar_play_without_dunder_file(monkeypatch, tmp_path, name, fmt, has_file):
-    source = SOURCE / f'cubit_mesh_export/cubit_gui/cubit_toolbar/scripts/export_{name}.py'
+def test_official_toolbar_play_without_dunder_file(monkeypatch, tmp_path, has_file):
+    source = SOURCE / 'cubit_mesh_export/cubit_gui/cubit_toolbar/scripts/export_netgen.py'
     (tmp_path / 'cubit_export_menu.py').write_text('# imported toolbar payload')
     monkeypatch.chdir(tmp_path)
     calls = []
-    monkeypatch.setitem(sys.modules, 'cubit_export_menu', types.SimpleNamespace(launch_export=calls.append))
+    monkeypatch.setitem(sys.modules, 'cubit_export_menu', types.SimpleNamespace(launch_netgen_export=lambda: calls.append('netgen')))
     namespace = {'__file__': str(tmp_path / source.name)} if has_file else {}
     if has_file == 'stale':
         namespace['__file__'] = str(tmp_path / 'unrelated' / 'previous_play.py')
@@ -106,4 +105,4 @@ def test_official_toolbar_play_without_dunder_file(monkeypatch, tmp_path, name, 
         exec(compile(source.read_text(), str(source), 'exec'), namespace)
     finally:
         sys.path[:] = original
-    assert calls == [fmt]
+    assert calls == ['netgen']
