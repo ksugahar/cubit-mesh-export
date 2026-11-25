@@ -4,7 +4,14 @@ Export high-order curved meshes from Coreform Cubit directly to Netgen/NGSolve
 `.vol`. Use `check-vol` to verify the exported mesh and its named regions and
 boundaries before analysis. The standalone tools run without Radia.
 
-The only mesh output is Netgen `.vol` (`export netgen`).
+## Export a mesh
+
+- **Toolbar:** Click **Export Netgen (.vol)...** to open the export dialog.
+- **Menu:** Choose **Export → Export Netgen (.vol)...** to open the same dialog.
+- **Batch:** Run `export netgen "mesh.vol"` in Cubit.
+
+Netgen `.vol` is selected automatically. In the dialog, set the output path
+and geometric order, then confirm the export.
 
 ## Explicit named periodic export
 
@@ -167,11 +174,6 @@ The no-argument `cubit-smoke-test` uses the package-owned
 
 The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
 bundled PySide6.
-
-The toolbar button **Export Netgen (.vol)...** opens the Netgen `.vol` export
-dialog in one click. Cubit's menu API adds actions under a menu title, so the
-Export menu holds that same single action: Export -> Export Netgen (.vol)...,
-with no format choice.
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
 > machine-wide `CUBIT_PLUGIN_DIR` environment variable. A stale setting can cause Cubit
