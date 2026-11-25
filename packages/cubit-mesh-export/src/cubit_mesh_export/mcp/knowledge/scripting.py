@@ -1821,7 +1821,7 @@ Cubit / cubit-mesh-export
   SAT or STEP -> mesh -> labels -> Netgen .vol -> check-vol
 
 Radia Simulink block or Python/MCP
-  checked .vol + DesignSpec -> headless solver -> result.json + GMSH .msh
+  checked .vol + DesignSpec -> headless solver -> result.json
 ```
 
 - Cubit's bundled PySide6 may be used only by the `cubit-mesh-export` toolbar.
@@ -1834,7 +1834,6 @@ Radia Simulink block or Python/MCP
   DesignSpec/configuration.
 - Reusable computation belongs to `radia.*` APIs. A `calc_*.py` entry point is
   a thin configuration and artifact adapter, not a second solver copy.
-- Spatial solver results use GMSH `.msh v4.2`.
 
 Common IH labels are `coil`, `workpiece`, `air`, `kelvin`, `source`, `sink`,
 `sibc`, `kelvin_int`, `kelvin_ext`, `outer`, and `GND`. The selected application
@@ -2763,45 +2762,7 @@ cubit.set_nodal_variable(node_ids, "J_magnitude", values)
 - No high-order interpolation — Cubit renders piecewise-linear on mesh facets
 - No vector field support — scalar only, one component at a time
 
-For production post-processing, use GMSH .msh output instead (see below).
-
-## Recommended: GMSH Post-Processing (.msh)
-
-For high-order element visualization and persistent results, use GmshPostExport:
-```python
-from radia.gmsh_post_export import GmshPostExport
-post = GmshPostExport(mesh, boundary=True)  # boundary=True for BND from volume mesh
-post.add_field("|J|", node_J, ncomp=1)       # per-node scalar
-post.write("results.msh")
-# Open in GMSH GUI for high-order interpolation
-```
-
-For curved meshes (mesh.Curve(p)), GmshPostExport automatically outputs
-high-order elements (Tri6/Tri10/Tri15/Tri21) with nodes on the curved surface.
-Node coordinates are extracted via GetTrafo evaluated at GMSH reference points.
-
-**GMSH display setting**: High-order elements require `Mesh.NumSubEdges = 4`
-(or higher) in GMSH to render curved surfaces. Default is 1 (straight lines).
-Set via Tools -> Command Line: `Mesh.NumSubEdges = 4;`
-
-**Advantages over Cubit set_nodal_variable**:
-- Persistent: .msh file saved alongside model
-- High-order: GMSH renders curved elements correctly
-- Vector fields: supports ncomp=3 for vector visualization
-- Linked to Optuna DB: each trial's gmsh_file recorded in user_attrs
-
-## Workflow: BEM Current Density Visualization
-
-```
-1. BEM solve (external Python) -> per-DOF current vector x
-2. Convert HDivSurface DOFs -> per-node scalar (J magnitude)
-3. Write .msh file via GmshPostExport (persistent)
-4. Return result JSON (inductance, n_dofs, gmsh_file path)
-5. Record trial in Optuna SQLite DB (params + result + gmsh_file)
-6. Panel auto-launches GMSH with .msh file
-7. optuna-dashboard shows parameter sweep with linked .msh files
-```
-
+Result post-processing files are outside cubit-mesh-export.
 """
 
 
