@@ -134,7 +134,7 @@ endif()
 # --------------------------------------------------------
 # Target 1: cubit_mesh_export.ccm (command plugin, goes to plugins/)
 #
-# Registers APREPRO commands: export gmsh/netgen
+# Registers APREPRO commands: export netgen
 # Loaded by Python API (CUBIT_PLUGIN_DIR) and by cubitcomp
 # (-commandplugindir).
 # --------------------------------------------------------
@@ -146,8 +146,6 @@ set(CCM_SOURCES
     # HighOrderMesh removed — NetgenCurver is the sole curving path (no fallback)
     NetgenCurver.cpp
     NetgenCurver.hpp
-    ExportGmshCommand.cpp
-    ExportGmshCommand.hpp
 )
 
 # Netgen-dependent sources: callbackgeom + ExportNetgenCommand

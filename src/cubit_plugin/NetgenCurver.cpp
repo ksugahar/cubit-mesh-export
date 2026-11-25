@@ -2346,53 +2346,6 @@ std::array<double,3> NetgenCurver::get_node_coords(int node_id) const
   return CubitInterface::get_nodal_coordinates(node_id);
 }
 
-void NetgenCurver::write_ho_nodes_gmsh(std::ofstream &fid) const
-{
-  for (auto &pair : ho_node_coords_) {
-    fid << pair.first << " "
-        << pair.second[0] << " "
-        << pair.second[1] << " "
-        << pair.second[2] << "\n";
-  }
-}
-
-// Gmsh element type codes for higher orders
-int NetgenCurver::gmsh_element_type(int base_nn, int elem_type, int order)
-{
-  // Order 1
-  if (order == 1) {
-    if (base_nn == 4) return 4;   // TET4
-    if (base_nn == 8) return 5;   // HEX8
-    if (base_nn == 6) return 6;   // WEDGE6
-    if (base_nn == 5) return 7;   // PYRAMID5
-    if (base_nn == 3) return 2;   // TRI3
-    if (base_nn == 4) return 3;   // QUAD4 (ambiguous with TET4)
-    return 0;
-  }
-  // Order 2
-  if (order == 2) {
-    if (base_nn == 4) return 11;  // TET10
-    if (base_nn == 8) return 17;  // HEX20
-    if (base_nn == 6) return 18;  // WEDGE15
-    if (base_nn == 5) return 19;  // PYRAMID13
-    if (base_nn == 3) return 9;   // TRI6
-    return 0;
-  }
-  // Order 3
-  if (order == 3) {
-    if (base_nn == 4) return 29;  // TET20
-    if (base_nn == 3) return 21;  // TRI10
-    return 0;
-  }
-  // Order 4
-  if (order == 4) {
-    if (base_nn == 4) return 30;  // TET35
-    if (base_nn == 3) return 23;  // TRI15
-    return 0;
-  }
-  return 0;
-}
-
 #endif // !CUBIT_MESH_EXPORT_MAPPING_CONTRACT_ONLY
 
 #else  // !HAVE_NETGEN
@@ -2411,7 +2364,5 @@ std::array<double,3> NetgenCurver::get_node_coords(int) const { return {0,0,0}; 
 std::vector<int> NetgenCurver::get_edge_nodes(int, int) const { return {}; }
 std::vector<int> NetgenCurver::get_face_nodes(int, int, int) const { return {}; }
 std::vector<int> NetgenCurver::get_vol_nodes(int, int, int, int) const { return {}; }
-void NetgenCurver::write_ho_nodes_gmsh(std::ofstream &) const {}
-int NetgenCurver::gmsh_element_type(int, int, int) { return 0; }
 
 #endif  // HAVE_NETGEN

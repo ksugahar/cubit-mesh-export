@@ -30,14 +30,11 @@ class NetgenCurver;
 
 // --- Edge tables for high-order connectivity ---
 // Internal order matches VTK convention (used by build_ho_conn_nc).
-// GMSH uses a DIFFERENT order — reorder tables below.
 //
 // Internal (= VTK) edge order:
 //   HEX:   bottom(4) + top(4) + vertical(4)
 //   WEDGE: bottom_tri(3) + top_tri(3) + vertical(3)
-// GMSH edge order: vertex-grouped (see gmsh.info Section 10.2)
 //
-// Reorder semantics: out[nv + reorder[i]] = conn[nv + i]
 namespace EdgeTables {
   // --- Internal (= VTK) edge tables ---
   inline constexpr int tet[][2] = {
@@ -64,40 +61,6 @@ namespace EdgeTables {
     {0,1},{1,2},{2,3},{3,0}
   };
 
-  // --- GMSH reorder: internal pos i -> GMSH file pos reorder[i] ---
-  // Verified: gmsh.info Section 10.2 + gmsh.model.mesh.getElementProperties()
-  inline constexpr int tet_gmsh_reorder[6] = {0,1,2,3,5,4};
-  inline constexpr int hex_gmsh_reorder[12] = {0,3,5,1,8,10,11,9,2,4,6,7};
-  inline constexpr int wedge_gmsh_reorder[9] = {0,3,1,6,8,7,2,4,5};
-  inline constexpr int pyramid_gmsh_reorder[8] = {0,3,5,1,2,4,6,7};
-  inline constexpr int tri_gmsh_reorder[3] = {0,1,2};
-  inline constexpr int quad_gmsh_reorder[4] = {0,1,2,3};
-
-  // --- GMSH edge direction flip: true = reverse HO nodes within this edge ---
-  // GMSH defines edge direction by (p0,p1) from MTetrahedron.h edges_tetra():
-  //   Edge 0: (0,1), Edge 1: (1,2), Edge 2: (2,0)
-  //   Edge 3: (3,0), Edge 4: (3,1), Edge 5: (3,2)
-  // Internal (Netgen/VTK) edge order:
-  //   Edge 0: (0,1), Edge 1: (1,2), Edge 2: (0,2)
-  //   Edge 3: (0,3), Edge 4: (1,3), Edge 5: (2,3)
-  // Flip needed for: edge 2 (0,2 vs 2,0), edge 3 (0,3 vs 3,0),
-  //                  edge 4 (1,3 vs 3,1), edge 5 (2,3 vs 3,2)
-  inline constexpr bool tet_gmsh_flip[6] = {false,false,true,true,true,true};
-  // Gmsh 5 Hexahedron 32 reference nodes orient edges (0,3) and (4,7)
-  // opposite to internal edges (3,0) and (7,4). A quadratic midpoint
-  // conceals this error; cubic edge nodes must be reversed.
-  inline constexpr bool hex_gmsh_flip[12] = {false,false,false,true,
-                                              false,false,false,true,
-                                              false,false,false,false};
-  // WEDGE (MPrism.h): edges match
-  inline constexpr bool wedge_gmsh_flip[9] = {false,false,false,
-                                               false,false,false,
-                                               false,false,false};
-  // Pyramid reference nodes orient the base edge (0,3), not (3,0).
-  inline constexpr bool pyramid_gmsh_flip[8] = {false,false,false,true,
-                                                 false,false,false,false};
-  inline constexpr bool tri_gmsh_flip[3] = {false,false,false};
-  inline constexpr bool quad_gmsh_flip[4] = {false,false,false,false};
 }
 
 // --- Data types ---
@@ -180,12 +143,6 @@ public:
   int total_element_count() const;  // block elements + all sideset faces
 
 #ifdef HAVE_NETGEN
-  // Build ho_conn directly in GMSH file order (edges, faces, volume).
-  // Uses GMSH face winding for face nodes (avoids per-order permutation tables).
-  // Coordinate-based sorting for volume interior nodes.
-  static std::vector<int> build_ho_conn_gmsh(
-      const std::vector<int> &conn, int nv, ElementType type,
-      const NetgenCurver &nc, const MeshData &mesh);
 #endif
 
 private:

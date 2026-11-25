@@ -2,7 +2,6 @@
 #ifdef HAVE_NETGEN
 #include "ExportNetgenCommand.hpp"
 #endif
-#include "ExportGmshCommand.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -43,7 +42,6 @@ std::vector<std::string> CubitMeshExportPlugin::get_keys()
 #ifdef HAVE_NETGEN
   keys.push_back("ExportNetgenCommand");
 #endif
-  keys.push_back("ExportGmshCommand");
   return keys;
 }
 
@@ -52,10 +50,7 @@ CubitCommand* CubitMeshExportPlugin::create_command(const std::string &key)
 #ifdef HAVE_NETGEN
   if (key == "ExportNetgenCommand")
     return new ExportNetgenCommand();
-  else
 #endif
-  if (key == "ExportGmshCommand")
-    return new ExportGmshCommand();
   return nullptr;
 }
 

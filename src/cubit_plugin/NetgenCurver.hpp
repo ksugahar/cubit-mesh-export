@@ -142,11 +142,6 @@ public:
   // Vertices n0..n3 in element-local order.
   std::vector<int> get_vol_nodes(int n0, int n1, int n2, int n3) const;
 
-  // Write all high-order nodes (beyond vertex nodes) to Gmsh format
-  void write_ho_nodes_gmsh(std::ofstream &fid) const;
-
-  // Get the Gmsh element type code for a given base type and order
-  static int gmsh_element_type(int base_nn, int elem_type, int order);
 
 private:
   std::unordered_map<int, int> cubit_curve_to_ng_edge_;

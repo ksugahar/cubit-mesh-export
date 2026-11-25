@@ -18,7 +18,7 @@
 // non-Windows builds the std::string path is passed through unchanged.
 //
 // Observed 2026-04-21 with path `C:\temp\日本語テスト\3turncoil.stp`
-// failing every `export netgen / gmsh` call.
+// failing every `export netgen` call.
 
 #include <filesystem>
 #include <string>
