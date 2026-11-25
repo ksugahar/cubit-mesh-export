@@ -209,11 +209,11 @@ def check_official_toolbar_contract() -> list[str]:
     register_text = register.read_text(encoding="utf-8", errors="replace")
     menu_text = export_menu.read_text(encoding="utf-8", errors="replace")
     if "cubit_export_menu.install_menu()" not in register_text:
-        issues.append("~/.cubit startup does not install the Claro Export menu")
-    if "emclaro.add_to_menu" not in menu_text:
-        issues.append("Export menu does not use Cubit's official Claro API")
-    if "QMenu(" in menu_text or "menu_bar.addMenu" in menu_text:
-        issues.append("Export menu still injects an unsupported PySide6 QMenu")
+        issues.append("~/.cubit startup does not install the Export menu")
+    if "bar.addAction(action)" not in menu_text:
+        issues.append("Export is not a one-level menu-bar action")
+    if "QMenu(" in menu_text or "addMenu" in menu_text:
+        issues.append("Export menu adds a popup menu instead of one action")
     return issues
 
 

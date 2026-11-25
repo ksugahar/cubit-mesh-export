@@ -322,7 +322,7 @@ cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external pa
 
 ```
 Menu bar: File Edit View Display Tools Export Help
-                                       (Claro menu, PySide6 dialogs)
+                                       (menu-bar action, PySide6 dialogs)
 Export:
   Export Netgen (.vol)...
 ```

@@ -1,11 +1,9 @@
 """
-Cubit Mesh Export menu — Claro-registered menu + PySide6 export dialogs.
+Cubit Mesh Export menu — one-level menu-bar action + PySide6 dialogs.
 
-The menu itself is registered through Cubit's own Claro API
-(`emclaro.add_to_menu`), so Cubit owns the menu and it
-survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
-run inside Cubit's embedded Python interpreter.  The single Netgen action
-runs the .ccm APREPRO `export netgen` command after collecting user
+Clicking **Export Netgen** on Cubit's menu bar opens the Netgen dialog directly.
+The dialogs are PySide6 and run inside Cubit's embedded Python
+interpreter.  The Netgen action runs the .ccm APREPRO `export netgen` command after collecting user
 input through Qt dialogs parented to the Cubit main window.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
@@ -36,16 +34,15 @@ import sys
 # silent PyQt5 fallback that masks it.
 #
 # Use backslash continuations (NOT parens) per Cubit toolbar convention.
-# PySide6 is used for the export DIALOGS only.  The menu itself is
-# registered through Cubit's Claro API (emclaro), so no QMenu / QAction
-# import is needed here -- and touching Claro-owned menu objects from
-# PySide6 would deadlock Cubit anyway.
+# The menu-bar entry is a module-owned QAction; Cubit-owned menu objects
+# are never enumerated from PySide6 (that deadlocks Cubit).
 from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, \
     QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QGroupBox, \
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, \
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, \
     QVBoxLayout
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QAction
 
 
 # ----------------------------------------------------------------------
@@ -682,126 +679,106 @@ def launch_netgen_export():
 # Menu installation
 # ----------------------------------------------------------------------
 
-# Claro component tag.  Every action we register carries it, so
-# ``emclaro.remove_menu_items(_CLARO_COMPONENT)`` removes exactly our
-# items and nothing else.  That is the officially supported cleanup path.
-_CLARO_COMPONENT = "cubit_mesh_export"
-# Top-level menu title.  Cubit has no top-level "Export" menu of its own
-# (export lives under File), so this creates a new one.  The component tag
-# is product-owned so it cannot remove another extension's menu items.
-_CLARO_MENU_TITLE = "&Export"
-
-# Cubit owns the PyAction objects on the C++ side, but the SWIG wrappers
-# must outlive this call or Cubit is left holding dangling pointers.
-_claro_keepalive = []
-_shutdown_connected = False
-
-# The single menu action.  The toolbar template, its script and the
-# toolbar checks carry the same label.
+# The single top-level menu-bar action.  The toolbar template, its script
+# and the toolbar checks carry the same label.
 _MENU_LABEL = "Export Netgen (.vol)..."
+_MENU_BAR_TEXT = "&Export Netgen"
 _MENU_STATUS_TIP = "Export curved mesh with labels (.vol, order 1-5)"
+_MENU_OBJECT_NAME = "cubit_mesh_export_export_action"
+
+# The QAction is created and owned by this module, so removing it never
+# touches Cubit-owned menu objects.
+_menu_action = None
+_shutdown_connected = False
+# Bumped by every install/remove.  A deferred re-attach only runs while its
+# generation is still current, so remove_menu() cancels a pending one.
+_attach_generation = 0
 
 
-def _activate_code():
-    """Return the Python snippet Cubit runs when the menu action is chosen.
+def _on_export_triggered(_checked=False):
+    import traceback
+    try:
+        launch_netgen_export()
+    except Exception:
+        traceback.print_exc()
 
-    ``PyAction.setActivateMethod`` takes a C string, NOT a callable
-    (measured: passing a function raises ``TypeError ... argument 2 of
-    type 'char const *'``).  Cubit executes that string in its embedded
-    interpreter, whose ``Run_SimpleString`` path evaluates in
-    ``__main__``.  A bare function name cannot work, because Cubit runs
-    played scripts inside a uniquely generated module rather than
-    ``__main__``.  So emit a self-contained snippet that performs its own
-    import and reports its own traceback.
-    """
-    module_dir = os.path.dirname(os.path.abspath(__file__))
-    return (
-        "import sys, traceback\n"
-        "_d = {dir!r}\n"
-        "(_d in sys.path) or sys.path.insert(0, _d)\n"
-        "try:\n"
-        "    import cubit_export_menu as _rem\n"
-        "    _rem.launch_netgen_export()\n"
-        "except Exception:\n"
-        "    traceback.print_exc()\n"
-    ).format(dir=module_dir)
+
+def _attach_menu_action():
+    """Add the Export action directly to Cubit's menu bar (one level)."""
+    global _menu_action
+    parent = find_claro()
+    if parent is None:
+        return None
+    _detach_menu_action()
+    bar = parent.menuBar()
+    action = QAction(_MENU_BAR_TEXT, bar)
+    action.setObjectName(_MENU_OBJECT_NAME)
+    action.setToolTip(_MENU_LABEL)
+    action.setStatusTip(_MENU_STATUS_TIP)
+    action.triggered.connect(_on_export_triggered)
+    bar.addAction(action)
+    _menu_action = action
+    return action
+
+
+def _detach_menu_action():
+    global _menu_action
+    action = _menu_action
+    _menu_action = None
+    if action is None:
+        return False
+    try:
+        bar = action.parent()
+        if bar is not None:
+            bar.removeAction(action)
+        action.deleteLater()
+    except RuntimeError:
+        # Cubit replaced its menu bar during startup; the old bar and its
+        # child action are already destroyed on the C++ side.
+        pass
+    return True
+
+
+def _deferred_attach(generation):
+    if generation == _attach_generation:
+        _attach_menu_action()
 
 
 def install_menu():
-    """Install the "Export" menu through Cubit's official Claro API.
+    """Install a one-level "Export Netgen" entry on Cubit's menu bar.
 
-    Uses ``emclaro`` -- the SWIG binding of Cubit's Claro GUI framework,
-    shipped inside Cubit itself (``<cubit>/bin/emclaro.py``).  This is the
-    same ``Claro::add_to_menu()`` entry point the old C++ ``.ccl``
-    component used, so the menu is OWNED BY CUBIT.  That ownership is the
-    whole point: the previous implementation injected a ``QMenu`` straight
-    into Cubit's ``QMenuBar`` with PySide6, and Cubit discarded it when it
-    rebuilt the menu bar during cold start.
+    Clicking **Export Netgen** opens the Netgen ``.vol`` dialog directly; there is
+    no submenu.  Cubit's Claro API (``emclaro.add_to_menu``) can only add
+    actions under a popup menu, so the entry is a module-owned ``QAction``
+    added to the main window's ``QMenuBar``.  It is attached once now and
+    again after the event loop starts, because Cubit rebuilds its menu bar
+    during cold start.  Only this module's own action is ever touched; do
+    not enumerate Cubit-owned menus from PySide6 (that deadlocks Cubit).
 
-    MEASURED (Coreform Cubit 2025.12): ``emclaro.is_loaded()`` is already
-    True while ``~/.cubit`` runs, and a menu registered from that hook is
-    still present once startup completes.
-
-    Do NOT walk this menu with PySide6 afterwards.  Enumerating the
-    resulting QMenu/QAction objects through the Python Qt binding
-    deadlocks Cubit, because the shiboken wrappers fight Cubit's C++
-    ownership.  Register through emclaro, remove through emclaro.
-
-    Returns True on success, or None when the Claro GUI is unavailable
-    (batch mode, or Cubit not present).
+    Returns True on success, or None when the Cubit main window is
+    unavailable (batch mode, or Cubit not present).
     """
-    global _shutdown_connected
-    try:
-        import emclaro
-    except ImportError:
-        print("[cubit-mesh-export] emclaro not available - "
+    global _shutdown_connected, _attach_generation
+    _attach_generation += 1
+    generation = _attach_generation
+    if _attach_menu_action() is None:
+        print("[cubit-mesh-export] Cubit main window not available - "
               "Export menu not installed")
         return None
-
-    if not emclaro.is_loaded():
-        print("[cubit-mesh-export] Claro GUI not loaded - "
-              "Export menu not installed")
-        return None
-
-    # Idempotent: drop any previous registration by component tag first.
-    emclaro.remove_menu_items(_CLARO_COMPONENT)
-    del _claro_keepalive[:]
-
-    actions = emclaro.PyActionVector()
-    act = emclaro.PyAction()
-    act.setText(_MENU_LABEL)
-    act.setMenuText(_MENU_LABEL)
-    act.setStatusTip(_MENU_STATUS_TIP)
-    act.setActivateMethod(_activate_code())
-    actions.push_back(act)
-    _claro_keepalive.append(act)
-    _claro_keepalive.append(actions)
-
-    emclaro.add_to_menu(_CLARO_MENU_TITLE, actions, _CLARO_COMPONENT)
-    # Claro owns the native actions; release them before Python/SWIG teardown.
-    # Leaving them registered caused Windows fast-fail 0xC0000409 on GUI exit.
+    QTimer.singleShot(0, lambda: _deferred_attach(generation))
     app = QApplication.instance()
     if app is not None and not _shutdown_connected:
         app.aboutToQuit.connect(remove_menu)
         _shutdown_connected = True
-    print("[cubit-mesh-export] Export menu installed "
-          "(1 action, Claro add_to_menu)")
+    print("[cubit-mesh-export] Export menu installed (one-level action)")
     return True
 
 
 def remove_menu():
-    """Remove the Export menu through the official Claro API.
-
-    Cleanup is by component tag, so it removes exactly the actions this
-    module registered and touches nothing else on the menu bar.
-    """
-    try:
-        import emclaro
-    except ImportError:
-        return False
-    emclaro.remove_menu_items(_CLARO_COMPONENT)
-    del _claro_keepalive[:]
-    return True
+    """Remove the Export action and cancel any pending re-attach."""
+    global _attach_generation
+    _attach_generation += 1
+    return _detach_menu_action()
 
 
 # Compatibility entry point for an explicit interactive ``play``.  Normal
