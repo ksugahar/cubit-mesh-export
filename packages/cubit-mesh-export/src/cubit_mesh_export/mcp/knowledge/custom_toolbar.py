@@ -32,7 +32,7 @@ The standalone GUI candidate packages its menu and toolbar installer under
 not required for those assets. Check the installed distribution before claiming
 this candidate capability is deployed. LLM production remains APREPRO/headless;
 launch GUI only for the explicitly scoped exporter GUI test or human workflow.
-The Export entry is one module-owned menu-bar QAction; never traverse
+The Export Netgen entry is one module-owned menu-bar QAction; never traverse
 Cubit-owned menus from PySide, and remove the action before Python shutdown
 (aboutToQuit).
 Legacy Radia GUI paths and compatibility bridges are removed. The exporter

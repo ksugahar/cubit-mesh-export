@@ -212,7 +212,7 @@ class TestInstallMenu(unittest.TestCase):
         self.assertTrue(rem.install_menu())
         self.app.processEvents()
         (action,) = self._ours()
-        self.assertEqual(action.text(), "&Export")
+        self.assertEqual(action.text(), "&Export Netgen")
         self.assertIsNone(action.menu())
         action.trigger()
         self.assertEqual(self.calls, ["netgen"])

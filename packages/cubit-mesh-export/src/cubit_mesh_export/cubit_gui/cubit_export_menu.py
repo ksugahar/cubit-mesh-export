@@ -1,7 +1,7 @@
 """
 Cubit Mesh Export menu — one-level menu-bar action + PySide6 dialogs.
 
-Clicking **Export** on Cubit's menu bar opens the Netgen dialog directly.
+Clicking **Export Netgen** on Cubit's menu bar opens the Netgen dialog directly.
 The dialogs are PySide6 and run inside Cubit's embedded Python
 interpreter.  The Netgen action runs the .ccm APREPRO `export netgen` command after collecting user
 input through Qt dialogs parented to the Cubit main window.
@@ -682,7 +682,7 @@ def launch_netgen_export():
 # The single top-level menu-bar action.  The toolbar template, its script
 # and the toolbar checks carry the same label.
 _MENU_LABEL = "Export Netgen (.vol)..."
-_MENU_BAR_TEXT = "&Export"
+_MENU_BAR_TEXT = "&Export Netgen"
 _MENU_STATUS_TIP = "Export curved mesh with labels (.vol, order 1-5)"
 _MENU_OBJECT_NAME = "cubit_mesh_export_export_action"
 
@@ -745,9 +745,9 @@ def _deferred_attach(generation):
 
 
 def install_menu():
-    """Install a one-level "Export" entry on Cubit's menu bar.
+    """Install a one-level "Export Netgen" entry on Cubit's menu bar.
 
-    Clicking **Export** opens the Netgen ``.vol`` dialog directly; there is
+    Clicking **Export Netgen** opens the Netgen ``.vol`` dialog directly; there is
     no submenu.  Cubit's Claro API (``emclaro.add_to_menu``) can only add
     actions under a popup menu, so the entry is a module-owned ``QAction``
     added to the main window's ``QMenuBar``.  It is attached once now and
