@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 3.0.0 - 2026-11-25
+
+Breaking: Netgen `.vol` is the only export format.
 
 - Remove the JMAG (.jcf) export: the menu and toolbar action, `cubit_mesh_export.jmag`,
   the JCF writer, its settings example and its guides.
@@ -13,8 +15,8 @@
   the `cubit_gmsh_v42_inventory`, `cubit_gmsh_v42_mixed_order_gate`,
   `cubit_pyramid_mixed_export_gate` and `cubit_pyramid_source_plugin_replay_gate` MCP tools,
   the Gmsh export lint rule and knowledge. The only output is Netgen `.vol`.
-- The Export menu is flat: a single **Export Netgen (.vol)...** action opens the Netgen
-  dialog directly; the toolbar has the matching single button.
+- The toolbar button **Export Netgen (.vol)...** opens the Netgen dialog in one click;
+  the Export menu holds the same single action, with no format choice.
 - Remove the `cubit_stl_to_vol`, `cubit_vfrac_to_vol` and `cubit_netgen_quality_compare`
   MCP tools, the Gmsh 5 quality referee runtime, the MSH 4.2 parser and the `mesh-quality`
   and `sculpt` extras. Evidence gates no longer require Gmsh export or inventory fields.

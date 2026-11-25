@@ -18,6 +18,6 @@ cubit-plugin-install deploys plugin binaries to Cubit.
 import netgen as _netgen  # noqa: F401
 
 # Consumer construction/physics adapters remain separate from this package.
-__version__ = "2.6.1"
+__version__ = "3.0.0"
 
 __all__ = ["__version__"]
