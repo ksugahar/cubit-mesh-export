@@ -366,24 +366,9 @@ regression/CI. Geometry kernel is **ACIS** -> importing native `.sat` avoids a t
   names BCs differently; use a solver plugin, edit the deck externally, or build a custom
   pre-processor on the API.
 
-### Export formats (only those the videos name)
-| target | export | notes |
-|---|---|---|
-| MOOSE / DOE (Sierra, Nalu, Truchas) | **Exodus** (.e/Genesis) | native, lossless; IGA -> Exodus with Bezier extraction |
-| Abaqus | `.inp` | often edit element formulation in the deck |
-| Calculix | Abaqus-style `.inp` (plugin) | element names follow Abaqus (C3D8, C3D20) |
-| LS-DYNA | `.k` | supported |
-| ANSYS / I-deas / Patran | respective | listed as supported (verify extensions in docs) |
-| OpenFOAM | **polyMesh** dir | Cubit writes points/faces/owner/neighbour/boundary |
-| Fluent | `.msh` | native |
-- **meshio** (open-source Python) fills export gaps (consumes Exodus/.inp). **Polyhedral
-  export is NOT supported** (even though Exodus allows it).
-- **Critical gotcha -- Exodus stores topology, not formulation.** Element type in Exodus =
-  node count/ordering only; quadrature (reduced/full), hybrid, incompatible modes are the
-  solver's job. Abaqus/Calculix encode formulation in the NAME (`C3D8`, `C3D8R` reduced
-  (verify), `C3D8I` incompatible modes, `C3D8IH` hybrid, `C3D20` quadratic) -> after export
-  you frequently **edit the element-type string** in the deck (the Calculix plugin can
-  override Cubit's element type with the Calculix type directly).
+### Mesh output
+cubit-mesh-export writes only Netgen `.vol` (`export netgen`). Other
+solver decks are outside this package.
 
 ### Canonical workflow (order matters)
 1. **Import/clean CAD** -- prefer the most direct translator; prefer ACIS `.sat` over STEP
@@ -533,8 +518,7 @@ Top-to-bottom guided pipeline in Power Tools; issues the same commands as manual
    refine/smooth/delete.
 6. Boundary conditions: make blocks/sidesets/nodesets from CAD entities (Ctrl-click multi-
    select); meshing auto-pulls the corresponding faces/nodes into the set.
-7. Export: native Genesis/Exodus (broadest downstream, incl. MOOSE) or Abaqus/Patran/
-   LS-DYNA/Fluent/OpenFOAM/...; option to force-overwrite.
+7. Export: Netgen `.vol` through `export netgen`.
 
 ### Blocks / sidesets / nodesets (Exodus model)
 Block = material/element-type/section (element type e.g. HEX8 linear vs HEX20 quadratic set on

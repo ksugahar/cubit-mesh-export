@@ -330,7 +330,6 @@ Export:
 - **Export**: the single action opens the Netgen dialog and runs `export netgen`.
 - Solver orchestration is outside the Cubit plugin. Downstream applications
   consume exported meshes through their own process boundary.
-- **Mesh p-convergence demo**: `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`
   uses explicit `cubit.cmd(...)` export commands and is not a Cubit menu action
 - Settings saved to `AppData/Roaming/cubit-mesh-export/export_settings.json`
 """
