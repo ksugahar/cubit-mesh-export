@@ -10,7 +10,7 @@ Coverage:
        expected `export netgen` APREPRO command)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
     F. Exactly one flat Export action that opens the Netgen dialog
-    H. install_menu() idempotency on a stub QMainWindow
+    H. install_menu(): one menu-bar action, idempotent, removable
     I. Current journal is an optional output-name hint, never a prerequisite
     J. Settings persistence round-trip
     K. Mesh Evaluation is not part of the Cubit menu; the
@@ -95,16 +95,16 @@ class TestModuleSurface(unittest.TestCase):
 
 
 # ----------------------------------------------------------------------
-# B. Cubit owns the menu actions through emclaro
+# B. One-level menu-bar action
 # ----------------------------------------------------------------------
-class TestClaroOwnership(unittest.TestCase):
+class TestMenuBarAction(unittest.TestCase):
 
-    def test_module_does_not_construct_qt_actions(self):
+    def test_module_adds_no_popup_menu(self):
         with open(rem.__file__, "r", encoding="utf-8") as f:
             source = f.read()
-        self.assertNotIn("from PySide6.QtGui import QAction", source)
         self.assertNotIn("QMenu(", source)
-        self.assertIn("emclaro.add_to_menu", source)
+        self.assertNotIn("addMenu", source)
+        self.assertIn("bar.addAction(action)", source)
 
 
 # ----------------------------------------------------------------------
@@ -178,70 +178,39 @@ class TestNetgenCommand(_DialogTestBase):
         self.assertIn("kelvin_sym_z bn", cmd)
 
 
-class _FakePyAction:
-    def __init__(self):
-        self.text = ""
-        self.menu_text = ""
-        self.status_tip = ""
-        self.activate_method = ""
-
-    def setText(self, value):
-        self.text = value
-
-    def setMenuText(self, value):
-        self.menu_text = value
-
-    def setStatusTip(self, value):
-        self.status_tip = value
-
-    def setActivateMethod(self, value):
-        self.activate_method = value
-
-
-class _FakePyActionVector(list):
-    def push_back(self, value):
-        self.append(value)
-
-
 class TestInstallMenu(unittest.TestCase):
 
     def setUp(self):
-        rem._claro_keepalive.clear()
-        self.removed = []
-        self.added = []
-        self.fake_emclaro = types.SimpleNamespace(
-            is_loaded=lambda: True,
-            remove_menu_items=self.removed.append,
-            PyAction=_FakePyAction,
-            PyActionVector=_FakePyActionVector,
-            add_to_menu=lambda *args: self.added.append(args),
-        )
-        sys.modules["emclaro"] = self.fake_emclaro
+        _ensure_qapp()
+        self.win = QMainWindow()
+        self.win.setObjectName("Claro")
+        self.calls = []
+        self._orig = rem.launch_netgen_export
+        rem.launch_netgen_export = lambda: self.calls.append("netgen")
 
     def tearDown(self):
-        sys.modules.pop("emclaro", None)
-        rem._claro_keepalive.clear()
+        rem.remove_menu()
+        rem.launch_netgen_export = self._orig
+        self.win.deleteLater()
 
-    def test_install_creates_one_flat_netgen_action(self):
+    def _ours(self):
+        return [a for a in self.win.menuBar().actions()
+                if a.objectName() == rem._MENU_OBJECT_NAME]
+
+    def test_install_adds_one_top_level_export_action(self):
         self.assertTrue(rem.install_menu())
-        self.assertEqual(self.removed, [rem._CLARO_COMPONENT])
-        self.assertEqual(len(self.added), 1)
-        menu_title, actions, component = self.added[0]
-        self.assertEqual(menu_title, rem._CLARO_MENU_TITLE)
-        self.assertEqual(component, rem._CLARO_COMPONENT)
-        self.assertEqual(len(actions), 1)
-        (action,) = actions
-        self.assertEqual(action.text, "Export Netgen (.vol)...")
-        self.assertEqual(action.menu_text, "Export Netgen (.vol)...")
-        self.assertIn("launch_netgen_export()", action.activate_method)
+        (action,) = self._ours()
+        self.assertEqual(action.text(), "&Export")
+        self.assertIsNone(action.menu())
+        action.trigger()
+        self.assertEqual(self.calls, ["netgen"])
 
-    def test_install_is_idempotent(self):
+    def test_install_is_idempotent_and_removable(self):
         rem.install_menu()
         rem.install_menu()
-        self.assertEqual(self.removed,
-                         [rem._CLARO_COMPONENT, rem._CLARO_COMPONENT])
-        self.assertEqual(len(self.added), 2)
-        self.assertEqual(len(rem._claro_keepalive), 2)
+        self.assertEqual(len(self._ours()), 1)
+        self.assertTrue(rem.remove_menu())
+        self.assertEqual(self._ours(), [])
 
 
 class TestFindClaro(unittest.TestCase):

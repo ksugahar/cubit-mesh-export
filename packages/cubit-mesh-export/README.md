@@ -7,7 +7,7 @@ boundaries before analysis. The standalone tools run without Radia.
 ## Export a mesh
 
 - **Toolbar:** Click **Export Netgen (.vol)...** to open the export dialog.
-- **Menu:** Choose **Export → Export Netgen (.vol)...** to open the same dialog.
+- **Menu:** Click **Export** on Cubit's menu bar to open the same dialog.
 - **Batch:** Run `export netgen "mesh.vol"` in Cubit.
 
 Netgen `.vol` is selected automatically. In the dialog, set the output path
@@ -172,7 +172,7 @@ The journal must produce the expected material and boundary labels; adjust
 The no-argument `cubit-smoke-test` uses the package-owned
 `solver_ready_sample.jou`; no Radia installation or source tree is required.
 
-The Export menu runs through Claro in Cubit's embedded Python and uses Cubit's
+The Export menu-bar action runs in Cubit's embedded Python and uses Cubit's
 bundled PySide6.
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a

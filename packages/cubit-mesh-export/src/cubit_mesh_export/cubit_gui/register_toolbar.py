@@ -9,6 +9,6 @@ if _directory not in sys.path:
 import cubit_export_menu
 
 if cubit_export_menu.install_menu():
-    print("[cubit-mesh-export] Export menu installed through Claro")
+    print("[cubit-mesh-export] Export menu installed on the menu bar")
 else:
-    print("[cubit-mesh-export] Claro GUI unavailable (batch mode)")
+    print("[cubit-mesh-export] Cubit main window unavailable (batch mode)")

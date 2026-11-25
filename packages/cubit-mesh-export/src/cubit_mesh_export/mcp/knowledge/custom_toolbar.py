@@ -32,8 +32,9 @@ The standalone GUI candidate packages its menu and toolbar installer under
 not required for those assets. Check the installed distribution before claiming
 this candidate capability is deployed. LLM production remains APREPRO/headless;
 launch GUI only for the explicitly scoped exporter GUI test or human workflow.
-Keep Claro-owned actions out of PySide menu traversal. Register/remove them via
-Claro and disconnect their ownership before Python shutdown (aboutToQuit).
+The Export entry is one module-owned menu-bar QAction; never traverse
+Cubit-owned menus from PySide, and remove the action before Python shutdown
+(aboutToQuit).
 Legacy Radia GUI paths and compatibility bridges are removed. The exporter
 owns `cubit-toolbar-smoke-test` and its embedded probe as well as the GUI.
 Re-run `cubit-plugin-install` from the selected external interpreter and restart

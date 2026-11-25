@@ -120,32 +120,28 @@ def test_deployment_audit_rejects_startup_from_another_checkout(tmp_path):
     assert issues == []
 
 
-def test_cubit_startup_installs_menu_through_claro_api():
-    """The startup hook must install the menu via Cubit's Claro API.
-
-    History: the menu used to be injected straight into Cubit's QMenuBar
-    with PySide6.  Cubit discarded it during cold start because it did
-    not own it, so the menu "disappeared".  MEASURED on Cubit 2025.12:
-    ``emclaro.is_loaded()`` is already True inside ``~/.cubit``, and a
-    menu registered through ``emclaro.add_to_menu()`` is still present
-    once startup completes.
-    """
+def test_cubit_startup_installs_the_export_menu():
+    """The startup hook installs the Export menu-bar action."""
     source = REGISTER_TOOLBAR.read_text(encoding="utf-8")
 
     assert "cubit_export_menu.install_menu()" in source
     assert "import radia" not in source.replace("import cubit_export_menu", "")
 
 
-def test_export_menu_uses_claro_api_not_qmenubar_injection():
-    """The menu module must register through emclaro, not QMenuBar."""
+def test_export_menu_is_one_level_menu_bar_action():
+    """Export is a single menu-bar action, not a popup menu.
+
+    Cubit rebuilds its menu bar during cold start, so the action is attached
+    again once the event loop runs.  Only the module-owned action is touched.
+    """
     source = EXPORT_MENU.read_text(encoding="utf-8")
 
-    assert "import emclaro" in source
-    assert "add_to_menu" in source
-    assert "remove_menu_items" in source
-    # No QMenuBar injection: that is the bug this replaced.
-    assert "menu_bar.addMenu" not in source
+    assert "bar.addAction(action)" in source
+    assert "QTimer.singleShot(0, _attach_menu_action)" in source
+    assert "bar.removeAction(action)" in source
+    assert "emclaro" not in source.replace("``emclaro.add_to_menu``", "")
     assert "QMenu(" not in source
+    assert "addMenu" not in source
 
 
 def test_export_menu_does_not_force_a_journal_save():
@@ -157,19 +153,6 @@ def test_export_menu_does_not_force_a_journal_save():
     assert "getSaveFileName(" not in source
     assert "save journal" not in source
     assert "_current_journal_hint" in source
-
-
-def test_claro_export_menu_not_removed_through_qt():
-    """"Cubit Mesh Export" must not be torn down via Qt.
-
-    Enumerating Claro-owned QMenu/QAction objects from PySide6 deadlocks
-    Cubit (reproduced twice: the GUI stops responding and the play script
-    never returns).  Cleanup goes through emclaro.remove_menu_items().
-    """
-    source = REGISTER_TOOLBAR.read_text(encoding="utf-8")
-
-    assert '"Export Mesh", "Cubit Mesh Export"' not in source
-    assert '"Cubit Mesh Export",' not in source
 
 
 def test_find_claro_matches_capital_c_object_name():
@@ -198,34 +181,18 @@ def test_menu_offers_only_the_maintained_formats():
                     "nastran", "femeem", "gmsh", "Gmsh", "_MENU_SPECS", "launch_export(", "_run_generic_export"):
         assert retired not in source, retired
     assert re.findall(r'^_MENU_LABEL = "([^"]+)"$', source, flags=re.MULTILINE) == ["Export Netgen (.vol)..."]
-    assert source.count("emclaro.PyAction()") == 1
+    assert source.count("QAction(") == 1
 
 
-def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
-    """Cubit must be able to execute every PyAction activation string.
-
-    ``setActivateMethod`` stores source text for Cubit's embedded Python,
-    rather than a Python callable.  Extract only the source generator so this
-    contract stays testable without importing Cubit's private PySide6 runtime.
-    """
+def test_menu_action_dispatches_netgen_export():
+    """Triggering the menu-bar action runs the Netgen dialog entry point."""
     source = EXPORT_MENU.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(EXPORT_MENU))
-    activate_node = next(
-        node for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "_activate_code"
-    )
-    namespace = {"os": os, "__file__": str(EXPORT_MENU)}
-    exec(compile(ast.Module([activate_node], type_ignores=[]),
-                 str(EXPORT_MENU), "exec"), namespace)
-
+    node = next(n for n in tree.body
+                if isinstance(n, ast.FunctionDef) and n.name == "_on_export_triggered")
     calls = []
-    fake_menu = types.SimpleNamespace(launch_netgen_export=lambda: calls.append("netgen"))
-    monkeypatch.setitem(sys.modules, "cubit_export_menu", fake_menu)
-    original_path = list(sys.path)
-    try:
-        exec(namespace["_activate_code"](), {})
-    finally:
-        sys.path[:] = original_path
-
+    namespace = {"launch_netgen_export": lambda: calls.append("netgen")}
+    exec(compile(ast.Module([node], type_ignores=[]), str(EXPORT_MENU), "exec"), namespace)
+    namespace["_on_export_triggered"](False)
     assert calls == ["netgen"]
 
