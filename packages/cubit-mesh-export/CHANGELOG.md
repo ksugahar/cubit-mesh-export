@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 3.1.0 - 2026-11-26
 
 - **Export Netgen** on Cubit's menu bar is a single action that opens the Netgen `.vol`
   dialog directly; the Export submenu is gone.
