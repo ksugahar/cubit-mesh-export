@@ -659,10 +659,6 @@ namespace netgen
     order = 1;
 
     auto comm = mesh.GetCommunicator();
-#ifdef PARALLEL
-    enum { NG_MPI_TAG_CURVE = NG_MPI_TAG_MESH+20 };
-    const ParallelMeshTopology & partop = mesh.GetParallelTopology ();
-#endif
     int ntasks = comm.Size();
     bool working = (ntasks == 1) || (comm.Rank() > 0);
 
@@ -777,36 +773,6 @@ namespace netgen
       }
 
 
-#ifdef PARALLEL
-    // TABLE<int> send_orders(ntasks), recv_orders(ntasks);
-    DynamicTable<int> send_orders(ntasks), recv_orders(ntasks);
-
-    if (ntasks > 1 && working)
-      {
-        for (auto e : edgeorder.Range())
-          for (int proc : partop.GetDistantEdgeProcs(e))
-            send_orders.Add (proc, edgeorder[e]);              
-        for (auto f : faceorder.Range())
-          for (int proc : partop.GetDistantFaceProcs(f))
-            send_orders.Add (proc, faceorder[f]);                          
-      }
-
-    if (ntasks > 1)
-      //  MyMPI_ExchangeTable (send_orders, recv_orders, NG_MPI_TAG_CURVE, comm);
-      comm.ExchangeTable (send_orders, recv_orders, NG_MPI_TAG_CURVE);
-
-    if (ntasks > 1 && working)
-      {
-        Array<int> cnt(ntasks);
-        cnt = 0;
-        for (auto e : edgeorder.Range())
-          for (auto proc : partop.GetDistantEdgeProcs(e))
-            edgeorder[e] = max(edgeorder[e], recv_orders[proc][cnt[proc]++]);              
-        for (auto f : faceorder.Range())
-          for (auto proc : partop.GetDistantFaceProcs(f))
-            faceorder[f] = max(faceorder[f], recv_orders[proc][cnt[proc]++]);              
-      }
-#endif
 
 
     edgecoeffsindex.SetSize (nedges+1);
@@ -884,52 +850,6 @@ namespace netgen
             }
 
 
-#ifdef PARALLEL
-        if (ntasks > 1)
-          {
-            // distribute it ...
-            // TABLE<double> senddata(ntasks), recvdata(ntasks);
-            DynamicTable<double> senddata(ntasks), recvdata(ntasks);
-            
-            if (working)
-              for (auto e : T_Range<EdgeIndex>(nedges))
-                for (int proc : partop.GetDistantEdgeProcs(e))
-                  {
-                    senddata.Add (proc, surfnr[e]);
-                    if (surfnr[e] != -1)
-                      {
-                        senddata.Add (proc, gi0[e].trignum);
-                        senddata.Add (proc, gi0[e].u);
-                        senddata.Add (proc, gi0[e].v);
-                        senddata.Add (proc, gi1[e].trignum);
-                        senddata.Add (proc, gi1[e].u);
-                        senddata.Add (proc, gi1[e].v);
-                      }
-                  }
-            
-            // MyMPI_ExchangeTable (senddata, recvdata, NG_MPI_TAG_CURVE, comm);
-            comm.ExchangeTable (senddata, recvdata, NG_MPI_TAG_CURVE);
-
-            Array<int> cnt(ntasks);
-            cnt = 0;
-            if (working)
-              for (auto e : T_Range<EdgeIndex>(nedges))
-                for (int proc : partop.GetDistantEdgeProcs(e))
-                  {
-                    int surfnr1 = recvdata[proc][cnt[proc]++];
-                    if (surfnr1 != -1)
-                      {
-                        surfnr[e] = surfnr1; 
-                        gi0[e].trignum = int (recvdata[proc][cnt[proc]++]);
-                        gi0[e].u = recvdata[proc][cnt[proc]++];
-                        gi0[e].v = recvdata[proc][cnt[proc]++];
-                        gi1[e].trignum = int (recvdata[proc][cnt[proc]++]);
-                        gi1[e].u = recvdata[proc][cnt[proc]++];
-                        gi1[e].v = recvdata[proc][cnt[proc]++];
-                      }
-                  }
-          }
-#endif    
 
 
         if (working)
@@ -1086,60 +1006,6 @@ namespace netgen
           swap_edge[edgenr] = int (seg[0] > seg[1]);
         }
 
-#ifdef PARALLEL
-    if (ntasks > 1)
-      {
-        // distribute it ...
-        // TABLE<double> senddata(ntasks), recvdata(ntasks);
-        DynamicTable<double> senddata(ntasks), recvdata(ntasks);
-        
-        if (working)
-          for (auto e : T_Range<EdgeIndex>(nedges))
-            for (int proc : partop.GetDistantEdgeProcs(e))
-              {
-                senddata.Add (proc, use_edge[e]);
-                if (use_edge[e])
-                  {
-                    senddata.Add (proc, edge_surfnr1[e]);
-                    senddata.Add (proc, edge_surfnr2[e]);
-                    senddata.Add (proc, edge_geoedgenr[e]);
-                    senddata.Add (proc, edge_gi0[e].dist);
-                    senddata.Add (proc, edge_gi0[e].gi.u);
-                    senddata.Add (proc, edge_gi0[e].gi.v);
-                    senddata.Add (proc, edge_gi1[e].dist);
-                    senddata.Add (proc, edge_gi1[e].gi.u);
-                    senddata.Add (proc, edge_gi1[e].gi.v);
-                    senddata.Add (proc, swap_edge[e]);
-                  }
-              }
-
-        // MyMPI_ExchangeTable (senddata, recvdata, NG_MPI_TAG_CURVE, comm);
-        comm.ExchangeTable (senddata, recvdata, NG_MPI_TAG_CURVE);
-        
-        Array<int> cnt(ntasks);
-        cnt = 0;
-        if (working)
-          for (auto e : edge_surfnr1.Range())
-            for (int proc : partop.GetDistantEdgeProcs(e))
-              {
-                int get_edge = int(recvdata[proc][cnt[proc]++]);
-                if (get_edge)
-                  {
-                    use_edge[e] = 1;
-                    edge_surfnr1[e] = int (recvdata[proc][cnt[proc]++]);
-                    edge_surfnr2[e] = int (recvdata[proc][cnt[proc]++]);
-                    edge_geoedgenr[e] = int (recvdata[proc][cnt[proc]++]);
-                    edge_gi0[e].dist = recvdata[proc][cnt[proc]++];
-                    edge_gi0[e].gi.u = recvdata[proc][cnt[proc]++];
-                    edge_gi0[e].gi.v = recvdata[proc][cnt[proc]++];
-                    edge_gi1[e].dist = recvdata[proc][cnt[proc]++];
-                    edge_gi1[e].gi.u = recvdata[proc][cnt[proc]++];
-                    edge_gi1[e].gi.v = recvdata[proc][cnt[proc]++];
-                    swap_edge[e] = recvdata[proc][cnt[proc]++];
-                  }
-              }
-      }
-#endif    
 
     if (working)
       for (auto edgenr : use_edge.Range())
@@ -1287,30 +1153,6 @@ namespace netgen
         surfnr[top.GetFace(i)] = 
           mesh.GetFaceDescriptor(mesh[i].GetIndex()).SurfNr();
 
-#ifdef PARALLEL
-    // TABLE<int> send_surfnr(ntasks), recv_surfnr(ntasks);
-    DynamicTable<int> send_surfnr(ntasks), recv_surfnr(ntasks);
-
-    if (ntasks > 1 && working)
-      {
-        for (auto f : T_Range<FaceIndex>(nfaces))
-          for (int proc : partop.GetDistantFaceProcs(f))
-            send_surfnr.Add (proc, surfnr[f]);              
-      }
-
-    if (ntasks > 1)
-      // MyMPI_ExchangeTable (send_surfnr, recv_surfnr, NG_MPI_TAG_CURVE, comm);
-      comm.ExchangeTable (send_surfnr, recv_surfnr, NG_MPI_TAG_CURVE);
-
-    if (ntasks > 1 && working)
-      {
-        Array<int> cnt(ntasks);
-        cnt = 0;
-        for (auto f : T_Range<FaceIndex>(nfaces))
-          for (int proc : partop.GetDistantFaceProcs(f))
-            surfnr[f] = max(surfnr[f], recv_surfnr[proc][cnt[proc]++]);              
-      }
-#endif
 
     if (mesh.GetDimension() == 3 && working)
       {
@@ -1697,9 +1539,6 @@ namespace netgen
     // (*testout) << "facecoeffs = " << endl << facecoeffs << endl;
 
 
-#ifdef PARALLEL
-    comm.Barrier();
-#endif
   }
 
 
@@ -1714,30 +1553,6 @@ namespace netgen
   // ***********************  Transform edges *****************************
 
   
-  bool CurvedElements ::  IsSegmentCurved (SegmentIndex elnr) const
-  {
-    if (mesh.coarsemesh)
-      {
-        const HPRefElement & hpref_el =
-          (*mesh.hpelements) [mesh.GetHpElnr(elnr)];
-        
-        return mesh.coarsemesh->GetCurvedElements().IsCurved (SegmentIndex(hpref_el.coarse_elnr));
-      }
-
-    SegmentInfo info;
-    info.elnr = elnr;
-    info.order = order;
-    info.ndof = info.nv = 2;
-    if (info.order > 1)
-      {
-        const MeshTopology & top = mesh.GetTopology();
-        info.edgenr = top.GetEdge (elnr);       
-        info.ndof += edgeorder[info.edgenr]-1;
-      }
-
-    return (info.ndof > info.nv);
-  }
-
 
  
   
@@ -2894,176 +2709,10 @@ namespace netgen
   }
 
 
-  bool CurvedElements :: IsElementHighOrder (ElementIndex elnr) const
-  {
-    if (mesh.coarsemesh)
-      {
-        const HPRefElement & hpref_el =
-          (*mesh.hpelements) [mesh.GetHpElnr(elnr)];
-        
-        return mesh.coarsemesh->GetCurvedElements().IsElementHighOrder (ElementIndex(hpref_el.coarse_elnr));
-      }
-
-    auto el = mesh[elnr];
-    ELEMENT_TYPE type = el.GetType();
-
-    ElementInfo info;
-    info.elnr = elnr;
-    info.order = order;
-    info.ndof = info.nv = MeshTopology::GetNPoints (type);
-    if (info.order > 1)
-      {
-        const MeshTopology & top = mesh.GetTopology();
-
-        for (auto e : top.GetEdges(elnr))
-          if (edgecoeffsindex[e+1] > edgecoeffsindex[e]) return true;
-        
-        for (auto f : top.GetFaces(elnr))
-          if (facecoeffsindex[f+1] > facecoeffsindex[f]) return true;
-
-      }
-    return false;
-  }
 
 
 
 
-
-
-  void CurvedElements :: 
-  CalcElementTransformation (Point<3> xi, ElementIndex elnr,
-                             Point<3> * x, Mat<3,3> * dxdxi, //  bool * curved,
-                             void * buffer, bool valid)
-  {
-    if (mesh.coarsemesh)
-      {
-        const HPRefElement & hpref_el =
-          (*mesh.hpelements) [mesh.GetHpElnr(elnr)];
-          
-        // xi umrechnen
-        double lami[8];
-        FlatVector vlami(8, lami);
-        vlami = 0;
-        mesh[elnr].GetShapeNew<double> (xi, vlami);
-
-        Mat<3,3> trans, dxdxic;
-        if (dxdxi)
-          {
-            MatrixFixWidth<3> dlami(8);
-            dlami = 0;
-            mesh[elnr].GetDShapeNew (xi, dlami);          
-              
-            trans = 0;
-            for (int k = 0; k < 3; k++)
-              for (int l = 0; l < 3; l++)
-                for (int i = 0; i < hpref_el.np; i++)
-                  trans(l,k) += hpref_el.param[i][l] * dlami(i, k);
-          }
-
-        Point<3> coarse_xi(0,0,0);
-        for (int i = 0; i < hpref_el.np; i++)
-          for (int j = 0; j < 3; j++)
-            coarse_xi(j) += hpref_el.param[i][j] * lami[i];
-
-        mesh.coarsemesh->GetCurvedElements().
-          CalcElementTransformation (coarse_xi, ElementIndex(hpref_el.coarse_elnr), x, &dxdxic /* , curved */);
-
-        if (dxdxi)
-          *dxdxi = dxdxic * trans;
-
-        return;
-      }
-
-
-    auto el = mesh[elnr];
-    ELEMENT_TYPE type = el.GetType();
-
-    ElementInfo hinfo;
-    ElementInfo & info = (buffer) ? *static_cast<ElementInfo*> (buffer) : hinfo;
-    
-
-    if (!valid)
-      {
-        info.elnr = elnr;
-        info.order = order;
-        info.ndof = info.nv = MeshTopology::GetNPoints (type);
-        if (info.order > 1)
-          {
-            const MeshTopology & top = mesh.GetTopology();
-
-            /*
-            info.nedges = top.GetElementEdges (elnr+1, info.edgenrs, 0);
-            for (int i = 0; i < info.nedges; i++)
-              info.edgenrs[i]--;
-            
-            info.nfaces = top.GetElementFaces (elnr+1, info.facenrs, 0);
-            for (int i = 0; i < info.nfaces; i++)
-              info.facenrs[i]--;
-            */
-            info.SetEdges (top.GetEdges(elnr));
-            info.SetFaces (top.GetFaces(elnr));
-
-            /*
-            for (int i = 0; i < info.nedges; i++)
-              info.ndof += edgecoeffsindex[info.edgenrs[i]+1] - edgecoeffsindex[info.edgenrs[i]];
-            for (int i = 0; i < info.nfaces; i++)
-              info.ndof += facecoeffsindex[info.facenrs[i]+1] - facecoeffsindex[info.facenrs[i]];
-            */
-
-            for (auto e : info.GetEdges())
-              info.ndof += edgecoeffsindex[e+1] - edgecoeffsindex[e];
-            
-            for (auto f : info.GetFaces())
-              info.ndof += facecoeffsindex[f+1] - facecoeffsindex[f];
-          }
-      }
-
-    ArrayMem<double,100> mem(info.ndof);
-    TFlatVector<double> shapes(info.ndof, &mem[0]);
-    ArrayMem<double,100> dshapes_mem(info.ndof*3);
-    MatrixFixWidth<3> dshapes(info.ndof, &dshapes_mem[0]);
-    
-    CalcElementShapes (info, xi, shapes);
-
-    Vec<3> * coefs =  (info.ndof <= 10) ? 
-      &info.hcoefs[0] : new Vec<3> [info.ndof];
-
-    if (info.ndof > 10 || !valid)
-      GetCoefficients (info, coefs);
-
-    if (x)
-      {
-        *x = 0;
-        for (int i = 0; i < shapes.Size(); i++)
-          *x += shapes(i) * coefs[i];
-      }
-
-    if (dxdxi)
-      {
-        if (valid && info.order == 1 && info.nv == 4)   // a linear tet
-          {
-            *dxdxi = info.hdxdxi;
-          }
-        else
-          {
-            CalcElementDShapes (info, xi, dshapes);
-            
-            *dxdxi = 0;
-            for (int i = 0; i < shapes.Size(); i++)
-              for (int j = 0; j < 3; j++)
-                for (int k = 0; k < 3; k++)
-                  (*dxdxi)(j,k) += dshapes(i,k) * coefs[i](j);
-            
-            info.hdxdxi = *dxdxi;
-          }
-      }
-
-    // *testout << "curved_elements, dshapes = " << endl << dshapes << endl;
-
-    //    if (curved) *curved = (info.ndof > info.nv);
-
-    if (info.ndof > 10) delete [] coefs;
-  }
 
 
 
@@ -4702,20 +4351,6 @@ namespace netgen
                                      Point<3,double> * x, Vec<3,double> * dxdxi, bool * curved);
 
 
-  void CurvedElements :: 
-  CalcMultiPointSurfaceTransformation (Array< Point<2> > * xi, SurfaceElementIndex elnr,
-                                       Array< Point<3> > * x,
-                                       Array< Mat<3,2> > * dxdxi)
-  {
-    double * px = (x) ? &(*x)[0](0) : NULL;
-    double * pdxdxi = (dxdxi) ? &(*dxdxi)[0](0) : NULL;
-
-    CalcMultiPointSurfaceTransformation <3> (elnr, xi->Size(),
-                                             &(*xi)[0](0), 2, 
-                                             px, 3,
-                                             pdxdxi, 6);
-  }
-
 
 
 
@@ -5017,160 +4652,6 @@ namespace netgen
 
 
 
-
-  void CurvedElements :: 
-  CalcMultiPointElementTransformation (Array< Point<3> > * xi, ElementIndex elnr,
-                                       Array< Point<3> > * x,
-                                       Array< Mat<3,3> > * dxdxi)
-  {
-    double * px = (x) ? &(*x)[0](0) : NULL;
-    double * pdxdxi = (dxdxi) ? &(*dxdxi)[0](0) : NULL;
-
-    CalcMultiPointElementTransformation (elnr, xi->Size(),
-                                         &(*xi)[0](0), 3, 
-                                         px, 3,
-                                         pdxdxi, 9);
-    
-    return;
-#ifdef OLD
-
-    if (mesh.coarsemesh)
-      {
-        const HPRefElement & hpref_el =
-          (*mesh.hpelements) [mesh.GetHpElnr(elnr)];
-        
-        // xi umrechnen
-        double lami[8];
-        FlatVector vlami(8, lami);
-
-
-        ArrayMem<Point<3>, 50> coarse_xi (xi->Size());
-        
-        for (int pi = 0; pi < xi->Size(); pi++)
-          {
-            vlami = 0;
-            mesh[elnr].GetShapeNew ( (*xi)[pi], vlami);
-            
-            Point<3> cxi(0,0,0);
-            for (int i = 0; i < hpref_el.np; i++)
-              for (int j = 0; j < 3; j++)
-                cxi(j) += hpref_el.param[i][j] * lami[i];
-
-            coarse_xi[pi] = cxi;
-          }
-
-        mesh.coarsemesh->GetCurvedElements().
-          CalcMultiPointElementTransformation (&coarse_xi, ElementIndex(hpref_el.coarse_elnr), x, dxdxi);
-
-
-        Mat<3,3> trans, dxdxic;
-        if (dxdxi)
-          {
-            MatrixFixWidth<3> dlami(8);
-            dlami = 0;
-
-            for (int pi = 0; pi < xi->Size(); pi++)
-              {
-                mesh[elnr].GetDShapeNew ( (*xi)[pi], dlami);      
-                
-                trans = 0;
-                for (int k = 0; k < 3; k++)
-                  for (int l = 0; l < 3; l++)
-                    for (int i = 0; i < hpref_el.np; i++)
-                      trans(l,k) += hpref_el.param[i][l] * dlami(i, k);
-                
-                dxdxic = (*dxdxi)[pi];
-                (*dxdxi)[pi] = dxdxic * trans;
-              }
-          }     
-
-        return;
-      }
-
-
-
-
-
-
-
-
-    Vector shapes;
-    MatrixFixWidth<3> dshapes;
-
-
-    const Element & el = mesh[elnr];
-    ELEMENT_TYPE type = el.GetType();
-
-    ElementInfo info;
-    info.elnr = elnr;
-    info.order = order;
-    info.ndof = info.nv = MeshTopology::GetNPoints (type);
-    if (info.order > 1)
-      {
-        const MeshTopology & top = mesh.GetTopology();
-        
-        info.nedges = top.GetElementEdges (elnr+1, info.edgenrs, 0);
-        for (int i = 0; i < info.nedges; i++)
-          info.edgenrs[i]--;
-
-        info.nfaces = top.GetElementFaces (elnr+1, info.facenrs, 0);
-        for (int i = 0; i < info.nfaces; i++)
-          info.facenrs[i]--;
-
-        for (int i = 0; i < info.nedges; i++)
-          info.ndof += edgecoeffsindex[info.edgenrs[i]+1] - edgecoeffsindex[info.edgenrs[i]];
-        for (int i = 0; i < info.nfaces; i++)
-          info.ndof += facecoeffsindex[info.facenrs[i]+1] - facecoeffsindex[info.facenrs[i]];
-        // info.ndof += facecoeffsindex[info.facenr+1] - facecoeffsindex[info.facenr];
-      }
-
-    Array<Vec<3> > coefs(info.ndof);
-    GetCoefficients (info, &coefs[0]);
-    if (x)
-      {
-        for (int j = 0; j < xi->Size(); j++)
-          {
-            CalcElementShapes (info, (*xi)[j], shapes);
-            (*x)[j] = 0;
-            for (int i = 0; i < coefs.Size(); i++)
-              (*x)[j] += shapes(i) * coefs[i];
-          }
-      }
-
-    if (dxdxi)
-      {
-        if (info.order == 1 && type == TET)
-          {
-            if (xi->Size() > 0)
-              {
-                CalcElementDShapes (info, (*xi)[0], dshapes);
-                Mat<3,3> ds;
-                ds = 0;
-                for (int i = 0; i < coefs.Size(); i++)
-                  for (int j = 0; j < 3; j++)
-                    for (int k = 0; k < 3; k++)
-                      ds(j,k) += dshapes(i,k) * coefs[i](j);
-            
-                for (int ip = 0; ip < xi->Size(); ip++)
-                  (*dxdxi)[ip] = ds;
-              }
-          }
-        else
-          for (int ip = 0; ip < xi->Size(); ip++)
-            {
-              CalcElementDShapes (info, (*xi)[ip], dshapes);
-              
-              Mat<3,3> ds;
-              ds = 0;
-              for (int i = 0; i < coefs.Size(); i++)
-                for (int j = 0; j < 3; j++)
-                  for (int k = 0; k < 3; k++)
-                    ds(j,k) += dshapes(i,k) * coefs[i](j);
-              (*dxdxi)[ip] = ds;
-            }
-      }
-#endif
-  }
 
 
   // extern int multipointtrafovar;

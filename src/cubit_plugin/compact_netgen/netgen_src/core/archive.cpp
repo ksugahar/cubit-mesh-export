@@ -34,16 +34,4 @@ namespace ngcore
     return GetTypeRegister().count(classname) != 0;
   }
 
-  Archive& Archive::Shallow(std::any& val)
-  {
-    if (shallow_to_python)
-      {
-        if (is_output)
-          ShallowOutAny(val);
-        else
-          ShallowInAny(val);
-      }
-    return *this;
-  }
-
 } // namespace ngcore

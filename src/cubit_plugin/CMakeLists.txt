@@ -38,6 +38,12 @@ endif()
 # specials, validate or surfacegeom; Python, MPI, AVX SIMD, visualization,
 # CSG/OCC/STL/ACIS/2D geometry, hp-refinement rule tables, boundary-layer,
 # Delaunay 2D, field-line, solution-data and nginterface headers are deleted.
+# Trimmed: the compiled .cpp files and *_patched.cpp overrides keep only
+# functions some link still references.  `#if 0`, PARALLEL, COMPACT_NETGEN
+# and other-platform branches were resolved; then each function the MSVC
+# linker discarded as unreferenced (/OPT:REF /VERBOSE:REF on a scratch link)
+# in the .ccm and both contract executables was deleted, keeping those that
+# were only inlined away, until the set converged.
 # To update, run compact_netgen/update_snapshot.py (three-way merge over the
 # retained files).
 set(COMPACT_NETGEN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/compact_netgen")

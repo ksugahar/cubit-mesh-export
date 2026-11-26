@@ -9,8 +9,11 @@ an upstream file), merge
     theirs = the upstream file at --new,
 with `git merge-file`, writing LF line endings.  Conflicts are left in the
 files with standard markers and listed at the end; resolve them, then build.
-A trimmed *_patched.cpp does not receive upstream functions added in regions
-it omits: the link step reports them, and they must be copied by hand.
+Every compiled .cpp here is trimmed to the functions the links reference.
+Upstream edits inside a deleted function surface as conflicts: resolve them
+by keeping the deletion unless the link now needs that function.  Upstream
+functions newly required are reported by the link step and are copied by
+hand from the upstream file.
 Update netgen_version.hpp to the new tag afterwards.
 """
 import argparse
