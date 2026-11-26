@@ -351,66 +351,55 @@ required.
 CPP_SDK_CUSTOM_COMMANDS = """
 # Adding New Cubit Command-Line Verbs (C++ SDK)
 
-The C++ SDK lets you register entirely new command verbs that show up
-in Cubit's command parser.  Once registered, users can type your
-command at the Cubit command prompt, or `play` a journal file that
-invokes it -- exactly like a built-in command.
+A command plugin adds verbs to Cubit's command parser, so they run from
+the command prompt, a `play`ed journal, or `cubit.cmd(...)`.  The Python
+toolbar path cannot do this: it only runs callbacks.
 
-This is a capability the in-process Python toolbar workflow cannot
-match: Python toolbars only run callbacks; they don't extend the
-command grammar.
-
-## When to add a new command
-
-- The action should be `play`-replayable from a `.jou` file.
-- The action should be hotkey-bindable (only NEW commands can get
-  hotkeys; existing commands cannot have hotkeys retrofitted -- see
-  webinar QA).
-- The action benefits from being scripted in a journal file rather
-  than triggered from a GUI button.
-
-## Registration sketch
-
-The SDK example shows the `command_factory` pattern.  Conceptually:
+The verified recipe (API, build flags, loading, headless smoke test and a
+template that builds on Cubit 2026.8) is the packaged skill: topic
+`command_plugin`, files via topic `command_plugin_templates`, or the
+`cubit_scaffold_command_plugin` tool.  The shape of the API, from
+`<Cubit>/include/cubit/CubitCommandInterface.hpp`:
 
 ```cpp
-class MyCommand : public CubitCommand {
-public:
-    virtual CubitStatus execute() override {
-        // parse parameters from the command line
-        // run the action
-        // return CUBIT_SUCCESS or CUBIT_FAILURE
-    }
-    virtual std::string syntax() const override { return "my_command <int>"; }
-    virtual std::string help() const override { return "..."; }
+class MyPlugin : public CubitCommandInterface {      // one per binary
+  std::vector<std::string> get_keys() override;     // internal keys
+  CubitCommand* create_command(const std::string& key) override;  // Cubit owns it
 };
+CUBIT_PLUGIN(MyPlugin)                               // CubitPluginExport.hpp; required
 
-void register_commands(ClaroInterface* claro) {
-    claro->command_parser()->register_command("my_command", []() {
-        return std::make_unique<MyCommand>();
-    });
-}
+class MyCommand : public CubitCommand {
+  std::vector<std::string> get_syntax() override {   // modified BNF
+    return {"mycommand report <string:label='message'> [count <value:label='count'>]"};
+  }
+  std::vector<std::string> get_syntax_help() override { return {}; }
+  std::vector<std::string> get_help() override { return {}; }
+  bool execute(CubitCommandData& data) override {   // false = failed
+    std::string m; data.get_string("message", m);
+    int n = 1; data.get_value("count", n);
+    for (int i = 0; i < n; ++i) PRINT_INFO("%s\\n", m.c_str());
+    return true;
+  }
+};
 ```
 
-After plugin load, users can do:
+There is no `register_command` call for plugins: the loader registers
+every command that `create_command` returns.  Plugin verbs are parsed
+before the legacy handlers, so a verb equal to a built-in masks it.
 
-```
-cubit> my_command 42
-cubit> play my_journal.jou       # if the .jou contains `my_command 42`
-```
-
-## Hotkey for the new command
+## Hotkey for the new command (GUI plugin)
 
 ```cpp
 auto* action = new QAction(QObject::tr("&MyCommand"), nullptr);
 action->setShortcut(QKeySequence("Ctrl+Shift+M"));
 QObject::connect(action, &QAction::triggered, []() {
-    claro->command_interface()->run_command("my_command 42");
+    CubitInterface::cmd("mycommand report \\"hi\\" count 1");
 });
 ```
 
-The `&M` Alt-hotkey works on menu items; `setShortcut` with
-`QKeySequence("Ctrl+Shift+M")` works for arbitrary key combinations.
+The `&M` Alt-hotkey works on menu items; `setShortcut` takes arbitrary
+key combinations.  Menus need a GUI plugin (`sdk_examples/GUIPlugin`,
+`cubit_gui` + Qt Widgets), separate from the command plugin.
 """
 
 CPP_SDK_TROUBLESHOOTING = """
@@ -485,6 +474,9 @@ CPP_SDK_TOPICS = {
     "troubleshooting": CPP_SDK_TROUBLESHOOTING,
 }
 
+# Topics served from the packaged skill files (see command_plugin_skill.py).
+_SKILL_TOPICS = ("command_plugin", "command_plugin_templates")
+
 # Aliases for natural-language access from the MCP server.
 CPP_SDK_ALIASES = {
     "intro": "overview",
@@ -509,6 +501,12 @@ CPP_SDK_ALIASES = {
     "panel_factory": "components_example",
     "navigation_nodes": "components_example",
     "commands": "custom_commands",
+    "plugin": "command_plugin",
+    "command_plugin_skill": "command_plugin",
+    "skill": "command_plugin",
+    "ccm": "command_plugin",
+    "templates": "command_plugin_templates",
+    "template": "command_plugin_templates",
     "command_verb": "custom_commands",
     "hotkey": "custom_commands",
     "shortcut": "custom_commands",
@@ -537,9 +535,14 @@ def get_cpp_sdk_documentation(topic: str = "overview") -> str:
                  "troubleshooting"]
         return "\n\n".join(CPP_SDK_TOPICS[k] for k in order)
     resolved = CPP_SDK_ALIASES.get(topic, topic)
+    if resolved in _SKILL_TOPICS:
+        from cubit_mesh_export.mcp.knowledge import command_plugin_skill as skill
+        if resolved == "command_plugin":
+            return skill.get_command_plugin_skill()
+        return skill.get_command_plugin_templates()
     if resolved in CPP_SDK_TOPICS:
         return CPP_SDK_TOPICS[resolved]
-    valid = sorted(CPP_SDK_TOPICS.keys())
+    valid = sorted([*CPP_SDK_TOPICS, *_SKILL_TOPICS])
     return (
         f"Unknown cpp_sdk topic: {topic!r}.  "
         f"Valid topics: {valid}.  "

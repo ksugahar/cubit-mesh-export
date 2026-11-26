@@ -5318,6 +5318,10 @@ def cubit_cpp_sdk_guide(topic: str = "overview") -> str:
 			"custom_commands"   - Register new command verbs + hotkeys
 			"troubleshooting"   - Debug/Release mismatch, MOC/UIC,
 			                      hotkey gotchas
+			"command_plugin"    - Packaged skill: verified recipe for a
+			                      native command plugin (API, build,
+			                      loading, headless smoke, shipping)
+			"command_plugin_templates" - The skill's template sources
 
 	Aliases: cmake, qt6, build, load, restart, claro, menu, toolbar,
 	         panel, navigation_nodes, hotkey, shortcut, moc, uic,
@@ -5328,6 +5332,50 @@ def cubit_cpp_sdk_guide(topic: str = "overview") -> str:
 	        SDK", Carl McKelvey).
 	"""
 	return get_cpp_sdk_documentation(topic)
+
+
+@mcp.tool()
+def cubit_scaffold_command_plugin(out_dir: str, name: str = "my_cubit_plugin") -> str:
+	"""
+	Copy the verified Cubit C++ command-plugin template to a new directory.
+
+	Writes <out_dir>/<name>/ with SKILL.md, CMakeLists.txt, a plugin class,
+	two example commands (`myplugin hello`, `export nodecount`),
+	utf8_path.hpp, build.ps1 (Release, pinned MSVC toolset) and smoke.ps1
+	(stages the DLL into a disposable headless Cubit and runs both verbs).
+	The template builds and passes smoke.ps1 on Coreform Cubit 2026.8.
+	Read `cubit_cpp_sdk_guide topic=command_plugin` for the recipe.
+
+	Args:
+		out_dir: Existing parent directory.
+		name: New directory name (letters, digits, '_' or '-'); must not exist.
+
+	Returns:
+		The written files and the next commands to run.
+	"""
+	import re
+	from cubit_mesh_export.mcp.knowledge.command_plugin_skill import scaffold_command_plugin
+
+	if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name or ""):
+		return "ERROR: name must be 1-64 letters, digits, '_' or '-'"
+	if not out_dir:
+		return "ERROR: out_dir is required"
+	parent = Path(out_dir).expanduser().resolve()
+	if not parent.is_dir():
+		return f"ERROR: out_dir does not exist: {parent}"
+	try:
+		written = scaffold_command_plugin(parent / name)
+	except (FileExistsError, FileNotFoundError) as exc:
+		return f"ERROR: {exc}"
+	target = parent / name
+	return (
+		f"Command-plugin template written to: {target}\n\nFiles:\n"
+		+ "\n".join(f"  {p}" for p in written)
+		+ "\n\nNext steps:\n"
+		"  1. Rename MyPlugin / the verbs / my_cubit_plugin (see SKILL.md)\n"
+		f"  2. pwsh -File {target / 'build.ps1'}\n"
+		f"  3. pwsh -File {target / 'smoke.ps1'}\n"
+	)
 
 
 @mcp.tool()
@@ -5607,6 +5655,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_smart_async", "cubit_mesh_race_review",
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
+	"cubit_scaffold_command_plugin",
 	"cubit_session_journal", "cubit_validation_run",
 	"cubit_probe", "cubit_mesh_diagnose", "cubit_suggest_next",
 }

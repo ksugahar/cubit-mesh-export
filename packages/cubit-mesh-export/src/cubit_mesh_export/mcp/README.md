@@ -102,7 +102,7 @@ Then in a session:
 | **Diagnostics** | `cubit_mesh_diagnose`, `cubit_suggest_next`, `cubit_recent_failures`, `cubit_diagnostics_guide` |
 | **Lint** | `lint_cubit_script`, `lint_cubit_directory`, `cubit_audit_summary`, `get_lint_rules`, `generate_cubit_script` |
 | **Knowledge** | `cubit_ask`, `cubit_lookup`, `cubit_docs`, `cubit_forum_tips`, `cubit_web_docs`, `cubit_examples[_refresh]`, `netgen_workflow_guide`, `netgen_code_example` |
-| **Toolbar / SDK** | `cubit_toolbar_guide`, `cubit_scaffold_toolbar`, `cubit_generate_dialog`, `cubit_cpp_sdk_guide` |
+| **Toolbar / SDK** | `cubit_toolbar_guide`, `cubit_scaffold_toolbar`, `cubit_generate_dialog`, `cubit_cpp_sdk_guide`, `cubit_scaffold_command_plugin` |
 | **Status / meta** | `cubit_status` |
 
 Run `cubit_status()` for the live, definitive list.

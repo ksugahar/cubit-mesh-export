@@ -53,7 +53,7 @@ where = ["src"]
 # is the only supported Cubit GUI; cubit-plugin-install deletes stale .ccl files.
 cubit_mesh_export = ["*.ccm", "native_payloads.json", "cubit_mesh_export_native_source.zip"]
 "cubit_mesh_export.cubit_helpers" = ["*.py"]
-"cubit_mesh_export.mcp" = ["README.md"]
+"cubit_mesh_export.mcp" = ["README.md", "skills/*/SKILL.md", "skills/*/templates/*"]
 "cubit_mesh_export.mcp._support" = ["*.txt", "*.md"]
 "cubit_mesh_export.cubit_gui" = ["*.jou", "cubit_toolbar/scripts/*.py", "cubit_toolbar/icons/*.svg", "cubit_toolbar/toolbars/*.tmpl"]
 
