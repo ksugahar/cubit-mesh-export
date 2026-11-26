@@ -99,7 +99,9 @@ plugin embeds Compact Netgen and does not link against the Python solver wheels.
 Meshes with pyramids additionally need a Netgen 6.2.2608 runtime carrying the
 pyramid apex clamp (upstream 13b47c3a9) and the base-edge blend; the stock
 6.2.2608 wheels have neither, and `check-vol` refuses pyramid meshes on such a
-runtime, naming the missing fix. The build and install recipe for that runtime
+runtime, naming the missing fix. Prebuilt Windows wheels of that runtime are
+the latest GitHub Releases of the [ksugahar/netgen](https://github.com/ksugahar/netgen/releases)
+and [ksugahar/ngsolve](https://github.com/ksugahar/ngsolve/releases) forks; the build recipe
 is in [docs/native-abi.md](https://github.com/ksugahar/cubit-mesh-export/blob/main/packages/cubit-mesh-export/docs/native-abi.md#patched-netgen-runtime-for-pyramids).
 For LLM operation, the canonical manual is the included `cubit_mesh_export.mcp` server:
 start with `cubit_status` and `cubit_docs`; use APREPRO through its headless
