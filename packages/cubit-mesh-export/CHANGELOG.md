@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Breaking: the Python curver extension `cubit_mesh_curver.pyd` is removed.
+
+- `cubit_mesh_export.ccm` (compact Netgen compiled in) is the only native payload; its
+  `export netgen` output is unchanged.
+- Remove the pybind11 target and its sources (`cubit_mesh_export_pybind.cpp`,
+  `NetgenCurverPure.*`), the `build-pyd` build step, the `binaries` release asset
+  download (`tools/download_release_asset.py`) and `LICENSE-PYBIND11.txt`.
+- `cubit-plugin-install` no longer deploys the curver or `nglib.dll`/`ngcore.dll`; it
+  deletes those stale files from Cubit's plugin directory.
+- `import cubit_mesh_export` no longer imports Netgen.
+
 ## 3.1.0 - 2026-11-26
 
 - **Export Netgen** on Cubit's menu bar is a single action that opens the Netgen `.vol`

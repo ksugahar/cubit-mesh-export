@@ -24,12 +24,10 @@ the plugin fail to load or crash.
 ## Rules
 
 1. Keep the ABI-bound native surface minimal: mesh export and the curving
-   trampoline only.
-   - `cubit_mesh_export.ccm` compiles a vendored compact Netgen snapshot
-     (`src/cubit_plugin/compact_netgen`: 6.2.2608 with the same two pyramid
-     fixes), so it never loads a runtime `nglib.dll`.
-   - `cubit_mesh_curver.pyd` links the Netgen C++ ABI of the runtime it runs
-     in.
+   trampoline only, in the single payload `cubit_mesh_export.ccm`. It compiles
+   a vendored compact Netgen snapshot (`src/cubit_plugin/compact_netgen`:
+   6.2.2608 with the same two pyramid fixes), so it never loads a runtime
+   `nglib.dll`. There is no Python native extension.
 2. Keep everything else out of the native plugin.
    - CAD-capture consumers and adapters for solvers that mesh from CAD run
      outside Cubit as JSON-in/JSON-out Python, bound to the capture SHA256.
@@ -42,7 +40,7 @@ the plugin fail to load or crash.
      PySide or PyQt.
 4. A move to a new Cubit or Netgen release replaces the supported version
    rather than adding one.
-   - Rebuild both payloads.
+   - Rebuild the `.ccm`.
    - Rerun the curved-surface regression that records high-order node
      deviation from the CAD surface.
 5. For CAD routes, verify the target's reconstructed radii and surfaces against

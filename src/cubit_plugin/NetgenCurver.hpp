@@ -110,7 +110,7 @@ public:
 
   int get_order() const { return order_; }
 
-  // Access the internal netgen::Mesh (for pybind11 export)
+  // Access the internal netgen::Mesh (for the .vol writer)
   std::shared_ptr<netgen::Mesh> get_ng_mesh() const { return ng_mesh_; }
 
   // Get coordinates for any node ID (original or generated)

@@ -3,7 +3,7 @@
 pyproject.toml drives metadata and package-data; this file exists only
 to gate wheel/sdist creation on a provenance invariant:
 
-    The native source-tree digest and both bundled payload digests must match
+    The native source-tree digest and the bundled payload digest must match
     native_payloads.json. Filesystem timestamps are never evidence.
 
 If the invariant is violated, the build aborts BEFORE setuptools bundles
@@ -12,8 +12,8 @@ the stale file into a wheel. Without this guard, ``pip install`` or
 binaries, which is how runtime host got a post-6a8d2e5 Python package with a
 pre-6a8d2e5 .ccm on 2026-04-14.
 
-The retired .ccl is not packaged. The .ccm and .pyd are both mandatory wheel
-payloads and are both freshness-gated. The package build directory is cleaned
+The retired .ccl is not packaged. The .ccm is the mandatory native wheel
+payload and is freshness-gated. The package build directory is cleaned
 before copying sources so deleted modules cannot leak from an incremental build.
 
 Override with ``CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK=1`` only as a
@@ -34,7 +34,7 @@ from setuptools.command.build_py import build_py as _build_py
 
 
 class BinaryDistribution(Distribution):
-    """Mark the prebuilt .pyd/.ccm payload as a native wheel."""
+    """Mark the prebuilt .ccm payload as a native wheel."""
 
     def has_ext_modules(self):
         return True
@@ -89,7 +89,7 @@ def _check_binary_provenance():
         sys.stderr.write(
             "\n  Rebuild BEFORE packaging:\n"
             "    pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild\n"
-            "  This rebuilds and SHA-verifies both mandatory payloads.\n"
+            "  This rebuilds and SHA-verifies the mandatory payload.\n"
             "  Then re-run `pip wheel` / `pip install`.\n"
             "\n  To override (not recommended):\n"
             "    set CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK=1\n\n")

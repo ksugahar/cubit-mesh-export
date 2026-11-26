@@ -161,7 +161,7 @@ private:
       const std::vector<int> &conn, int nv, ElementType type,
       const NetgenCurver &nc);
 
-  // Preserved NetgenCurver (keeps ng_mesh_ alive for pybind11 export)
+  // Preserved NetgenCurver (keeps ng_mesh_ alive for the .vol writer)
   std::shared_ptr<NetgenCurver> netgen_curver_;
 #endif
 };

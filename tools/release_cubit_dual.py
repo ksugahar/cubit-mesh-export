@@ -48,7 +48,7 @@ def wheel_contract(path, distribution='cubit-mesh-export'):
                     content = content.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
                 files[name] = {'sha256': digest(content), 'text': text}
     required_files = (
-        'cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd', 'toolbar_smoke.py',
+        'cubit_mesh_export.ccm', 'toolbar_smoke.py',
         'cubit_gui/toolbar_probe.py', 'cubit_gui/cubit_export_menu.py',
         'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
         'cubit_gui/solver_ready_sample.jou', 'native_payloads.json',

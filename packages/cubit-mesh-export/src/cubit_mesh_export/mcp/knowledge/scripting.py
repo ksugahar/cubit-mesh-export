@@ -1033,7 +1033,9 @@ comment so lint can tell it is intentional.
 The ccm was compiled against one Netgen version but plugins/nglib.dll is a
 different version. This causes access violations in netgen::Mesh::AddPoint().
 
-**Fix**: Rebuild ccm with compact_netgen (static link, no external nglib.dll):
+**Fix**: Rebuild ccm with compact_netgen (static link, no external nglib.dll).
+`cubit-plugin-install` deletes stale `plugins/nglib.dll`, `plugins/ngcore.dll`
+and the retired `cubit_mesh_curver*.pyd`:
 ```bash
 cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
 # Do NOT use -DNETGEN_DIR=C:/netgen  # dynamic link = ABI risk

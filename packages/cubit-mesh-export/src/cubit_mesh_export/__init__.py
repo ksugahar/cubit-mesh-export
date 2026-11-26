@@ -11,12 +11,6 @@ Consistency checking (does NOT require Cubit):
 cubit-plugin-install deploys plugin binaries to Cubit.
 """
 
-# Import Netgen before the bundled curver on Windows. Netgen registers the
-# directory containing nglib.dll with the process DLL search path; without
-# that initialization, importing cubit_mesh_curver in a fresh Python process
-# fails even though the exact pinned Netgen wheel is installed.
-import netgen as _netgen  # noqa: F401
-
 # Consumer construction/physics adapters remain separate from this package.
 __version__ = "3.1.0"
 

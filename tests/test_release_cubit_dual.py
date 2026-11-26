@@ -124,7 +124,7 @@ def test_receipt_is_bound_to_the_target_tier():
 
 
 def _fake_cubit_wheel(path):
-    contract_files = ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd',
+    contract_files = ('cubit_mesh_export.ccm',
                       'toolbar_smoke.py', 'cubit_gui/toolbar_probe.py',
                       'cubit_gui/cubit_export_menu.py',
                       'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
@@ -174,7 +174,7 @@ def _installable_fake_wheel(path):
                    b'from pathlib import Path\n'
                    b'def _find_cubit_dir():\n    return Path(".")\n'
                    b'def preflight(cubit_dir, verbose=False):\n    return True, []\n')}
-    for file in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd', 'toolbar_smoke.py',
+    for file in ('cubit_mesh_export.ccm', 'toolbar_smoke.py',
                  'cubit_gui/toolbar_probe.py', 'cubit_gui/cubit_export_menu.py',
                  'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
                  'cubit_gui/solver_ready_sample.jou', 'native_payloads.json',
@@ -202,7 +202,7 @@ def test_wheel_contract_includes_embedded_probe_and_bytes(tmp_path):
     with zipfile.ZipFile(wheel, 'w') as archive:
         archive.writestr('cubit_mesh_export-1.0.2.dist-info/METADATA',
                          'Name: cubit-mesh-export\nVersion: 1.0.2\n')
-        for file in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd',
+        for file in ('cubit_mesh_export.ccm',
                      'toolbar_smoke.py', 'cubit_gui/toolbar_probe.py',
                      'cubit_gui/cubit_export_menu.py',
                      'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',

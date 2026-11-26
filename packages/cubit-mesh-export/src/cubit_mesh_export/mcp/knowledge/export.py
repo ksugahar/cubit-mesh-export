@@ -314,6 +314,8 @@ The ccm was built against one version of Netgen, but a different nglib.dll
 is loaded from the plugins/ directory.
 
 **Fix**: Rebuild ccm with **compact_netgen** (static link, no nglib.dll dependency).
+`cubit-plugin-install` deletes stale `plugins/nglib.dll`, `plugins/ngcore.dll`
+and the retired `cubit_mesh_curver*.pyd`; the `.ccm` is the only native payload.
 ```bash
 cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
 ```

@@ -10,7 +10,6 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "cubit_mesh_export"
 
 @pytest.mark.parametrize("payload,pdb", [
     ("cubit_mesh_export.ccm", "cubit_mesh_export_ccm.pdb"),
-    ("cubit_mesh_curver.pyd", "cubit_mesh_curver.pdb"),
 ])
 def test_native_codeview_uses_only_the_pdb_filename(payload, pdb):
     path = PACKAGE / payload

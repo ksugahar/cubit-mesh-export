@@ -10,7 +10,6 @@ import os
 import re
 import subprocess
 import zipfile
-from importlib import metadata
 from pathlib import Path
 
 
@@ -26,7 +25,7 @@ def _layout():
 
 SCHEMA ="cubit-mesh-export.native-payloads.v2"
 HASH_FORMAT = "sha256-path-nul-lf-content-nul-v1"
-REQUIRED_PAYLOADS = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd")
+REQUIRED_PAYLOADS = ("cubit_mesh_export.ccm",)
 SOURCE_SUFFIXES = {
     ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx",
     ".cmake", ".txt", ".ps1",
@@ -97,7 +96,6 @@ ARCHIVE_IDENTITY = "native-source.json"
 ARCHIVE_NOTICES = (
     "LICENSE",
     "packages/cubit-mesh-export/LICENSE-NETGEN.txt",
-    "packages/cubit-mesh-export/LICENSE-PYBIND11.txt",
     "packages/cubit-mesh-export/NETGEN-AUTHORS.txt",
     "packages/cubit-mesh-export/NOTICE",
     "packages/cubit-mesh-export/THIRD_PARTY_NOTICES.md",
@@ -288,7 +286,7 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         payload["sha256"] = sha256
         payload["size"] = size
         payload.setdefault("platform", "win_amd64")
-        build_dir = "build-pyd" if name.endswith(".pyd") else "build-ccm"
+        build_dir = "build-ccm"
         cache_path = repo_root / "src/cubit_plugin" / build_dir / "CMakeCache.txt"
         if not cache_path.is_file():
             raise ValueError(f"Missing Cubit SDK cache: {cache_path}")
@@ -315,12 +313,6 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
                 raise ValueError(f"Missing compiler identity in {configs[-1]}")
         else:
             payload["toolchain"] = "unrecorded (no CMake compiler metadata)"
-        if name.endswith(".pyd"):
-            payload["asset_name"] = f"cubit_mesh_curver-{sha256}.pyd"
-            payload.setdefault("python_abi", "cp312")
-            # The curver links the external Netgen C++ ABI; record the
-            # version of the environment that is recording the build.
-            payload["netgen_version"] = metadata.version("netgen-mesher")
     # Pack the archive last and write nothing until every check has passed.
     archive = build_source_archive(repo_root, manifest["source"])
     manifest["source"]["archive_sha256"] = hashlib.sha256(archive).hexdigest()
