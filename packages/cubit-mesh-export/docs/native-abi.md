@@ -26,8 +26,9 @@ the plugin fail to load or crash.
 1. Keep the ABI-bound native surface minimal: mesh export and the curving
    trampoline only, in the single payload `cubit_mesh_export.ccm`. It compiles
    a vendored compact Netgen snapshot (`src/cubit_plugin/compact_netgen`:
-   6.2.2608 with the same two pyramid fixes), so it never loads a runtime
-   `nglib.dll`. There is no Python native extension.
+   6.2.2608 with the same two pyramid fixes, pruned to the compiled sources and
+   their header closure), so it never loads a runtime `nglib.dll`; there is no
+   shared-Netgen build option. There is no Python native extension.
 2. Keep everything else out of the native plugin.
    - CAD-capture consumers and adapters for solvers that mesh from CAD run
      outside Cubit as JSON-in/JSON-out Python, bound to the capture SHA256.

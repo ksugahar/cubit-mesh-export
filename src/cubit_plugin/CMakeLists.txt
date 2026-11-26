@@ -23,104 +23,80 @@ if(NOT TARGET cubit_geom)
 endif()
 
 # --------------------------------------------------------
-# Netgen (optional, for high-order curving order >= 2)
+# Compact Netgen (required; the only Netgen route)
 # --------------------------------------------------------
-set(NETGEN_DIR "" CACHE PATH "Netgen installation directory (full Netgen, optional)")
-set(COMPACT_NETGEN_OVERRIDES "" CACHE PATH "Compact Netgen overrides directory")
-
-# Option 1: Compact Netgen (source compiled directly into plugin)
-# Netgen sources are snapshotted in compact_netgen/netgen_src/ (no external dependency).
+# Netgen sources are snapshotted in compact_netgen/netgen_src/ and compiled
+# directly into the plugin; there is no shared nglib route.
 # Snapshot: upstream v6.2.2608 plus upstream 13b47c3a9 (pyramid apex clamp)
 # and local patches (static-library macros in
 # ngcore_api.hpp/mydefs.hpp, BlockAllocator mutex lifetime, CurvedElements
 # coefficient accessors, pyramid base-edge blending in EvaluateMapping).
-# To update, run compact_netgen/update_snapshot.py (three-way merge).
-if(NOT COMPACT_NETGEN_OVERRIDES)
-  set(COMPACT_NETGEN_OVERRIDES "${CMAKE_CURRENT_SOURCE_DIR}/compact_netgen")
+# Pruned: netgen_src holds only the compiled .cpp files listed below and the
+# header closure of them, the *_patched.cpp overrides and the plugin sources
+# (measured with MSVC /showIncludes via `ninja -t deps`).  meshing.hpp no
+# longer includes meshtool, ruler2, meshing2, improve2/3, findip/findip2,
+# specials, validate or surfacegeom; Python, MPI, AVX SIMD, visualization,
+# CSG/OCC/STL/ACIS/2D geometry, hp-refinement rule tables, boundary-layer,
+# Delaunay 2D, field-line, solution-data and nginterface headers are deleted.
+# To update, run compact_netgen/update_snapshot.py (three-way merge over the
+# retained files).
+set(COMPACT_NETGEN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/compact_netgen")
+set(NETGEN_SNAP "${COMPACT_NETGEN_DIR}/netgen_src")
+if(NOT EXISTS "${NETGEN_SNAP}/meshing/meshing.hpp" OR NOT EXISTS "${COMPACT_NETGEN_DIR}/meshclass_patched.cpp")
+  message(FATAL_ERROR "Compact Netgen sources missing under ${COMPACT_NETGEN_DIR}")
 endif()
-set(NETGEN_SNAP "${COMPACT_NETGEN_OVERRIDES}/netgen_src")
-if(EXISTS "${NETGEN_SNAP}/meshing/meshing.hpp" AND EXISTS "${COMPACT_NETGEN_OVERRIDES}/meshclass_patched.cpp")
-    message(STATUS "Compact Netgen: sources from ${NETGEN_SNAP}")
-    set(HAVE_NETGEN ON)
-    set(USE_COMPACT_NETGEN ON)
+message(STATUS "Compact Netgen: sources from ${NETGEN_SNAP}")
 
-    set(COMPACT_NETGEN_SOURCES
-      ${COMPACT_NETGEN_OVERRIDES}/core_stubs.cpp
-    )
-    list(APPEND COMPACT_NETGEN_SOURCES
-      ${NETGEN_SNAP}/core/archive.cpp
-      ${NETGEN_SNAP}/core/bitarray.cpp
-      ${NETGEN_SNAP}/core/blockallocator.cpp
-      ${NETGEN_SNAP}/core/exception.cpp
-      ${COMPACT_NETGEN_OVERRIDES}/flags_patched.cpp
-      ${NETGEN_SNAP}/core/localheap.cpp
-      ${NETGEN_SNAP}/core/table.cpp
-      ${COMPACT_NETGEN_OVERRIDES}/utils_patched.cpp
-      ${COMPACT_NETGEN_OVERRIDES}/version_patched.cpp
-      ${COMPACT_NETGEN_OVERRIDES}/statushandler_patched.cpp
-    )
-    list(APPEND COMPACT_NETGEN_SOURCES
-      ${NETGEN_SNAP}/general/table.cpp
-      ${NETGEN_SNAP}/gprim/geom3d.cpp
-      ${NETGEN_SNAP}/gprim/transform3d.cpp
-      ${NETGEN_SNAP}/linalg/densemat.cpp
-    )
-    list(APPEND COMPACT_NETGEN_SOURCES
-      ${COMPACT_NETGEN_OVERRIDES}/meshtype_patched.cpp
-      ${COMPACT_NETGEN_OVERRIDES}/meshclass_patched.cpp
-      ${NETGEN_SNAP}/meshing/curvedelems.cpp
-      ${NETGEN_SNAP}/meshing/topology.cpp
-      ${NETGEN_SNAP}/meshing/localh.cpp
-      ${COMPACT_NETGEN_OVERRIDES}/basegeom_patched.cpp
-      ${NETGEN_SNAP}/meshing/msghandler.cpp
-      ${COMPACT_NETGEN_OVERRIDES}/compact_stubs.cpp
-    )
+set(COMPACT_NETGEN_SOURCES
+  ${COMPACT_NETGEN_DIR}/core_stubs.cpp
+  ${NETGEN_SNAP}/core/archive.cpp
+  ${NETGEN_SNAP}/core/bitarray.cpp
+  ${NETGEN_SNAP}/core/blockallocator.cpp
+  ${NETGEN_SNAP}/core/exception.cpp
+  ${COMPACT_NETGEN_DIR}/flags_patched.cpp
+  ${NETGEN_SNAP}/core/localheap.cpp
+  ${NETGEN_SNAP}/core/table.cpp
+  ${COMPACT_NETGEN_DIR}/utils_patched.cpp
+  ${COMPACT_NETGEN_DIR}/version_patched.cpp
+  ${COMPACT_NETGEN_DIR}/statushandler_patched.cpp
+  ${NETGEN_SNAP}/general/table.cpp
+  ${NETGEN_SNAP}/gprim/geom3d.cpp
+  ${NETGEN_SNAP}/gprim/transform3d.cpp
+  ${NETGEN_SNAP}/linalg/densemat.cpp
+  ${COMPACT_NETGEN_DIR}/meshtype_patched.cpp
+  ${COMPACT_NETGEN_DIR}/meshclass_patched.cpp
+  ${NETGEN_SNAP}/meshing/curvedelems.cpp
+  ${NETGEN_SNAP}/meshing/topology.cpp
+  ${NETGEN_SNAP}/meshing/localh.cpp
+  ${COMPACT_NETGEN_DIR}/basegeom_patched.cpp
+  ${NETGEN_SNAP}/meshing/msghandler.cpp
+  ${COMPACT_NETGEN_DIR}/compact_stubs.cpp
+)
 
-    set(COMPACT_NETGEN_INCLUDES
-      ${COMPACT_NETGEN_OVERRIDES}/..    # netgen_config.hpp, netgen_version.hpp
-      ${COMPACT_NETGEN_OVERRIDES}       # gzstream.h stub, patched headers
-      ${NETGEN_SNAP}
-      ${NETGEN_SNAP}/core
-      ${NETGEN_SNAP}/include
-      ${NETGEN_SNAP}/general
-      ${NETGEN_SNAP}/gprim
-      ${NETGEN_SNAP}/linalg
-      ${NETGEN_SNAP}/meshing
-    )
+set(COMPACT_NETGEN_INCLUDES
+  ${COMPACT_NETGEN_DIR}/..    # netgen_config.hpp, netgen_version.hpp
+  ${COMPACT_NETGEN_DIR}       # gzstream.h stub, patched headers
+  ${NETGEN_SNAP}
+  ${NETGEN_SNAP}/core
+  ${NETGEN_SNAP}/include
+  ${NETGEN_SNAP}/general
+  ${NETGEN_SNAP}/gprim
+  ${NETGEN_SNAP}/linalg
+  ${NETGEN_SNAP}/meshing
+)
 
-    set(COMPACT_NETGEN_DEFS
-      COMPACT_NETGEN              # Skip mesher-dependent code paths
-      COMPACT_NETGEN_STATIC       # DLL_HEADER / NGCORE_API = empty
-      NO_PARALLEL_THREADS         # NgMutex = empty class (TaskManager disabled)
-      # OpenMP is still used for BuildCurvedElements parallelization
-      CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API  # snapshot >= 6.2.2605
-    )
-    # Enable OpenMP for edge/face curving parallelization
-    find_package(OpenMP)
-    if(OpenMP_CXX_FOUND)
-      message(STATUS "Compact Netgen: OpenMP enabled for BuildCurvedElements")
-    endif()
-# Option 2: Full Netgen (shared libs, has Python dependency)
-elseif(NETGEN_DIR AND EXISTS "${NETGEN_DIR}/lib/nglib.lib")
-  message(STATUS "Netgen found: ${NETGEN_DIR}")
-  set(HAVE_NETGEN ON)
-  set(USE_COMPACT_NETGEN OFF)
-
-  add_library(netgen::nglib SHARED IMPORTED)
-  set_target_properties(netgen::nglib PROPERTIES
-    IMPORTED_IMPLIB "${NETGEN_DIR}/lib/nglib.lib"
-    IMPORTED_LOCATION "${NETGEN_DIR}/nglib.dll"
-  )
-
-  add_library(netgen::ngcore SHARED IMPORTED)
-  set_target_properties(netgen::ngcore PROPERTIES
-    IMPORTED_IMPLIB "${NETGEN_DIR}/lib/ngcore.lib"
-    IMPORTED_LOCATION "${NETGEN_DIR}/ngcore.dll"
-  )
-else()
-  message(STATUS "Netgen not found. High-order disabled.")
-  set(HAVE_NETGEN OFF)
-  set(USE_COMPACT_NETGEN OFF)
+set(COMPACT_NETGEN_DEFS
+  HAVE_NETGEN
+  COMPACT_NETGEN              # Skip mesher-dependent code paths
+  COMPACT_NETGEN_STATIC       # DLL_HEADER / NGCORE_API = empty
+  NO_PARALLEL_THREADS         # NgMutex = empty class (TaskManager disabled)
+  # OpenMP is still used for BuildCurvedElements parallelization
+  CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API  # snapshot >= 6.2.2605
+)
+# OpenMP for edge/face curving parallelization
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+  message(STATUS "Compact Netgen: OpenMP enabled for BuildCurvedElements")
 endif()
 
 # --------------------------------------------------------
@@ -145,19 +121,11 @@ set(CCM_SOURCES
     # HighOrderMesh removed — NetgenCurver is the sole curving path (no fallback)
     NetgenCurver.cpp
     NetgenCurver.hpp
-)
-
-# Netgen-dependent sources: callbackgeom + ExportNetgenCommand
-if(HAVE_NETGEN)
-  list(APPEND CCM_SOURCES
     callbackgeom.cpp callbackgeom.hpp
     NetgenGeometricRefit.cpp NetgenGeometricRefit.hpp
     ExportNetgenCommand.cpp ExportNetgenCommand.hpp NamedPeriodicIdentification.hpp NamedPeriodicMeshAdapter.hpp
-  )
-  if(USE_COMPACT_NETGEN)
-    list(APPEND CCM_SOURCES ${COMPACT_NETGEN_SOURCES})
-  endif()
-endif()
+    ${COMPACT_NETGEN_SOURCES}
+)
 
 add_library(cubit_mesh_export_ccm MODULE ${CCM_SOURCES})
 set_target_properties(cubit_mesh_export_ccm PROPERTIES
@@ -187,27 +155,16 @@ endif()
 
 option(DEBUG_HO_NODES "Print debug info for high-order node registration" OFF)
 
-if(HAVE_NETGEN)
-  target_compile_definitions(cubit_mesh_export_ccm PRIVATE HAVE_NETGEN)
-  if(DEBUG_HO_NODES)
-    target_compile_definitions(cubit_mesh_export_ccm PRIVATE DEBUG_HO_NODES)
-  endif()
-  if(USE_COMPACT_NETGEN)
-    target_include_directories(cubit_mesh_export_ccm PRIVATE ${COMPACT_NETGEN_INCLUDES})
-    target_compile_definitions(cubit_mesh_export_ccm PRIVATE ${COMPACT_NETGEN_DEFS})
-    if(MSVC)
-      target_compile_options(cubit_mesh_export_ccm PRIVATE /bigobj)
-    endif()
-    if(OpenMP_CXX_FOUND)
-      target_link_libraries(cubit_mesh_export_ccm OpenMP::OpenMP_CXX)
-    endif()
-  else()
-    target_include_directories(cubit_mesh_export_ccm PRIVATE
-      "${NETGEN_DIR}/include"
-      "${NETGEN_DIR}/include/include"
-    )
-    target_link_libraries(cubit_mesh_export_ccm netgen::nglib netgen::ngcore)
-  endif()
+if(DEBUG_HO_NODES)
+  target_compile_definitions(cubit_mesh_export_ccm PRIVATE DEBUG_HO_NODES)
+endif()
+target_include_directories(cubit_mesh_export_ccm PRIVATE ${COMPACT_NETGEN_INCLUDES})
+target_compile_definitions(cubit_mesh_export_ccm PRIVATE ${COMPACT_NETGEN_DEFS})
+if(MSVC)
+  target_compile_options(cubit_mesh_export_ccm PRIVATE /bigobj)
+endif()
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(cubit_mesh_export_ccm OpenMP::OpenMP_CXX)
 endif()
 
 # --------------------------------------------------------
@@ -220,7 +177,7 @@ endif()
 # Native contract tests (optional)
 # --------------------------------------------------------
 find_package(Python3 COMPONENTS Interpreter)
-# Both compact-writer and full-Netgen contracts load the same installed reader.
+# Native contracts check their output with the installed Netgen Python reader.
 # Discover package paths without executing netgen.__init__ or native CAD code.
 function(cubit_contract_runtime_path output)
   execute_process(COMMAND "${Python3_EXECUTABLE}" -c
@@ -229,14 +186,6 @@ function(cubit_contract_runtime_path output)
     RESULT_VARIABLE runtime_status)
   if(NOT runtime_status EQUAL 0 OR NOT runtime_dirs)
     message(FATAL_ERROR "Cannot discover Netgen/OCC contract runtime DLL directories")
-  endif()
-  if(NETGEN_DIR)
-    list(GET runtime_dirs 0 discovered_netgen)
-    get_filename_component(discovered_netgen "${discovered_netgen}" REALPATH)
-    get_filename_component(configured_netgen "${NETGEN_DIR}" REALPATH)
-    if(NOT discovered_netgen STREQUAL configured_netgen)
-      message(FATAL_ERROR "Configured Netgen and Python reader package paths differ")
-    endif()
   endif()
   set(runtime_path "${runtime_dirs};$ENV{PATH}")
   string(REPLACE ";" "\\;" runtime_path "${runtime_path}")
@@ -249,9 +198,6 @@ if(CUBIT_MODEL_CAPTURE_CONTRACT_TESTS)
 endif()
 option(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS "Build compact periodic curved geometry contracts" OFF)
 if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
-  if(NOT USE_COMPACT_NETGEN)
-    message(FATAL_ERROR "Curved coefficient contract requires the compact build variant")
-  endif()
   enable_testing()
   add_executable(cubit_periodic_curved_contract
     tests/periodic_curved_contract.cpp ${COMPACT_NETGEN_SOURCES})
@@ -276,34 +222,40 @@ if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
   set_tests_properties(cubit_periodic_curved_independent_load PROPERTIES
     ENVIRONMENT "PATH=${COMPACT_READER_RUNTIME_PATH};PYTHONUNBUFFERED=1;PYTHONDONTWRITEBYTECODE=1")
 endif()
-# Callback contracts link the full Netgen variant.
-if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
-  option(CUBIT_CALLBACK_CONTRACT_TESTS "Build native geometry callback contracts" OFF)
-  if(CUBIT_CALLBACK_CONTRACT_TESTS)
-    enable_testing()
-    add_library(cubit_named_periodic_header_compile OBJECT tests/named_periodic_header_compile.cpp)
-    target_compile_features(cubit_named_periodic_header_compile PRIVATE cxx_std_17)
-    target_include_directories(cubit_named_periodic_header_compile PRIVATE
-      "${CMAKE_CURRENT_SOURCE_DIR}" "${NETGEN_DIR}/include" "${NETGEN_DIR}/include/include")
-    add_executable(cubit_callback_contract tests/callback_curve_identity.cpp callbackgeom.cpp NetgenCurver.cpp)
-    add_dependencies(cubit_callback_contract cubit_named_periodic_header_compile)
-    target_compile_features(cubit_callback_contract PRIVATE cxx_std_17)
-    target_include_directories(cubit_callback_contract PRIVATE
-      "${CMAKE_CURRENT_SOURCE_DIR}" "${NETGEN_DIR}/include" "${NETGEN_DIR}/include/include")
-    target_compile_definitions(cubit_callback_contract PRIVATE HAVE_NETGEN CUBIT_MESH_EXPORT_MAPPING_CONTRACT_ONLY)
-    target_link_libraries(cubit_callback_contract PRIVATE netgen::nglib netgen::ngcore)
-    add_test(NAME cubit_callback_curve_identity COMMAND cubit_callback_contract)
-    set_tests_properties(cubit_callback_curve_identity PROPERTIES FIXTURES_SETUP named_periodic_fixture)
-    add_test(NAME cubit_named_periodic_vol_load COMMAND "${Python3_EXECUTABLE}"
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_named_periodic_vol.py"
-      "${CMAKE_CURRENT_BINARY_DIR}/named-periodic-contract.vol")
-    set_tests_properties(cubit_named_periodic_vol_load PROPERTIES FIXTURES_REQUIRED named_periodic_fixture)
-    # Native executables do not run netgen.__init__'s OCC/delvewheel preload.
-    # Discover the exact installed package DLL locations, without importing CAD.
-    cubit_contract_runtime_path(CALLBACK_RUNTIME_PATH)
-    set_tests_properties(cubit_callback_curve_identity cubit_named_periodic_vol_load PROPERTIES
-      ENVIRONMENT "PATH=${CALLBACK_RUNTIME_PATH}" TIMEOUT 120)
+# Callback contracts compile against the compact Netgen sources.
+option(CUBIT_CALLBACK_CONTRACT_TESTS "Build native geometry callback contracts" OFF)
+if(CUBIT_CALLBACK_CONTRACT_TESTS)
+  enable_testing()
+  add_library(cubit_named_periodic_header_compile OBJECT tests/named_periodic_header_compile.cpp)
+  target_compile_features(cubit_named_periodic_header_compile PRIVATE cxx_std_17)
+  target_include_directories(cubit_named_periodic_header_compile PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}" ${COMPACT_NETGEN_INCLUDES})
+  target_compile_definitions(cubit_named_periodic_header_compile PRIVATE ${COMPACT_NETGEN_DEFS})
+  add_executable(cubit_callback_contract tests/callback_curve_identity.cpp callbackgeom.cpp NetgenCurver.cpp
+    ${COMPACT_NETGEN_SOURCES})
+  add_dependencies(cubit_callback_contract cubit_named_periodic_header_compile)
+  target_compile_features(cubit_callback_contract PRIVATE cxx_std_17)
+  target_include_directories(cubit_callback_contract PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}" ${COMPACT_NETGEN_INCLUDES})
+  target_compile_definitions(cubit_callback_contract PRIVATE
+    ${COMPACT_NETGEN_DEFS} CUBIT_MESH_EXPORT_MAPPING_CONTRACT_ONLY)
+  if(MSVC)
+    target_compile_options(cubit_callback_contract PRIVATE /bigobj)
   endif()
+  if(OpenMP_CXX_FOUND)
+    target_link_libraries(cubit_callback_contract PRIVATE OpenMP::OpenMP_CXX)
+  endif()
+  add_test(NAME cubit_callback_curve_identity COMMAND cubit_callback_contract)
+  set_tests_properties(cubit_callback_curve_identity PROPERTIES FIXTURES_SETUP named_periodic_fixture)
+  add_test(NAME cubit_named_periodic_vol_load COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_named_periodic_vol.py"
+    "${CMAKE_CURRENT_BINARY_DIR}/named-periodic-contract.vol")
+  set_tests_properties(cubit_named_periodic_vol_load PROPERTIES FIXTURES_REQUIRED named_periodic_fixture)
+  # Native executables do not run netgen.__init__'s OCC/delvewheel preload.
+  # Discover the exact installed package DLL locations, without importing CAD.
+  cubit_contract_runtime_path(CALLBACK_RUNTIME_PATH)
+  set_tests_properties(cubit_callback_curve_identity cubit_named_periodic_vol_load PROPERTIES
+    ENVIRONMENT "PATH=${CALLBACK_RUNTIME_PATH}" TIMEOUT 120)
 endif()
 
 # --------------------------------------------------------
@@ -314,10 +266,3 @@ install(TARGETS cubit_mesh_export_ccm
 )
 # No .ccl is installed; the packaged PySide6 toolbar is the sole GUI.
 
-if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
-  install(FILES
-    "${NETGEN_DIR}/nglib.dll"
-    "${NETGEN_DIR}/ngcore.dll"
-    DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
-  )
-endif()

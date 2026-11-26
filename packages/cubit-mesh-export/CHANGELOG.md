@@ -12,6 +12,10 @@ Breaking: the Python curver extension `cubit_mesh_curver.pyd` is removed.
 - `cubit-plugin-install` no longer deploys the curver or `nglib.dll`/`ngcore.dll`; it
   deletes those stale files from Cubit's plugin directory.
 - `import cubit_mesh_export` no longer imports Netgen.
+- The native build has one Netgen route: the vendored compact snapshot. The shared
+  `nglib` option (`NETGEN_DIR`) and its install rules are removed, and CMake fails if the
+  snapshot is missing. The snapshot is pruned to the compiled sources and their header
+  closure (148 -> 95 files); the callback contract tests now build against it.
 
 ## 3.1.0 - 2026-11-26
 

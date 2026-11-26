@@ -25,8 +25,7 @@ inline int periodic_face_number(netgen::FaceRegionIndex index) { return index.Nr
 
 // Resolve a boundary-condition property, never reinterpret it as a face index.
 // Netgen stores boundary names on the face descriptors (face regions); a BC
-// property may own several descriptors, and they must agree on the name. The
-// compact snapshot and full Netgen share this one lookup.
+// property may own several descriptors, and they must agree on the name.
 inline std::string periodic_boundary_label(const netgen::Mesh &mesh, int bc)
 {
   if (bc < 1) throw std::runtime_error("Invalid boundary-condition property");

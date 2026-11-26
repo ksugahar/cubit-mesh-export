@@ -1038,7 +1038,6 @@ different version. This causes access violations in netgen::Mesh::AddPoint().
 and the retired `cubit_mesh_curver*.pyd`:
 ```bash
 cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
-# Do NOT use -DNETGEN_DIR=C:/netgen  # dynamic link = ABI risk
 ```
 
 **Verification**: ccm file size should be > 400 KB (compact_netgen ~600 KB).

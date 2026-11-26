@@ -1,4 +1,4 @@
-// Guards: the actual production matcher compiles against the full Netgen
+// Guards: the actual production matcher compiles against the compact Netgen
 // typed-index headers before linking or running a native contract.
 #include "NamedPeriodicIdentification.hpp"
 #include <type_traits>
