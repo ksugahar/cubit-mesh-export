@@ -209,9 +209,6 @@ DLL_HEADER size_t timestamp = 0;
 // ============================================================
 void Ng_PrintDest(const char*) {}
 
-// netrule destructor (needed by Meshing2 destructor via unique_ptr)
-netrule::~netrule() {}
-
 // ============================================================
 // GeometryRegisterArray (from basegeom.cpp, used by Mesh::Load)
 // ============================================================

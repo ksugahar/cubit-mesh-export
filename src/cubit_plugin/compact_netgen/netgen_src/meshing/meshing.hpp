@@ -24,25 +24,15 @@ namespace netgen
 // #include "meshclass.hpp"
 // #include "global.hpp"
 
-#include "meshtool.hpp"
 
-#include "ruler2.hpp"
 #include "adfront2.hpp"
 
 
-#include "meshing2.hpp"
-#include "improve2.hpp"
 
 
-#include "geomsearch.hpp"
 #include "adfront3.hpp"
-#include "ruler3.hpp"
 
-#include "findip.hpp"
-#include "findip2.hpp"
 
-#include "meshing3.hpp"
-#include "improve3.hpp"
 
 #include "curvedelems.hpp"
 #include "clusters.hpp"
@@ -51,12 +41,8 @@ namespace netgen
 #include "bisect.hpp"
 #include "hprefinement.hpp"
 
-#include "specials.hpp"
-#include "validate.hpp"
 #include "basegeom.hpp"
-#include "surfacegeom.hpp"
 
-#include "paralleltop.hpp"
 
 
 
