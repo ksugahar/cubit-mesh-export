@@ -1,8 +1,8 @@
 """
 Cubit plugin installer for cubit-mesh-export.
 
-Deploys the Cubit plugin binaries (.ccm, .pyd) and Netgen DLLs to the
-Coreform Cubit 2026.8 installation directory.
+Deploys the Cubit command plugin (.ccm, with compact Netgen compiled in)
+to the Coreform Cubit 2026.8 installation directory.
 
 After ``pip install cubit-mesh-export``, run::
 
@@ -45,7 +45,6 @@ from cubit_mesh_export._layout import (
 
 _REQUIRED_PACKAGE_BINARIES = (
     "cubit_mesh_export.ccm",
-    "cubit_mesh_curver.pyd",
 )
 
 
@@ -99,20 +98,6 @@ def _find_cubit_dir():
 def _package_dir():
     """Directory containing this package's bundled binaries."""
     return Path(__file__).resolve().parent
-
-
-def _find_netgen_dlls():
-    """Find nglib.dll and ngcore.dll from pip-installed netgen."""
-    try:
-        import netgen
-        ng_dir = Path(netgen.__file__).parent
-        nglib = ng_dir / "nglib.dll"
-        ngcore = ng_dir / "ngcore.dll"
-        if nglib.is_file() and ngcore.is_file():
-            return nglib, ngcore
-    except ImportError:
-        pass
-    return None, None
 
 
 def _is_cubit_process_name(name: str) -> bool:
@@ -203,6 +188,7 @@ def _critical_plugin_files(cubit_dir: Path):
     bin_ = cubit_dir / "bin"
     return [
         command_plugin_path(cubit_dir),
+        # Obsolete deployment artifacts that the clean-up step deletes.
         plugins / "cubit_mesh_curver.cp312-win_amd64.pyd",
         plugins / "nglib.dll",
         plugins / "ngcore.dll",
@@ -220,13 +206,6 @@ def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
     if (pkg_dir / "cubit_mesh_export.ccm").is_file():
         pairs.append((pkg_dir / "cubit_mesh_export.ccm",
                        command_plugin_path(cubit_dir)))
-    if (pkg_dir / "cubit_mesh_curver.pyd").is_file():
-        pairs.append((pkg_dir / "cubit_mesh_curver.pyd",
-                       plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
-    nglib, ngcore = _find_netgen_dlls()
-    if nglib:
-        pairs.append((nglib, plugins_dir / nglib.name))
-        pairs.append((ngcore, plugins_dir / ngcore.name))
     # Cubit-side Python helpers (Kelvin transformation, etc.).  Deployed
     # to bin/plugins/cubit_helpers/ so the .ccm code can locate them via
     # the plugin directory and add them to the embedded Python sys.path
@@ -263,13 +242,6 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
             issues.append(
                 f"required package binary missing: {p}. Rebuild before deploy."
             )
-
-    nglib, ngcore = _find_netgen_dlls()
-    if not nglib or not ngcore:
-        issues.append(
-            "required Netgen DLLs missing from the Python environment "
-            "(nglib.dll / ngcore.dll)"
-        )
 
     pairs = _expected_deployments(pkg_dir, cubit_dir)
     if verbose:
@@ -365,11 +337,12 @@ _CLEAN_PATTERNS = [
     "cubit_mesh_export.ccm",
     "cubit_mesh_export.dll",
     "cubit_mesh_export.ccl",
+    # One-way deletion targets for obsolete artifacts (the retired Python
+    # curver, its Netgen DLLs, pre-independence plugins).  They are deleted,
+    # never loaded or forwarded.
     "cubit_mesh_curver*.pyd",
     "nglib.dll",
     "ngcore.dll",
-    # One-way deletion targets for obsolete pre-independence artifacts.  They
-    # are deleted, never loaded or forwarded.
     "radia_cubit.ccm",
     "radia_cubit.ccl",
     "radia_cubit_mesh*.pyd",
@@ -515,7 +488,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
             preflight is clean.
         verify_only: verify the complete deployed plugin without writing.
         helpers_only: deploy and hash-verify only Cubit's pure-Python helpers.
-            Native ``.ccm`` / ``.pyd`` files and toolbars are not touched.
+            The native ``.ccm`` and toolbars are not touched.
 
     Returns:
         True on full success. False (or raises RuntimeError) on failure.
@@ -596,7 +569,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
             print(f"  [OK] {py.name} -> {dst}")
         print()
         print("  Pure-Python Cubit helpers installed and hash-verified.")
-        print("  Native .ccm/.pyd files were not touched.")
+        print("  The native .ccm was not touched.")
         print("=" * 60)
         return True
 
@@ -623,20 +596,6 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     else:
         print(f"  [FAIL] cubit_mesh_export.ccm not found in {pkg_dir}")
 
-    pyd_src = pkg_dir / "cubit_mesh_curver.pyd"
-    if pyd_src.is_file():
-        copy_jobs.append(
-            (pyd_src, plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
-    else:
-        print(f"  [FAIL] cubit_mesh_curver.pyd not found in {pkg_dir}")
-
-    nglib, ngcore = _find_netgen_dlls()
-    if nglib:
-        copy_jobs.append((nglib, plugins_dir / nglib.name))
-        copy_jobs.append((ngcore, plugins_dir / ngcore.name))
-    else:
-        print("  [FAIL] Netgen DLLs not found (nglib.dll / ngcore.dll)")
-
     # Cubit-side Python helpers (Kelvin transformation, etc.).
     helpers_src = pkg_dir / "cubit_helpers"
     if helpers_src.is_dir():
@@ -650,8 +609,6 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     for required in _REQUIRED_PACKAGE_BINARIES:
         if not (pkg_dir / required).is_file():
             copy_errors.append(f"required package binary missing: {pkg_dir / required}")
-    if not nglib or not ngcore:
-        copy_errors.append("required Netgen DLLs missing")
     if not helpers_src.is_dir():
         copy_errors.append(f"required cubit_helpers/ missing: {helpers_src}")
 
@@ -694,7 +651,7 @@ def main():
     parser = argparse.ArgumentParser(
         prog="cubit-plugin-install",
         description="Install the cubit-mesh-export Cubit plugin "
-                    "(.ccm / .pyd + Netgen DLLs) and Cubit Mesh Export toolbar.")
+                    "(.ccm) and Cubit Mesh Export toolbar.")
     parser.add_argument("--all-users", action="store_true",
                         help="also register the exporter toolbar in every "
                              "user's ~/.cubit (requires admin)")
@@ -706,7 +663,7 @@ def main():
                              "sha256). No writes.")
     parser.add_argument("--helpers-only", action="store_true",
                         help="deploy only pure-Python cubit_helpers; do not "
-                            "copy or remove .ccm/.pyd binaries")
+                            "copy or remove the .ccm binary")
     args = parser.parse_args()
     selected_modes = sum((args.check_only, args.verify_only, args.helpers_only))
     if selected_modes > 1:

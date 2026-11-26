@@ -29,33 +29,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Fetch the hash-pinned native curver
+      - name: Verify committed native payload provenance
         shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $destination = 'packages\cubit-mesh-export\src\cubit_mesh_export'
-          $manifestPath = Join-Path $destination 'native_payloads.json'
-          $payload = (Get-Content -LiteralPath $manifestPath -Raw |
-            ConvertFrom-Json).payloads.'cubit_mesh_curver.pyd'
-          python tools\download_release_asset.py `
-            --repo ${{ github.repository }} `
-            --tag $payload.github_release_tag `
-            --name $payload.asset_name `
-            --dest $destination
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $downloaded = Join-Path $destination $payload.asset_name
-          $actualHash = (Get-FileHash -LiteralPath $downloaded `
-            -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actualHash -ne $payload.sha256 -or
-              (Get-Item -LiteralPath $downloaded).Length -ne $payload.size) {
-            throw "native curver does not match native_payloads.json"
-          }
-          Move-Item -LiteralPath $downloaded `
-            -Destination (Join-Path $destination 'cubit_mesh_curver.pyd') `
-            -Force
           python packages\cubit-mesh-export\src\cubit_mesh_export\_native_provenance.py `
-            verify --repo-root . --package-dir $destination
+            verify --repo-root . --package-dir packages\cubit-mesh-export\src\cubit_mesh_export
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Materialize exact tagged package bytes
@@ -63,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import os, pathlib, subprocess, shutil
+          import os, pathlib, subprocess
           sha = os.environ['GITHUB_SHA']
           stage = pathlib.Path(os.environ['RUNNER_TEMP']) / 'cubit-wheel-source'
           if stage.exists():
@@ -79,8 +57,6 @@ jobs:
               target = stage / relative
               target.parent.mkdir(parents=True, exist_ok=True)
               target.write_bytes(subprocess.check_output(['git', 'cat-file', 'blob', oid]))
-          payload = pathlib.Path('packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_curver.pyd')
-          shutil.copyfile(payload, stage / payload)
           with pathlib.Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as stream:
               stream.write('CUBIT_BUILD_ROOT=' + str(stage) + '\n')
           PY
@@ -102,7 +78,6 @@ jobs:
           with zipfile.ZipFile(wheel) as archive:
               names = archive.namelist()
               required = ('cubit_mesh_export/cubit_mesh_export.ccm',
-                          'cubit_mesh_export/cubit_mesh_curver.pyd',
                           'cubit_mesh_export/cubit_gui/solver_ready_sample.jou',
                           'cubit_mesh_export/cubit_gui/cubit_export_menu.py',
                           'cubit_mesh_export/cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
@@ -126,8 +101,7 @@ jobs:
                   'cubit_mesh_export/native_payloads.json'))
               payload_contents = {
                   name: archive.read(f'cubit_mesh_export/{name}')
-                  for name in ('cubit_mesh_export.ccm',
-                               'cubit_mesh_curver.pyd')
+                  for name in ('cubit_mesh_export.ccm',)
               }
               wheel_meta_path = next(
                   name for name in names
@@ -141,7 +115,7 @@ jobs:
               raise SystemExit(f'wheel is not natively tagged: {wheel}')
           if 'Root-Is-Purelib: false' not in wheel_meta:
               raise SystemExit('native wheel incorrectly declares purelib root')
-          for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
+          for name in ('cubit_mesh_export.ccm',):
               content = payload_contents[name]
               expected = native_manifest['payloads'][name]
               if (len(content) != expected['size'] or
@@ -215,8 +189,6 @@ jobs:
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
             packages\cubit-mesh-export\tests\test_smoke_command.py `
             packages\cubit-mesh-export\tests\test_runtime_contract.py `
-            packages\cubit-mesh-export\tests\test_native_curver_connectivity.py `
-            packages\cubit-mesh-export\tests\test_native_curver_edge_callback.py `
             packages\cubit-mesh-export\tests\test_native_debug_paths.py `
             packages\cubit-mesh-export\tests\test_native_plugin_registry.py `
             tests\test_release_cubit_dual.py -q
@@ -337,7 +309,7 @@ jobs:
               raise SystemExit(
                   f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
               )
-          required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd",
+          required = ("cubit_mesh_export.ccm",
                       "cubit_gui/solver_ready_sample.jou",
                       "cubit_gui/cubit_export_menu.py",
                       "cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl",
@@ -367,7 +339,7 @@ jobs:
               source_manifest = json.loads((package / 'src/cubit_mesh_export/native_payloads.json').read_text(encoding='utf-8'))
               require(manifest == source_manifest, 'wheel native manifest differs from tagged source')
               require(metadata['Name'] == 'cubit-mesh-export', 'wrong wheel distribution')
-              for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
+              for name in ('cubit_mesh_export.ccm',):
                   content = archive.read('cubit_mesh_export/' + name)
                   evidence = manifest['payloads'][name]
                   require(hashlib.sha256(content).hexdigest() == evidence['sha256'] and len(content) == evidence['size'], 'native payload hash/size differs: ' + name)
@@ -398,7 +370,7 @@ jobs:
                       # These are generated metadata, not source files: frozen by the
                       # immediate post-build artifact above, with version/name checked.
                       continue
-                  if name in {'cubit_mesh_export/cubit_mesh_export.ccm', 'cubit_mesh_export/cubit_mesh_curver.pyd'}:
+                  if name == 'cubit_mesh_export/cubit_mesh_export.ccm':
                       continue  # Independently checked against the signed native manifest.
                   if name.startswith('cubit_mesh_export/'):
                       relative = 'packages/cubit-mesh-export/src/' + name
@@ -529,7 +501,7 @@ jobs:
               raise SystemExit(
                   f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
               )
-          required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd",
+          required = ("cubit_mesh_export.ccm",
                       "cubit_gui/solver_ready_sample.jou",
                       "cubit_gui/cubit_export_menu.py",
                       "cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl",
@@ -559,7 +531,7 @@ jobs:
               source_manifest = json.loads((package / 'src/cubit_mesh_export/native_payloads.json').read_text(encoding='utf-8'))
               require(manifest == source_manifest, 'wheel native manifest differs from tagged source')
               require(metadata['Name'] == 'cubit-mesh-export', 'wrong wheel distribution')
-              for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
+              for name in ('cubit_mesh_export.ccm',):
                   content = archive.read('cubit_mesh_export/' + name)
                   evidence = manifest['payloads'][name]
                   require(hashlib.sha256(content).hexdigest() == evidence['sha256'] and len(content) == evidence['size'], 'native payload hash/size differs: ' + name)
@@ -590,7 +562,7 @@ jobs:
                       # These are generated metadata, not source files: frozen by the
                       # immediate post-build artifact above, with version/name checked.
                       continue
-                  if name in {'cubit_mesh_export/cubit_mesh_export.ccm', 'cubit_mesh_export/cubit_mesh_curver.pyd'}:
+                  if name == 'cubit_mesh_export/cubit_mesh_export.ccm':
                       continue  # Independently checked against the signed native manifest.
                   if name.startswith('cubit_mesh_export/'):
                       relative = 'packages/cubit-mesh-export/src/' + name

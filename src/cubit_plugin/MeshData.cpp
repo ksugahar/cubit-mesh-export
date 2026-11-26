@@ -56,7 +56,7 @@ bool MeshData::extract(int req_order) try
       PRINT_INFO("build_high_order: NetgenCurver succeeded (%d nodes).\n",
                  nc->get_num_nodes());
       has_netgen = true;
-      netgen_curver_ = nc;  // keep alive for pybind11 export
+      netgen_curver_ = nc;  // keep alive for the .vol writer
       apply_ho(*nc);
     } else {
       PRINT_ERROR("NetgenCurver failed for order %d. "

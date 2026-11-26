@@ -9,10 +9,9 @@ those sources. The wheel includes cubit_mesh_export_native_source.zip with the c
 source and relink instructions. The native payload manifest records the source
 revision, source tree digest and archive SHA-256.
 
-The Python curver (cubit_mesh_curver.pyd) uses pybind11 headers under
-BSD-3-Clause. See LICENSE-PYBIND11.txt. Its Netgen and NGSolve runtime packages
-are installed separately at version 6.2.2608 and provide their own notices.
-Both native payloads are built from the source tree identified by the manifest.
+The check-vol reader uses the Netgen and NGSolve runtime packages, installed
+separately at version 6.2.2608 with their own notices. The native payload is
+built from the source tree identified by the manifest.
 
 Other declared Python dependencies and optional extras are installed
 separately and retain their own license terms.

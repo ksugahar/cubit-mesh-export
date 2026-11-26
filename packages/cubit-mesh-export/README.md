@@ -94,9 +94,8 @@ The GUI and MCP are distributed independently. The repository includes
 
 The supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
 2026.8, and Netgen/NGSolve 6.2.2608.  These solver versions are exact pins in
-package metadata because `cubit_mesh_curver.pyd` links against the Netgen C++
-ABI.  The separately loaded `cubit_mesh_export.ccm` plugin embeds Compact
-Netgen and does not link against the Python solver wheels.
+package metadata for the `check-vol` reader.  The `cubit_mesh_export.ccm`
+plugin embeds Compact Netgen and does not link against the Python solver wheels.
 Meshes with pyramids additionally need a Netgen 6.2.2608 runtime carrying the
 pyramid apex clamp (upstream 13b47c3a9) and the base-edge blend; the stock
 6.2.2608 wheels have neither, and `check-vol` refuses pyramid meshes on such a
@@ -108,7 +107,7 @@ execution tools and `cubit_check_vol` before handing a mesh to a solver.
 Combined Radia installations must also pass Radia's declared exporter
 compatibility check; standalone operation does not import Radia.
 
-- **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2026.8 only):
+- **Cubit plugin** (`.ccm`, Coreform Cubit 2026.8 only):
   - `export netgen` APREPRO command
   - Cubit-owned **Export** menu plus the Cubit Mesh Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
@@ -198,7 +197,7 @@ verification step rejects any stale deployed copy.
 
 ### Native developer rebuild
 
-Rebuild and propagate both mandatory native payloads from the current
+Rebuild and propagate the mandatory native payload from the current
 worktree with:
 
 ```powershell
@@ -208,15 +207,12 @@ pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild
 The build refuses to start unless `src/cubit_plugin` and
 `tools/find_cubit.ps1` are a clean commit on a remote-tracking branch, so the
 recorded commit is one anyone can check out: commit and push, then build.
-The command fails unless both artifacts are produced and their copied
-SHA-256 hashes match, then records the source-tree digest, source commit, and
-both payload hashes in `native_payloads.json`. Wheel creation independently
+The command fails unless the `.ccm` is produced and its copied SHA-256 hash
+matches, then records the source-tree digest, source commit, and payload hash
+in `native_payloads.json`. Wheel creation independently
 recomputes that content evidence; checkout timestamps are irrelevant. It emits
 a native `cp312-cp312-win_amd64` wheel for CPython 3.12 on 64-bit Windows.
-Because `.pyd` files are intentionally gitignored, upload the newly named,
-content-addressed curver to the `binaries` GitHub release before pushing a
-manifest change. Release CI downloads it and checks both native payloads.
-Building a wheel from an sdist still verifies the manifest and both payloads;
+Building a wheel from an sdist still verifies the manifest and the payload;
 only source-tree comparison is omitted when the C++ tree is not included.
 
 For a complete deployed-export check, close the interactive Cubit process and

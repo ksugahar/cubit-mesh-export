@@ -37,21 +37,12 @@ if (-not $ninja -or -not (Test-Path $ninja)) {
     throw "ninja.exe not found on PATH or in the active Python environment."
 }
 $pythonExecutable = (Get-Command python -ErrorAction Stop).Source
-$pybind11CmakeDir = (& $pythonExecutable -c "import pybind11; print(pybind11.get_cmake_dir())").Trim()
-if (-not (Test-Path "$pybind11CmakeDir\pybind11Config.cmake")) {
-    throw "pybind11 CMake package not found under $pybind11CmakeDir"
-}
 
 # Coreform Cubit 2026.8 only: find_cubit.ps1 takes CUBIT_INSTALL_DIR or the
 # default 2026.8 path and checks BUILD_INFO.
 . "$PSScriptRoot\..\..\tools\find_cubit.ps1"
 if (-not $CubitCmakeDir) { throw "Cubit not found; set CUBIT_INSTALL_DIR" }
 $env:CUBIT_DIR = $CubitCmakeDir
-$env:NETGEN_DIR = (& $pythonExecutable -c `
-    "import netgen, os; print(os.path.dirname(netgen.__file__))").Trim()
-if (-not (Test-Path "$($env:NETGEN_DIR)\include")) {
-    throw "Netgen include directory not found under $($env:NETGEN_DIR)"
-}
 
 # Keep every path relative to this script. A hard-coded repository path makes
 # a clean worktree silently build another checkout.
@@ -106,28 +97,6 @@ function Assert-CubitCompilerCache([string]$Directory, [string]$Compiler) {
     }
 }
 
-# build-pyd
-$buildPyd = Join-Path $src "build-pyd"
-if (-not $Rebuild) { Assert-CubitCompilerCache $buildPyd $compilerPath }
-Reset-BuildDirectory $buildPyd
-if (-not (Test-Path $buildPyd)) { New-Item -ItemType Directory -Path $buildPyd | Out-Null }
-Push-Location $buildPyd
-try {
-    & $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release `
-        "-DCMAKE_C_COMPILER=$compilerPath" "-DCMAKE_CXX_COMPILER=$compilerPath" `
-        "-DCMAKE_MAKE_PROGRAM=$ninja" `
-        "-DPython3_EXECUTABLE=$pythonExecutable" `
-        "-Dpybind11_DIR=$pybind11CmakeDir" `
-        "-DCubit_DIR=$($env:CUBIT_DIR)" `
-        "-DNETGEN_DIR=$($env:NETGEN_DIR)" `
-        -DCOMPACT_NETGEN_OVERRIDES=NONE $src
-    if ($LASTEXITCODE -ne 0) { throw "cmake configure build-pyd failed" }
-    & $cmake --build . --config Release --target cubit_mesh_curver -j $BuildJobs
-    if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_curver failed" }
-} finally {
-    Pop-Location
-}
-
 # build-ccm
 $buildCcm = Join-Path $src "build-ccm"
 if (-not $Rebuild) { Assert-CubitCompilerCache $buildCcm $compilerPath }
@@ -139,9 +108,7 @@ try {
         "-DCMAKE_C_COMPILER=$compilerPath" "-DCMAKE_CXX_COMPILER=$compilerPath" `
         "-DCMAKE_MAKE_PROGRAM=$ninja" `
         "-DPython3_EXECUTABLE=$pythonExecutable" `
-        "-Dpybind11_DIR=$pybind11CmakeDir" `
-        "-DCubit_DIR=$($env:CUBIT_DIR)" `
-        "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
+        "-DCubit_DIR=$($env:CUBIT_DIR)" $src
     if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
     & $cmake --build . --config Release --target cubit_mesh_export_ccm -j $BuildJobs
     if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_export_ccm failed" }
@@ -151,21 +118,16 @@ try {
 # The retired Qt5 .ccl target is intentionally absent.  The packaged PySide6
 # toolbar is the only supported Cubit GUI surface.
 
-$pydOutput = Get-ChildItem -LiteralPath $buildPyd `
-    -Filter "cubit_mesh_curver*.pyd" -File |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
 $ccmOutput = Get-Item -LiteralPath `
     (Join-Path $buildCcm "cubit_mesh_export.ccm") -ErrorAction SilentlyContinue
-if (-not $pydOutput -or -not $ccmOutput) {
-    throw "Native Cubit build did not produce both cubit_mesh_curver.pyd and cubit_mesh_export.ccm"
+if (-not $ccmOutput) {
+    throw "Native Cubit build did not produce cubit_mesh_export.ccm"
 }
 if (-not (Test-Path $packageDir)) {
     throw "cubit-mesh-export package directory not found: $packageDir"
 }
 
 $deployments = @(
-    @{ Source = $pydOutput.FullName; Destination = Join-Path $packageDir "cubit_mesh_curver.pyd" },
     @{ Source = $ccmOutput.FullName; Destination = Join-Path $packageDir "cubit_mesh_export.ccm" }
 )
 foreach ($deployment in $deployments) {

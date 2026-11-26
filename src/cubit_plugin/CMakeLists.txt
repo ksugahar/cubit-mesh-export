@@ -128,8 +128,7 @@ endif()
 # --------------------------------------------------------
 # The old Qt5 .ccl GUI component is gone; all GUI work is now in
 # packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py
-# (PySide6).  The .ccm (APREPRO commands) and .pyd (cubit_mesh_curver)
-# below have no Qt dependency.
+# (PySide6).  The .ccm (APREPRO commands) below has no Qt dependency.
 
 # --------------------------------------------------------
 # Target 1: cubit_mesh_export.ccm (command plugin, goes to plugins/)
@@ -218,9 +217,9 @@ endif()
 # packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py.
 
 # --------------------------------------------------------
-# pybind11 module: cubit_mesh_curver (.pyd) — Cubit-free
+# Native contract tests (optional)
 # --------------------------------------------------------
-find_package(Python3 COMPONENTS Interpreter Development)
+find_package(Python3 COMPONENTS Interpreter)
 # Both compact-writer and full-Netgen contracts load the same installed reader.
 # Discover package paths without executing netgen.__init__ or native CAD code.
 function(cubit_contract_runtime_path output)
@@ -277,37 +276,8 @@ if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
   set_tests_properties(cubit_periodic_curved_independent_load PROPERTIES
     ENVIRONMENT "PATH=${COMPACT_READER_RUNTIME_PATH};PYTHONUNBUFFERED=1;PYTHONDONTWRITEBYTECODE=1")
 endif()
-# The Python curver target requires full Netgen; CCM-only builds do not need pybind11.
+# Callback contracts link the full Netgen variant.
 if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
-  # Honor the caller's explicit config directory; Python purelib may differ from
-  # the importable dependency location in an isolated environment.
-  find_package(pybind11 CONFIG REQUIRED)
-  message(STATUS "pybind11 + Netgen found: building cubit_mesh_curver (Cubit-free)")
-
-  pybind11_add_module(cubit_mesh_curver
-      cubit_mesh_export_pybind.cpp
-      NetgenCurverPure.cpp
-      NetgenCurverPure.hpp
-      callbackgeom.cpp
-      callbackgeom.hpp
-  )
-  set_target_properties(cubit_mesh_curver PROPERTIES CXX_STANDARD 17)
-  if(MSVC)
-    target_link_options(cubit_mesh_curver PRIVATE
-      "$<$<CONFIG:Release>:/PDBALTPATH:$<TARGET_PDB_FILE_NAME:cubit_mesh_curver>>")
-  endif()
-
-  target_include_directories(cubit_mesh_curver PRIVATE
-    "${NETGEN_DIR}/include"
-    "${NETGEN_DIR}/include/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-  )
-  target_compile_definitions(cubit_mesh_curver PRIVATE CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API)
-  target_link_libraries(cubit_mesh_curver PRIVATE netgen::nglib netgen::ngcore)
-
-  install(TARGETS cubit_mesh_curver
-      LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
-  )
   option(CUBIT_CALLBACK_CONTRACT_TESTS "Build native geometry callback contracts" OFF)
   if(CUBIT_CALLBACK_CONTRACT_TESTS)
     enable_testing()
@@ -334,8 +304,6 @@ if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
     set_tests_properties(cubit_callback_curve_identity cubit_named_periodic_vol_load PROPERTIES
       ENVIRONMENT "PATH=${CALLBACK_RUNTIME_PATH}" TIMEOUT 120)
   endif()
-else()
-  message(STATUS "Full Netgen not selected: skipping cubit_mesh_curver Python module")
 endif()
 
 # --------------------------------------------------------

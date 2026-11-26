@@ -3,7 +3,6 @@ import ast
 import importlib.util
 import json
 import os
-import re
 import runpy
 import shutil
 import subprocess
@@ -60,7 +59,7 @@ def _fake_native_sdk_cache(repo_root: Path):
     sdk = repo_root / "sdk"
     (sdk / "cmake").mkdir(parents=True)
     (sdk / "BUILD_INFO").write_text("short=2026.8\n", encoding="utf-8")
-    for build in ("build-pyd", "build-ccm"):
+    for build in ("build-ccm",):
         folder = repo_root / "src/cubit_plugin" / build
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "CMakeCache.txt").write_text(
@@ -178,25 +177,18 @@ def test_cubit_mesh_export_installer_requires_2026_8(monkeypatch, tmp_path):
     assert cme_install._find_cubit_dir() == supported
 
 
-def test_cubit_mesh_export_verify_requires_curver_pyd(monkeypatch, tmp_path):
+def test_cubit_mesh_export_verify_requires_the_ccm(tmp_path):
     from cubit_mesh_export import install as cme_install
 
     pkg_dir = tmp_path / "pkg"
     cubit_dir = tmp_path / "Coreform Cubit 2026.8"
-    plugins = cubit_dir / "bin" / "plugins"
-    plugins.mkdir(parents=True)
+    (cubit_dir / "bin" / "plugins").mkdir(parents=True)
     pkg_dir.mkdir()
-    (pkg_dir / "cubit_mesh_export.ccm").write_bytes(b"ccm")
-    nglib = tmp_path / "nglib.dll"
-    ngcore = tmp_path / "ngcore.dll"
-    nglib.write_bytes(b"nglib")
-    ngcore.write_bytes(b"ngcore")
-    monkeypatch.setattr(cme_install, "_find_netgen_dlls", lambda: (nglib, ngcore))
 
     ok, issues = cme_install.verify_deployment(pkg_dir, cubit_dir, verbose=False)
 
     assert not ok
-    assert any("cubit_mesh_curver.pyd" in issue for issue in issues)
+    assert any("cubit_mesh_export.ccm" in issue for issue in issues), issues
 
 
 def test_helpers_only_install_does_not_touch_native_plugins(monkeypatch, tmp_path):
@@ -532,8 +524,9 @@ def test_native_build_is_worktree_relative_and_propagates_both_payloads():
     assert r"S:\Radia\01_GitHub" not in build_script
     assert "$src = $PSScriptRoot" in build_script
     assert "packages\\cubit-mesh-export\\src\\cubit_mesh_export" in build_script
-    for payload in ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd"):
-        assert payload in build_script
+    assert "cubit_mesh_export.ccm" in build_script
+    assert "cubit_mesh_curver" not in build_script
+    assert "pybind11" not in build_script
     assert "_native_provenance.py" in build_script
     assert "record" in build_script
     # The clean-pushed-source check runs before any build directory is touched.
@@ -582,8 +575,8 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
     assert "python -m wheel tags" not in workflow
     assert "Root-Is-Purelib: false" in workflow
     assert "native_payloads.json" in workflow
-    assert "download_release_asset.py" in workflow
-    assert "Get-FileHash" in workflow
+    assert "download_release_asset.py" not in workflow
+    assert "cubit_mesh_curver" not in workflow
     # PowerShell continuation and argument order do not define the contract.
     install_commands = [line.split("pip install", 1)[1].split()
                         for line in workflow.replace("`\n", " ").splitlines()
@@ -591,11 +584,10 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
     required_test_dependencies = {"setuptools", "pytest", "numpy", "psutil"}
     assert any(required_test_dependencies <= set(args) for args in install_commands)
     assert "_native_provenance.py" in workflow
-    assert "verify --repo-root . --package-dir $destination" in workflow
+    assert "verify --repo-root . --package-dir" in workflow
     assert '"netgen-mesher==6.2.2608"' in workflow
     assert '"ngsolve==6.2.2608"' in workflow
     assert "cubit_mesh_export/cubit_mesh_export.ccm" in workflow
-    assert "cubit_mesh_export/cubit_mesh_curver.pyd" in workflow
     assert "tests\\test_cubit_menu_startup.py" in workflow
     assert "python tools\\audit_pyside6_only.py" in workflow
 
@@ -624,8 +616,7 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
         content = (package_dir / name).read_bytes()
         assert payload["size"] == len(content)
         assert payload["sha256"] == hashlib.sha256(content).hexdigest()
-    curver = manifest["payloads"]["cubit_mesh_curver.pyd"]
-    assert curver["asset_name"].endswith(curver["sha256"] + ".pyd")
+    assert set(manifest["payloads"]) == {"cubit_mesh_export.ccm"}
 
 
 def test_native_source_provenance_is_content_addressed_not_timestamped(tmp_path):
@@ -681,7 +672,7 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
     (package_dir / "native_payloads.json").write_text(
         '{"payloads": {}}', encoding="utf-8")
     monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
-    for build in ("build-pyd", "build-ccm"):
+    for build in ("build-ccm",):
         config = tmp_path / "src/cubit_plugin" / build / "CMakeFiles/4.4.3/CMakeCXXCompiler.cmake"
         config.parent.mkdir(parents=True)
         config.write_text('set(CMAKE_CXX_COMPILER_ID "MSVC")\n'
@@ -775,7 +766,7 @@ def test_verify_rejects_an_archive_of_a_different_build(monkeypatch, tmp_path, d
 
 
 @pytest.mark.parametrize("damage", [
-    None, "schema", "ccm-content", "pyd-content", "ccm-missing", "pyd-missing",
+    None, "schema", "ccm-content", "ccm-missing",
     "size", "source-archive-content",
 ])
 def test_sdist_setup_verifies_payloads_without_native_sources(
@@ -811,9 +802,7 @@ def test_sdist_setup_verifies_payloads_without_native_sources(
             manifest["payloads"]["cubit_mesh_export.ccm"]["size"] += 1
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     elif damage is not None:
-        name = ("cubit_mesh_export.ccm" if damage.startswith("ccm")
-                else "cubit_mesh_curver.pyd")
-        path = package_dir / name
+        path = package_dir / "cubit_mesh_export.ccm"
         if damage.endswith("missing"):
             path.unlink()
         else:
@@ -847,22 +836,6 @@ def test_distribution_metadata_matches_the_only_supported_native_wheel():
     assert project["requires-python"] == ">=3.12,<3.13"
     assert "Programming Language :: Python :: 3.12" in project["classifiers"]
     assert "Operating System :: Microsoft :: Windows" in project["classifiers"]
-
-
-def test_native_module_version_matches_the_distribution():
-    # The .pyd reported 2.0.0 through the 2.0.1 release.  Keeping the literal
-    # in the native source means a version bump changes the recorded source
-    # digest, so the payload cannot ship without a rebuild.
-    package_root = PROJECT_ROOT / "packages" / "cubit-mesh-export"
-    version = tomllib.loads(
-        (package_root / "pyproject.toml").read_text(encoding="utf-8")
-    )["project"]["version"]
-    init = (package_root / "src" / "cubit_mesh_export" / "__init__.py").read_text(
-        encoding="utf-8")
-    pybind = (PROJECT_ROOT / "src" / "cubit_plugin"
-              / "cubit_mesh_export_pybind.cpp").read_text(encoding="utf-8")
-    assert f'__version__ = "{version}"' in init
-    assert re.findall(r'm\.attr\("__version__"\) = "([^"]+)"', pybind) == [version]
 
 
 def test_toolbar_sync_replaces_retired_launchers(monkeypatch, tmp_path):
