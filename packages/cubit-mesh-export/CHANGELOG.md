@@ -16,6 +16,9 @@ Breaking: the Python curver extension `cubit_mesh_curver.pyd` is removed.
   `nglib` option (`NETGEN_DIR`) and its install rules are removed, and CMake fails if the
   snapshot is missing. The snapshot is pruned to the compiled sources and their header
   closure (148 -> 95 files); the callback contract tests now build against it.
+- The compact Netgen sources keep only functions the `.ccm` or the contract tests link:
+  dead preprocessor branches and linker-unreferenced functions are deleted (about 13,000
+  lines). `.vol` output is byte-identical.
 
 ## 3.1.0 - 2026-11-26
 

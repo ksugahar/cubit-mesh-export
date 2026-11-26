@@ -25,13 +25,5 @@ namespace ngcore
   const std::map<std::string, VersionInfo>& GetLibraryVersions()
   { return get_library_versions(); }
 
-  void SetLibraryVersion(const std::string& library, const VersionInfo& version)
-  {
-    auto& lib_versions = get_library_versions();
-    if(lib_versions.count(library) && (lib_versions[library] != version))
-      throw Exception("Failed to set library version for " + library + " to " + version.to_string() + ": version already set to " + lib_versions[library].to_string());
-    lib_versions[library] = version;
-  }
-
   // NOTE: No lambda static init here. Version registration happens on first use.
 } // namespace ngcore

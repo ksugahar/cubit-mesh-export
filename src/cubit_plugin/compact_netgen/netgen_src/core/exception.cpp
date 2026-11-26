@@ -1,9 +1,6 @@
 #include "exception.hpp"
 #include "utils.hpp"
 
-#ifdef EMSCRIPTEN
-#include <iostream>
-#endif // EMSCRIPTEN
 
 // no backtrace on Emscripten
 // backtrace on Apple platforms with GNUC (does not define __GLIBC__)
@@ -19,16 +16,10 @@ namespace ngcore
 {
   Exception :: Exception(const std::string& s)
     : m_what(s) {
-  #ifdef EMSCRIPTEN
-  std::cout << "THROW Exception " << s << std::endl;
-  #endif
 }
   
   Exception :: Exception(const char* s)
     : m_what(s) {
-  #ifdef EMSCRIPTEN
-  std::cout << "THROW Exception " << s << std::endl;
-  #endif
 
 }
 
@@ -42,21 +33,6 @@ namespace ngcore
   { }
 
 
-  void Exception :: Throw (std::string_view s1)
-  {
-    throw Exception(std::string(s1));
-  }
-
-  void Exception :: Throw (std::string_view s1, std::string_view s2)
-  {
-    throw Exception(std::string(s1)+std::string(s2));
-  }
-    
-  void Exception :: Throw (std::string_view s1, std::string_view s2, std::string_view s3)
-  {
-    throw Exception(std::string(s1)+std::string(s2)+std::string(s3));
-  }
-  
   
   RangeException :: RangeException (// const std::string & where,
                                     const char * where,
@@ -69,27 +45,7 @@ namespace ngcore
   }
   
 
-  void ThrowRangeException(const char * s, ptrdiff_t ind, ptrdiff_t imin, ptrdiff_t imax)
-  {
-    throw RangeException(s, ind, imin, imax);
-  }
-  
-  void ThrowException(const std::string & s)
-  {
-    throw Exception (s);
-  }
-  
-  void ThrowException(const char * s)
-  {
-    throw Exception (s);
-  }
 
-
-  void ThrowNotTheSameException(const char * s, ptrdiff_t a, ptrdiff_t b)
-  {
-    throw ngcore::Exception(std::string(s) + ", a="+ToString(a) + ", b="+ToString(b) + GetBackTrace());     
-  }
-  
 } // namespace ngcore
 
 
@@ -128,50 +84,6 @@ namespace ngcore
       return error_code;
     }
 
-#ifdef __APPLE__
-    // Split output line from backtrace_symbols to recover function name and offset
-    // then use `nm` command line tool to get the address of the function
-    // then use `add42line` command line tool to map function address + offset to line in source code
-    static std::string TranslateBacktrace( std::string s, std::string libname )
-    {
-      // example line
-      // 1   libngcore.dylib                     0x000000010ddb298c _ZL21ngcore_signal_handleri + 316
-      constexpr char reset_shell[] = "\033[0m";
-      constexpr char green[] = "\033[32m";
-      [[maybe_unused]] constexpr char yellow[] = "\033[33m";
-
-      std::istringstream in(s);
-
-      std::string libname1, funcname, addr, plus_sign;
-      size_t i,offset;
-
-      in >> i >> libname1 >> addr >> funcname >> plus_sign >> std::hex >> offset;
-
-      std::stringstream out;
-
-      if(!funcname.empty() && !libname.empty())
-      {
-        std::string nm_command = "nm " + libname + " | grep \"" + funcname + "$\" | cut -f 1 -d ' '";
-        std::string output;
-        auto exit_code = exec(nm_command, output);
-        auto fptr = std::strtoul(output.c_str(), 0, 16);
-        if(fptr == 0)
-            return out.str()+'\n';
-        std::stringstream offset_s;
-        offset_s << "0x" << std::hex << fptr+offset - 5;
-        std::string addr2line_command = std::string("atos -o ") + libname + " --fullPath " + offset_s.str();
-        exit_code = exec(addr2line_command, output);
-        if(exit_code==0)
-          out << " at " << green << output << reset_shell;
-        else
-          out << '\n';
-      }
-      else
-        out << s << '\n';
-
-      return out.str();
-    }
-#else // __APPLE__
 
     // Split output line from backtrace_symbols to recover function name and offset
     // then use `nm` command line tool to get the address of the function
@@ -231,7 +143,6 @@ namespace ngcore
 
       return out.str();
     }
-#endif // __APPLE__
 
   } // namespace detail
 

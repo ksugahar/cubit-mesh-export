@@ -54,42 +54,11 @@ namespace netgen
 
   MeshTopology :: ~MeshTopology () { ;  }
 
-  bool MeshTopology :: NeedsUpdate() const
-  { return (timestamp <= mesh->GetTimeStamp()); }
-
   
-  void MeshTopology :: EnableTable (string name, bool set)
-  {
-    if (name == "edges")
-      SetBuildEdges(set);
-    else if (name == "faces")
-      SetBuildFaces(set);
-    else if (name == "parentedges")
-      SetBuildParentEdges(set);
-    else if (name == "parentfaces")
-      SetBuildParentFaces(set);
-    else
-      throw Exception ("nothing known about table "+name +"\n"
-                       "known are 'edges', 'faces', 'parentedges', 'parentfaces'");
-  }
-
   bool MeshTopology :: static_buildedges = true; 
   bool MeshTopology :: static_buildfaces = true; 
   bool MeshTopology :: static_buildvertex2element = true; 
   
-  void MeshTopology :: EnableTableStatic (string name, bool set)
-  {
-    if (name == "edges")
-      static_buildedges = set;
-    else if (name == "faces")
-      static_buildfaces = set;      
-    else if (name == "vertex2element")
-      static_buildvertex2element = set;      
-    else
-      throw Exception ("nothing known about table "+name +"\n"
-                       "known are 'edges', 'faces', 'vertex2element'");
-  }
-
   
   template <typename FUNC>
   void LoopOverEdges (const Mesh & mesh, MeshTopology & top, PointIndex v,
@@ -372,9 +341,6 @@ namespace netgen
     static Timer timer_tables("Build vertex to element table");
     RegionTimer reg (timer);
 
-#ifdef PARALLEL
-    // ParallelMeshTopology & paralleltop = mesh.GetParallelTopology();
-#endif
 
     auto id = this->mesh->GetCommunicator().Rank();
     auto ntasks = this->mesh->GetCommunicator().Size();
@@ -1267,10 +1233,6 @@ namespace netgen
         // face table complete
 
 
-#ifdef PARALLEL
-        // (*testout) << " RESET Paralleltop" << endl;
-        // paralleltop.Reset ();
-#endif
 
         static Timer t_topology_update_count_face_els("Topology::Update count face_els"); t_topology_update_count_face_els.Start();
         Array<short int, FaceIndex> face_els(nfa), face_surfels(nfa);
@@ -1317,14 +1279,6 @@ namespace netgen
                 if (face_els[i] + face_surfels[i] == 1)
                   {
                     cnt_err++;
-#ifdef PARALLEL
-                    if ( ntasks > 1 )
-                      {
-                        continue;
-                        // if ( !paralleltop.DoCoarseUpdate() ) continue;
-                      }
-                    else
-#endif
                       {
                         (*testout) << "illegal face : " << i.Nr0() << ", cnt = " << face_els[i]+face_surfels[i] << endl;
                         (*testout) << "points = "
@@ -1664,13 +1618,6 @@ namespace netgen
       }
     
 
-#ifdef PARALLEL
-    if (id != 0)  
-      {
-        // if ( paralleltop.DoCoarseUpdate() )
-        // paralleltop.UpdateCoarseGrid();
-      }
-#endif
  
  
   
@@ -1703,94 +1650,6 @@ namespace netgen
   
 
 
-
-  const Point<3> * MeshTopology :: GetVertices (ELEMENT_TYPE et)
-  {
-    static Point<3> segm_points [] = 
-      { Point<3> (1, 0, 0),
-        Point<3> (0, 0, 0) };
-  
-    static Point<3> trig_points [] = 
-      { Point<3> ( 1, 0, 0 ),
-        Point<3> ( 0, 1, 0 ),
-        Point<3> ( 0, 0, 0 ) };
-
-    static Point<3> quad_points [] = 
-      { Point<3> ( 0, 0, 0 ),
-        Point<3> ( 1, 0, 0 ),
-        Point<3> ( 1, 1, 0 ),
-        Point<3> ( 0, 1, 0 ) };
-
-    static Point<3> tet_points [] = 
-      { Point<3> ( 1, 0, 0 ),
-        Point<3> ( 0, 1, 0 ),
-        Point<3> ( 0, 0, 1 ),
-        Point<3> ( 0, 0, 0 ) };
-
-    static Point<3> pyramid_points [] =
-      {
-        Point<3> ( 0, 0, 0 ),
-        Point<3> ( 1, 0, 0 ),
-        Point<3> ( 1, 1, 0 ),
-        Point<3> ( 0, 1, 0 ),
-        Point<3> ( 0, 0, 1-1e-7 ),
-      };    
-  
-    static Point<3> prism_points[] = 
-      {
-        Point<3> ( 1, 0, 0 ),
-        Point<3> ( 0, 1, 0 ),
-        Point<3> ( 0, 0, 0 ),
-        Point<3> ( 1, 0, 1 ),
-        Point<3> ( 0, 1, 1 ),
-        Point<3> ( 0, 0, 1 )
-      };
-
-
-    static Point<3> hex_points [] = 
-      { Point<3> ( 0, 0, 0 ),
-        Point<3> ( 1, 0, 0 ),
-        Point<3> ( 1, 1, 0 ),
-        Point<3> ( 0, 1, 0 ),
-        Point<3> ( 0, 0, 1 ),
-        Point<3> ( 1, 0, 1 ),
-        Point<3> ( 1, 1, 1 ),
-        Point<3> ( 0, 1, 1 ) };
-
-
-    switch (et)
-      {
-      case SEGMENT:
-      case SEGMENT3:
-        return segm_points;
-
-      case TRIG:
-      case TRIG6:
-        return trig_points;
-
-      case QUAD:
-      case QUAD6:
-      case QUAD8:
-        return quad_points;
-
-      case TET:
-      case TET10:
-        return tet_points;
-
-      case PYRAMID:
-        return pyramid_points;
-
-      case PRISM:
-      case PRISM12:
-        return prism_points;
-
-      case HEX:
-        return hex_points;
-      default:
-        cerr << "Ng_ME_GetVertices, illegal element type " << et << endl;
-      }
-    return 0;
-  }
 
 
 
@@ -1832,91 +1691,8 @@ namespace netgen
     }
   }
 
-  void MeshTopology :: GetElementEdgeOrientations (int elnr, Array<int> & eorient) const
-  {
-    ElementIndex ei = IndexBASE<ElementIndex>() +(elnr-1);    
-    int ned = GetNEdges (mesh->VolumeElement(ei).GetType());
-    eorient.SetSize (ned);
-    for (int i = 1; i <= ned; i++)
-      // eorient.Elem(i) = (edges.Get(elnr)[i-1] > 0) ? 1 : -1;
-      // eorient.Elem(i) = (edges.Get(elnr)[i-1].orient) ? -1 : 1;
-      eorient[i-1] = GetElementEdgeOrientation (elnr, i-1) ? -1 : 1;
-  }
-
-  void MeshTopology :: GetElementFaceOrientations (int elnr, Array<int> & forient) const
-  {
-    ElementIndex ei = IndexBASE<ElementIndex>() +(elnr-1);    
-    int nfa = GetNFaces (mesh->VolumeElement(ei).GetType());
-    forient.SetSize (nfa);
-    for (int i = 1; i <= nfa; i++)
-      // forient.Elem(i) = faces.Get(elnr)[i-1].forient;
-      // forient.Elem(i) = (faces.Get(elnr)[i-1]-1) % 8;
-      forient[i-1] = GetElementFaceOrientation(elnr, i-1);
-  }
-
 
   
-  int MeshTopology :: GetElementEdges (int elnr, int * eledges, int * orient) const
-  {
-    //  int ned = GetNEdges (mesh.VolumeElement(elnr).GetType());
-    ElementIndex ei = IndexBASE<ElementIndex>() +(elnr-1);
-    if (mesh->GetDimension()==3 || 1)
-      {
-        auto eledges_ei = edges[ei];
-        if (orient)
-          {
-            for (int i = 0; i < int(eledges_ei.Size()); i++)
-              {
-                /*
-                if (!edges.Get(elnr)[i]) return i;
-                eledges[i] = abs (edges.Get(elnr)[i]);
-                orient[i] = (edges.Get(elnr)[i] > 0 ) ? 1 : -1;
-                */
-                
-                // if (edges.Get(elnr)[i] == -1) return i;
-                // eledges[i] = edges[ei].Get(elnr)[i]+1;
-                if (!edges[ei][i].IsValid()) return i;
-                eledges[i] = edges[ei][i].Nr1();
-                
-                // orient[i] = edges.Get(elnr)[i].orient ? -1 : 1;
-                orient[i] = GetElementEdgeOrientation(elnr, i) ? -1 : 1;
-              }
-          }
-        else
-          {
-            for (int i = 0; i < int(eledges_ei.Size()); i++)
-              {
-                if (!edges[ei][i].IsValid()) return i;
-                eledges[i] = edges[ei][i].Nr1();
-              }
-          }
-        return int(eledges_ei.Size());
-      }
-    else
-      {
-        throw NgException("rethink implementation");
-        /*
-          if (orient)
-          {
-          for (i = 0; i < 4; i++)
-          {
-          if (!surfedges.Get(elnr)[i]) return i;
-          eledges[i] = abs (surfedges.Get(elnr)[i]);
-          orient[i] = (surfedges.Get(elnr)[i] > 0 ) ? 1 : -1;
-          }
-          }
-          else
-          {
-          if (!surfedges.Get(elnr)[i]) return i;
-          for (i = 0; i < 4; i++)
-          eledges[i] = abs (surfedges.Get(elnr)[i]);
-          }
-        */
-        return 4;
-        //      return GetSurfaceElementEdges (elnr, eledges, orient);
-      }
-  }
-
   int MeshTopology :: GetElementFaces (int elnr, int * elfaces, int * orient) const
   {
     ElementIndex ei = IndexBASE<ElementIndex>() +(elnr-1);
@@ -1986,78 +1762,6 @@ namespace netgen
 
 
 
-  int MeshTopology :: GetSurfaceElementFaceOrientation (int elnr) const
-  {
-    // return (surffaces.Get(elnr)-1) % 8;
-    // return surffaces.Get(elnr).forient;
-    return GetSurfaceElementFaceOrientation2(elnr);
-  }
-
-  int MeshTopology :: GetSurfaceElementEdges (int elnr, int * eledges, int * orient) const
-  {
-    SurfaceElementIndex sei = IndexBASE<SurfaceElementIndex>() +(elnr-1);        
-    int i;
-    auto eledges_sei = surfedges[sei];
-    if (mesh->GetDimension() == 3 || 1)
-      {
-        if (orient)
-          {
-            for (i = 0; i < int(eledges_sei.Size()); i++)
-              {
-                /*
-                if (!surfedges.Get(elnr)[i]) return i;
-                eledges[i] = abs (surfedges.Get(elnr)[i]);
-                orient[i] = (surfedges.Get(elnr)[i] > 0 ) ? 1 : -1;
-                */
-                // if (surfedges.Get(elnr)[i] == -1) return i;
-                // eledges[i] = surfedges.Get(elnr)[i]+1;
-                if (!surfedges[sei][i].IsValid()) return i;
-                eledges[i] = surfedges[sei][i].Nr1();
-                // orient[i] = (surfedges.Get(elnr)[i].orient) ? -1 : 1;
-                // orient[i] = GetSurfaceElementEdgeOrientation(elnr, i) ? -1 : 1;
-                orient[i] = 1;
-
-              }
-          }
-        else
-          {
-            for (i = 0; i < int(eledges_sei.Size()); i++)
-              {
-                if (!surfedges[sei][i].IsValid()) return i;
-                eledges[i] = surfedges[sei][i].Nr1();
-              }
-          }
-        return int(eledges_sei.Size());
-      }
-    else
-      {
-        /*
-        eledges[0] = abs (segedges.Get(elnr));
-        if (orient)
-          orient[0] = segedges.Get(elnr) > 0 ? 1 : -1;
-        */
-        eledges[0] = segedges[SegmentIndex::FromNr1(elnr)].Nr1();
-        if (orient)
-          // orient[0] = segedges.Get(elnr).orient ? -1 : 1;
-          // orient[0] = GetSegmentEdgeOrientation(elnr) ? -1 : 1;
-          orient[0] = 1;
-      }
-    return 1;
-  }
-
-
-  int MeshTopology :: GetElementEdgeOrientation (int elnr, int locedgenr) const
-  {
-    ElementIndex ei = IndexBASE<ElementIndex>() +(elnr-1);        
-    
-    auto el = mesh->VolumeElement (ei);
-    auto eledges = MeshTopology::GetEdges (el.GetType());    
-
-    int k = locedgenr;
-    PointIndices<2> edge(el[eledges[k][0]], el[eledges[k][1]]);
-    int edgedir = (edge[0] > edge[1]);
-    return edgedir;
-  }
 
   
   int MeshTopology :: GetElementFaceOrientation (int elnr, int locfacenr) const
@@ -2117,106 +1821,9 @@ namespace netgen
     
 
   
-  int MeshTopology :: GetSurfaceElementEdgeOrientation (int elnr, int locedgenr) const
-  {
-    const Element2dRef & el = (*mesh)[SurfaceElementIndex::FromNr1(elnr)];
-    auto eledges = MeshTopology::GetEdges (el.GetType());    
-
-    int k = locedgenr;
-    PointIndices<2> edge(el[eledges[k][0]], el[eledges[k][1]]);
-    int edgedir = (edge[0] > edge[1]);
-    return edgedir;
-  }
   
-  int MeshTopology :: GetSurfaceElementFaceOrientation2 (int elnr) const
-  {
-    const Element2dRef & el = (*mesh)[SurfaceElementIndex::FromNr1(elnr)];
-    
-    auto elfaces = MeshTopology::GetFaces (el.GetType());
-
-    int j = 0;
-    if (elfaces[j][3] < 0)
-      { // triangle
-        PointIndices<4> face(el[elfaces[j][0]], el[elfaces[j][1]], 
-                     el[elfaces[j][2]], PointIndex(PointIndex::INVALID));
-        
-        int facedir = 0;
-        if (face[0] > face[1])
-          { swap (face[0], face[1]); facedir += 1; }
-        if (face[1] > face[2])
-          { swap (face[1], face[2]); facedir += 2; }
-        if (face[0] > face[1])
-          { swap (face[0], face[1]); facedir += 4; }
-
-        return facedir;
-      }
-    else
-      {
-        // quad
-        // int facenum;
-        PointIndices<4> face4(el[elfaces[j][0]], el[elfaces[j][1]],
-                      el[elfaces[j][2]], el[elfaces[j][3]]);
-        
-        int facedir = 0;
-        if (min2 (face4[0], face4[1]) > 
-            min2 (face4[3], face4[2])) 
-          {  // z - flip
-            facedir += 1; 
-            swap (face4[0], face4[3]);
-            swap (face4[1], face4[2]);
-          }
-        if (min2 (face4[0], face4[3]) >
-            min2 (face4[1], face4[2])) 
-          {  // x - flip
-            facedir += 2; 
-            swap (face4[0], face4[1]);
-            swap (face4[2], face4[3]);
-          }
-        if (face4[1] > face4[3])
-          {  // diagonal flip
-            facedir += 4; 
-            swap (face4[1], face4[3]);
-          }
-        
-        return facedir;
-      }
-  }
-
-  void MeshTopology :: GetSegmentEdge (int segnr, int & enr, int & orient) const
-  {
-    enr = segedges[SegmentIndex::FromNr1(segnr)].Nr1();
-    orient = GetSegmentEdgeOrientation(segnr);
-  }
 
   
-  int MeshTopology :: GetSegmentEdgeOrientation (int elnr) const
-  {
-    const Segment & el = (*mesh)[SegmentIndex::FromNr1(elnr)];
-    auto eledges = MeshTopology::GetEdges (el.GetType());    
-
-    int k = 0;
-    PointIndices<2> edge(el[eledges[k][0]], el[eledges[k][1]]);
-    int edgedir = (edge[0] > edge[1]);
-    return edgedir;
-  }
-
-
-  
-  void MeshTopology :: GetFaceVertices (int fnr, Array<int> & vertices) const
-  {
-    vertices.SetSize(4);
-    for (int i = 0; i < 4; i++)
-      vertices[i] = face2vert[FaceIndex::FromNr1(fnr)][i].Nr1();
-    if (vertices[3] == 0)
-      vertices.SetSize(3);
-  }
-
-  void MeshTopology :: GetFaceVertices (int fnr, int * vertices) const
-  {
-    for (int i = 0; i <= 3; i++)
-      vertices[i] = face2vert[FaceIndex::FromNr1(fnr)][i].Nr1();
-  }
-
 
 
 
@@ -2385,40 +1992,6 @@ namespace netgen
   }
 
 
-
-  void MeshTopology :: 
-  GetSegmentVolumeElements ( int segnr, Array<ElementIndex> & volels ) const
-  {
-    /*
-    int v1, v2;
-    // GetEdgeVertices ( GetSegmentEdge (segnr), v1, v2 );
-    GetEdgeVertices ( GetEdge (segnr-1)+1, v1, v2 );
-    */
-    auto [v1,v2] = GetEdgeVertices ( GetEdge (SegmentIndex::FromNr1(segnr)) );
-    auto volels1 = GetVertexElements ( v1 );
-    auto volels2 = GetVertexElements ( v2 );
-    volels.SetSize(0);
-
-    for ( auto volel1 : volels1 )
-      if ( volels2.Contains( volel1 ) )
-        volels.Append ( volel1 );
-  }
-
-  void MeshTopology :: 
-  GetSegmentSurfaceElements (int segnr, Array<SurfaceElementIndex> & els) const
-  {
-    // int v1, v2;
-    // GetEdgeVertices ( GetSegmentEdge (segnr), v1, v2 );
-    // GetEdgeVertices ( GetEdge (segnr-1)+1, v1, v2 );
-    auto [v1,v2] = GetEdgeVertices ( GetEdge (SegmentIndex::FromNr1(segnr)) );
-    auto els1 = GetVertexSurfaceElements ( v1 );
-    auto els2 = GetVertexSurfaceElements ( v2 );
-    els.SetSize(0);
-
-    for ( auto el1 : els1 )
-      if ( els2.Contains( el1 ) )
-        els.Append ( el1 );
-  }
 
 
 
