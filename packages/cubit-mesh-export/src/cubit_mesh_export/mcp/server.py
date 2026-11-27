@@ -5373,8 +5373,8 @@ def cubit_scaffold_command_plugin(out_dir: str, name: str = "my_cubit_plugin") -
 		+ "\n".join(f"  {p}" for p in written)
 		+ "\n\nNext steps:\n"
 		"  1. Rename MyPlugin / the verbs / my_cubit_plugin (see SKILL.md)\n"
-		f"  2. pwsh -File {target / 'build.ps1'}\n"
-		f"  3. pwsh -File {target / 'smoke.ps1'}\n"
+		f"  2. pwsh -File \"{target / 'build.ps1'}\"\n"
+		f"  3. pwsh -File \"{target / 'smoke.ps1'}\"\n"
 	)
 
 

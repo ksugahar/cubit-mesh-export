@@ -64,16 +64,30 @@ def scaffold_command_plugin(target: Path) -> list[Path]:
         raise FileExistsError(f"refusing to overwrite an existing directory: {target}")
     if not target.parent.is_dir():
         raise FileNotFoundError(f"parent directory does not exist: {target.parent}")
-    sources = {name: _skill_dir().joinpath("templates", name) for name in TEMPLATE_FILES}
-    missing = [name for name, src in sources.items() if not src.is_file()]
-    if missing:
-        raise FileNotFoundError(f"packaged templates missing: {missing}")
-    target.mkdir()
+    # Read every packaged resource before touching the disk, so a broken
+    # install fails without leaving a half-written directory behind.
+    payload = {}
+    try:
+        for name in TEMPLATE_FILES:
+            payload[name] = _skill_dir().joinpath("templates", name).read_bytes()
+        payload["SKILL.md"] = _skill_dir().joinpath("SKILL.md").read_bytes()
+    except OSError as exc:
+        raise FileNotFoundError(f"packaged skill resources unreadable: {exc}") from exc
+    target.mkdir()  # exclusive: raises FileExistsError if it appeared meanwhile
     written = []
-    for name, src in sources.items():
-        dest = target / name
-        dest.write_bytes(src.read_bytes())
-        written.append(dest)
-    (target / "SKILL.md").write_bytes(_skill_dir().joinpath("SKILL.md").read_bytes())
-    written.append(target / "SKILL.md")
+    try:
+        for name, data in payload.items():
+            dest = target / name
+            with open(dest, "xb") as handle:
+                handle.write(data)
+            written.append(dest)
+    except BaseException:
+        # Only this call created target and these files; remove exactly them.
+        for path in written:
+            path.unlink(missing_ok=True)
+        try:
+            target.rmdir()
+        except OSError:
+            pass
+        raise
     return written

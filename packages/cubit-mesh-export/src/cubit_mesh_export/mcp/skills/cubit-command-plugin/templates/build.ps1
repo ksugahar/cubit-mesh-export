@@ -38,9 +38,21 @@ if ([IO.Path]::GetFullPath((Get-Command cl.exe).Source) -ne [IO.Path]::GetFullPa
 }
 
 if ($Rebuild -and (Test-Path -LiteralPath $BuildDir)) {
-    $full = [IO.Path]::GetFullPath($BuildDir)
-    if (-not $full.StartsWith([IO.Path]::GetFullPath($PSScriptRoot), [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to delete a build directory outside the source tree: $full"
+    # Delete only a real directory strictly inside the source tree: the
+    # separator stops a sibling like "<src>2" or the source dir itself from
+    # matching, and a reparse point is never followed by the recursive delete.
+    $root = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $full = [IO.Path]::GetFullPath($BuildDir).TrimEnd('\', '/')
+    if (-not ($full + [IO.Path]::DirectorySeparatorChar).StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -or
+        ($full + [IO.Path]::DirectorySeparatorChar) -ieq $root) {
+        throw "Refusing to delete a build directory not strictly inside ${root}: $full"
+    }
+    $item = Get-Item -LiteralPath $full -Force
+    if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Refusing to delete a non-directory or reparse point: $full"
+    }
+    if (Get-ChildItem -LiteralPath $full -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop) {
+        throw "Refusing to delete a build directory that contains reparse points: $full"
     }
     Remove-Item -LiteralPath $full -Recurse -Force
 }

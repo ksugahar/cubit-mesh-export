@@ -57,6 +57,56 @@ def test_scaffold_copies_bytes_and_refuses_overwrite(tmp_path):
         skill.scaffold_command_plugin(target)
 
 
+def test_scaffold_preflight_failure_creates_nothing(tmp_path, monkeypatch):
+    real = skill._skill_dir
+
+    class Broken:
+        def joinpath(self, *parts):
+            node = real().joinpath(*parts)
+            if parts[-1] == "SKILL.md":
+                class Missing:
+                    def read_bytes(self):
+                        raise OSError("gone")
+                return Missing()
+            return node
+
+    monkeypatch.setattr(skill, "_skill_dir", lambda: Broken())
+    with pytest.raises(FileNotFoundError):
+        skill.scaffold_command_plugin(tmp_path / "plug")
+    assert not (tmp_path / "plug").exists()
+
+
+def test_scaffold_write_failure_removes_only_its_own_files(tmp_path, monkeypatch):
+    import builtins
+
+    real_open = builtins.open
+    calls = {"n": 0}
+
+    def flaky_open(path, mode="r", *args, **kwargs):
+        if mode == "xb":
+            calls["n"] += 1
+            if calls["n"] == 3:
+                raise OSError("disk full")
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", flaky_open)
+    with pytest.raises(OSError, match="disk full"):
+        skill.scaffold_command_plugin(tmp_path / "plug")
+    assert not (tmp_path / "plug").exists()
+    monkeypatch.setattr(builtins, "open", real_open)
+    assert len(skill.scaffold_command_plugin(tmp_path / "plug")) == len(skill.TEMPLATE_FILES) + 1
+
+
+def test_templates_carry_the_review_fixes():
+    smoke = skill.read_template("smoke.ps1")
+    assert "if ($exit -ne 0)" in smoke and "output file contents differ" in smoke
+    build = skill.read_template("build.ps1")
+    assert "ReparsePoint" in build and "strictly inside" in build
+    export = skill.read_template("ExportNodeCountCommand.cpp")
+    assert 'L"wbx"' in export and "initialize_export()" in export
+    assert "id_from_handle" in export and "get_block_size(block, n)" in export
+
+
 def test_scaffold_tool_validates_and_writes(tmp_path):
     assert server.cubit_scaffold_command_plugin(str(tmp_path), "../x").startswith("ERROR")
     assert server.cubit_scaffold_command_plugin(str(tmp_path / "missing")).startswith("ERROR")

@@ -97,26 +97,38 @@ std::unique_ptr<CubitBaseInterface, void(*)(CubitBaseInterface*)> raw(
     CubitInterface::get_interface("MeshExport"),
     [](CubitBaseInterface* p){ if (p) CubitInterface::release_interface(p); });
 auto* iface = dynamic_cast<MeshExportInterface*>(raw.get());
-iface->set_use_sequential_ids(false);  // keep Cubit's ids
-iface->initialize_export();
+if (!iface) { PRINT_ERROR("MeshExport interface is not available
+"); return false; }
+iface->set_use_sequential_ids(false);            // keep Cubit's ids (void)
+if (!iface->initialize_export()) { PRINT_ERROR("initialize_export failed
+"); return false; }
 ```
 
 - Always release the interface. The RAII holder covers every early return.
 - `get_coords(start, n, x, y, z, ids)` and
   `get_block_elements(start, n, block, types, handles)` return batches.
   Loop until they return 0.
-- `get_block_list` also returns an internal default block that holds
-  elements outside any user block. To get the user's block ids, use
-  `CubitInterface::parse_cubit_list("block", "all")` and skip the rest.
+- `BlockHandle` is a pointer (`ElementOutputGroup*`), not an id. Map it
+  with `iface->id_from_handle(handle)`. The SDK only promises a list of
+  blocks. With mesh that is not assigned to any block, the
+  cubit-mesh-export plugin observed an extra group that is not a user
+  block. Filter the handles against
+  `CubitInterface::parse_cubit_list("block", "all")`.
+- Check the bool returns of `initialize_export()` and
+  `get_block_size()`. Otherwise a failure is reported as a successful
+  undercount.
 - For sidesets, use `CubitInterface::parse_cubit_list("sideset","all")`,
   `get_sideset_surfaces(id)` and `get_connectivity("tri", id)`. Free-mesh
   faces from Sculpt or Exodus have no parent surface, so read them
   directly.
 - Cubit passes file names as UTF-8 `std::string`. On Japanese Windows,
   `std::filesystem::path(std::string)` decodes them as cp932, so the file
-  fails to open. Build the path through UTF-16 with `utf8_path.hpp`.
+  fails to open. Build the path through UTF-16 with `utf8_path.hpp`, and
+  reject invalid UTF-8 instead of falling back to the code page.
   `smoke.ps1` writes into a `日本語` directory to prove this.
-- Check `overwrite` yourself. Check the stream state after `close()`.
+- Handle `overwrite` yourself. Without it, open with an exclusive create
+  (`_wfopen_s(..., L"wbx")`) rather than "check exists, then truncate".
+  Check the write result and the result of `fclose`.
 
 ## 5. Build (Windows)
 
@@ -130,10 +142,15 @@ iface->initialize_export();
   `-DCubit_DIR=<Cubit>/cmake`, then call `find_package(Cubit REQUIRED CONFIG)`
   and link `cubiti cubit_util`. Read the release from `<Cubit>/BUILD_INFO`
   (`short=`), never from the directory name.
-- Define `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR`. Cubit loads its own
-  older `MSVCP140.dll`. With MSVC 14.40 or later, a constexpr-constructed
-  `std::mutex` crashes in `lock()` against that runtime. This hits any
-  code that uses `std::mutex`, including vendored libraries.
+- Define `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR` for the code built into
+  the plugin. Cubit loads its own bundled `MSVCP140.dll`. Microsoft
+  supports a runtime that is at least as new as the toolset only; when
+  the bundled runtime is older, a constexpr-constructed `std::mutex` from
+  MSVC 14.40 or later can crash in `lock()`. cubit-mesh-export hit this
+  with Cubit 2025.12, which bundles 14.31. Cubit 2026.8 bundles 14.42,
+  so with toolset 14.44 this define is a targeted workaround, not a
+  guaranteed crash. Check the bundled runtime's version
+  (`<Cubit>/bin/MSVCP140.dll`) when you change the toolset.
 - Use `/Zi` and `/DEBUG:FULL` in Release, plus
   `/PDBALTPATH:<name>.pdb`, so crash dumps can be symbolicated without
   leaking the build path.
@@ -152,9 +169,13 @@ iface->initialize_export();
   the install's plugin directory. In 2026.8 that directory is
   `<install>/plugins`, beside `bin/` (`bin/cubitx.exe` exists). Older
   releases use `bin/plugins`.
-- In 2026.8 the loader scans `*.dll`. Older releases also took `.ccm`
-  files. A package can keep `.ccm` as its canonical name and copy it as
-  `.dll` when deploying.
+- The 2026.8 SDK example builds a normal MODULE (`.dll`), and the
+  cubit-mesh-export installer deploys its plugin as `.dll` on 2026.8.
+  Older releases also loaded `.ccm` files and took `-commandplugindir`
+  (Coreform forum, "Example plugin not loading", 2023). Whether 2026.8
+  still accepts `.ccm` has not been tested, so deploy `.dll`. A package
+  can keep `.ccm` as its canonical name and copy it as `.dll` when
+  deploying.
 - Headless runs: 2026.8 uses `cubitx.exe -nographics -batch -nojournal
   -noinitfile driver.jou` with `CUBIT_PLUGIN_DIR=<staged dir>`. Older
   releases use `coreform_cubit.com ... -commandplugindir <dir>`.
@@ -170,17 +191,23 @@ iface->initialize_export();
   loaded DLLs.
 - Rename hazard: when a plugin file is renamed, delete the old file.
   Otherwise Cubit loads both and registers the verbs twice.
-- A stale machine-wide `CUBIT_PLUGIN_DIR` can make Cubit exit with code 2
-  and report `-commandplugindir` and its value as files it could not
-  open. Fix the variable. Do not accept exit code 2 as success.
+- Observed symptom: with a stale machine-wide `CUBIT_PLUGIN_DIR`, Cubit
+  exited with code 2 and reported `-commandplugindir` and its value as
+  files it could not open. That is one cause of exit code 2, not the
+  only one. Read the log, fix the cause, and never accept exit code 2 as
+  success. `smoke.ps1` requires exit code 0.
 
 ## 7. Verify
 
 1. `build.ps1`: checks the marker (`debug=no`) inside the DLL and prints
    its SHA256.
-2. `smoke.ps1`: stages the DLL, meshes a brick, and runs both verbs.
-   Expected output: `SMOKE OK exit=0 hello=2 MYPLUGIN_EXPORT nodes=125
-   blocks=1 elements=64` (Cubit 2026.8, brick x 1, size 0.25).
+2. `smoke.ps1` (Cubit 2026.8 only): stages the DLL, meshes a brick, and
+   runs both verbs. It passes only when the exit code is 0, both exact
+   log lines appear, and the output file has exactly the expected counts.
+   The whole run, including the output pipes, is bounded by the timeout.
+   On failure it keeps the work directory. Expected output:
+   `SMOKE OK exit=0 hello=2 MYPLUGIN_EXPORT nodes=125 blocks=1
+   elements=64` (brick x 1, size 0.25).
 3. For a real writer, also read its output back with an independent
    reader (for example `check-vol` for Netgen `.vol`). A file that
    exists is not proof that the export is correct.
@@ -204,12 +231,12 @@ iface->initialize_export();
 
 | Symptom | Cause |
 |---|---|
-| Verb unknown, nothing in log | `CUBIT_PLUGIN` missing, wrong directory, `.ccm` on 2026.8, Cubit not restarted, or the run used `cubit.init` Python |
+| Verb unknown, nothing in log | `CUBIT_PLUGIN` missing, wrong directory, not a `.dll` on 2026.8, Cubit not restarted, or the run used `cubit.init` Python |
 | Plugin missing or crashing from a Debug build | marker says `debug=yes`; Debug CRT against Release Cubit |
-| Crash in `std::mutex::lock` | built with MSVC >= 14.40 without `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR` |
+| Crash in `std::mutex::lock` | toolset newer than Cubit's bundled `MSVCP140.dll` (>= 14.40 vs older runtime) without `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR` |
 | Crash on load after a Cubit update | ABI drift: rebuild against the new SDK |
 | Verbs registered twice | an old renamed plugin file is still in the plugin directory |
 | Built-in command stops working | the plugin syntax masks it; rename the keyword |
 | Headless run hangs | stdin left open under an MCP or pipe parent |
-| Exit code 2 with `-commandplugindir` "files" | stale machine-wide `CUBIT_PLUGIN_DIR` |
+| Exit code 2 with `-commandplugindir` "files" | observed with a stale machine-wide `CUBIT_PLUGIN_DIR`; check the log for other causes |
 | Open fails only on Japanese paths | path built from a UTF-8 `std::string` without the UTF-16 conversion |
