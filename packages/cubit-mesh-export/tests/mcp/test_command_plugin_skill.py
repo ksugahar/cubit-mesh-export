@@ -76,25 +76,80 @@ def test_scaffold_preflight_failure_creates_nothing(tmp_path, monkeypatch):
     assert not (tmp_path / "plug").exists()
 
 
-def test_scaffold_write_failure_removes_only_its_own_files(tmp_path, monkeypatch):
+def _inject(monkeypatch, stage, at=3):
+    """Fail the at-th exclusive create at `stage`: open, write or close."""
     import builtins
 
     real_open = builtins.open
     calls = {"n": 0}
 
-    def flaky_open(path, mode="r", *args, **kwargs):
-        if mode == "xb":
-            calls["n"] += 1
-            if calls["n"] == 3:
-                raise OSError("disk full")
-        return real_open(path, mode, *args, **kwargs)
+    class Faulty:
+        def __init__(self, inner):
+            self.inner = inner
 
-    monkeypatch.setattr(builtins, "open", flaky_open)
-    with pytest.raises(OSError, match="disk full"):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.inner.close()
+            if stage == "close":
+                raise OSError("close failed")
+            return False
+
+        def write(self, data):
+            if stage == "write":
+                self.inner.write(data[:5])
+                raise OSError("disk full")
+            return self.inner.write(data)
+
+    def fake_open(path, mode="r", *args, **kwargs):
+        if mode != "xb":
+            return real_open(path, mode, *args, **kwargs)
+        calls["n"] += 1
+        if calls["n"] != at:
+            return real_open(path, mode, *args, **kwargs)
+        if stage == "open":
+            raise OSError("open failed")
+        return Faulty(real_open(path, mode, *args, **kwargs))
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+    return real_open
+
+
+@pytest.mark.parametrize("stage,message", [
+    ("open", "open failed"), ("write", "disk full"), ("close", "close failed")])
+def test_scaffold_failure_at_each_stage_removes_only_its_own_files(
+        tmp_path, monkeypatch, stage, message):
+    import builtins
+
+    real_open = _inject(monkeypatch, stage)
+    with pytest.raises(OSError, match=message):
         skill.scaffold_command_plugin(tmp_path / "plug")
     assert not (tmp_path / "plug").exists()
     monkeypatch.setattr(builtins, "open", real_open)
     assert len(skill.scaffold_command_plugin(tmp_path / "plug")) == len(skill.TEMPLATE_FILES) + 1
+
+
+def test_scaffold_cleanup_failure_keeps_primary_error_and_continues(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    _inject(monkeypatch, "write", at=3)
+    real_unlink = Path.unlink
+    stuck = []
+
+    def unlink(self, missing_ok=False):
+        if self.name == skill.TEMPLATE_FILES[0]:
+            stuck.append(self)
+            raise PermissionError("locked")
+        return real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    with pytest.raises(OSError, match="disk full") as info:
+        skill.scaffold_command_plugin(tmp_path / "plug")
+    notes = "\n".join(getattr(info.value, "__notes__", []))
+    assert "could not remove" in notes and skill.TEMPLATE_FILES[0] in notes
+    remaining = sorted(p.name for p in (tmp_path / "plug").iterdir())
+    assert remaining == [skill.TEMPLATE_FILES[0]]  # the others were still removed
 
 
 def test_templates_carry_the_review_fixes():

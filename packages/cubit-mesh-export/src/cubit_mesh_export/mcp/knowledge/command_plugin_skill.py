@@ -74,20 +74,25 @@ def scaffold_command_plugin(target: Path) -> list[Path]:
     except OSError as exc:
         raise FileNotFoundError(f"packaged skill resources unreadable: {exc}") from exc
     target.mkdir()  # exclusive: raises FileExistsError if it appeared meanwhile
-    written = []
+    created = []  # every file this call created, recorded as soon as it exists
     try:
         for name, data in payload.items():
             dest = target / name
-            with open(dest, "xb") as handle:
+            handle = open(dest, "xb")
+            created.append(dest)
+            with handle:
                 handle.write(data)
-            written.append(dest)
-    except BaseException:
+    except BaseException as primary:
         # Only this call created target and these files; remove exactly them.
-        for path in written:
-            path.unlink(missing_ok=True)
+        # Cleanup problems are attached as notes and never mask the original.
+        for path in created:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as exc:
+                primary.add_note(f"cleanup: could not remove {path}: {exc}")
         try:
             target.rmdir()
-        except OSError:
-            pass
+        except OSError as exc:
+            primary.add_note(f"cleanup: could not remove {target}: {exc}")
         raise
-    return written
+    return created

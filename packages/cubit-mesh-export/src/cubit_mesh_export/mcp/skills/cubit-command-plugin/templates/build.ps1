@@ -47,9 +47,16 @@ if ($Rebuild -and (Test-Path -LiteralPath $BuildDir)) {
         ($full + [IO.Path]::DirectorySeparatorChar) -ieq $root) {
         throw "Refusing to delete a build directory not strictly inside ${root}: $full"
     }
-    $item = Get-Item -LiteralPath $full -Force
-    if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        throw "Refusing to delete a non-directory or reparse point: $full"
+    # Walk every component from the trusted root down to the build dir: a
+    # junction or symlink anywhere on that chain could redirect the delete.
+    $relative = $full.Substring($root.Length)
+    $cursor = $root.TrimEnd('\', '/')
+    foreach ($part in $relative.Split([char[]]@('\', '/'), [StringSplitOptions]::RemoveEmptyEntries)) {
+        $cursor = Join-Path $cursor $part
+        $node = Get-Item -LiteralPath $cursor -Force
+        if (-not $node.PSIsContainer -or ($node.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "Refusing to delete through a non-directory or reparse point: $cursor"
+        }
     }
     if (Get-ChildItem -LiteralPath $full -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop) {
         throw "Refusing to delete a build directory that contains reparse points: $full"
